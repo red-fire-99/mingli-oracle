@@ -39,6 +39,12 @@ jobs:
       - name: 生成单文件网页
         run: python web/build_web.py
 
+      # 自托管 Pyodide：运行时随站点一起发布，浏览器从同源取，不依赖公共 CDN。
+      # 主路径取整包 tgz（npmmirror 约 3s / 5.6MB，且四个文件齐全）；
+      # 逐文件下载作为兜底。
+      - name: 下载 Pyodide 运行时（自托管）
+        run: python web/fetch_pyodide.py --out web/dist/pyodide
+
       # 构建产物必须自洽：占位符填完、7 个模块都在、内联的 Python 语法配平。
       # 这些断言全部只用标准库，不给 CI 引入额外依赖。
       - name: 校验产物

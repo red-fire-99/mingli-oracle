@@ -311,27 +311,30 @@ var PYODIDE_VERSION = /*__PYODIDE_VERSION__*/;
 
 var ENGINE_VERSION = /*__ENGINE_VERSION__*/;
 
-/* 镜像源。实测（zh-CN 网络，wasm brotli 后 2.85MB / stdlib 2.20MB）：
-   wasm 源
-     registry.npmmirror.com  1.6~4.4 MB/s   最快，但 files/ 只有 13 个文件
-     gcore.jsdelivr.net      4.4 MB/s       偶尔 WinError 10054 连接重置
+/* Pyodide 运行时来源。自托管优先，公共 CDN 兜底。
+   自托管：web/dist/pyodide/ 随站点一起发布，浏览器从同源取 —— 走 GitHub Pages
+   自己的 CDN，与页面同域、无跨域协商，也不受第三方 CDN 波动影响。
+   兜底：万一 Pages 部署异常或用户从别处打开，仍能回退到公共源。
+   实测各公共源速度差一个数量级（wasm brotli 后 2.85MB）：
+     registry.npmmirror.com  1.6~4.4 MB/s   但 python_stdlib.zip 返回 451
+     gcore.jsdelivr.net      4.4 MB/s       stdlib 会稳定 WinError 10054
      cdn.jsdelivr.net        0.31 MB/s      稳定但慢
-   stdlib 源（indexURL，必须能取到 python_stdlib.zip）
-     gcore.jsdelivr.net      1.21 MB/s      本机实测稳定失败（10054）
-     cdn.jsdelivr.net        0.02~0.06 MB/s 慢但能下
-   「最快」不等于「最全」：npmmirror 的 python_stdlib.zip 直接 451，所以两类文件
-   必须分别配源；而且网络抖动大，任一单一源都有「看运气」的成分，故都做成列表逐个试。 */
+   故 wasm 与 stdlib 分别配源，且都做成列表逐个试。 */
+var LOCAL_PYODIDE = "pyodide/";
 var WASM_SOURCES = [
+  { name: "selfhost",       url: LOCAL_PYODIDE, local: true },
   { name: "npmmirror",      url: "https://registry.npmmirror.com/pyodide/0.26.4/files/" },
-  { name: "gcore.jsdelivr", url: "https://gcore.jsdelivr.net/pyodide/v0.26.4/full/" },
-  { name: "jsdelivr",       url: "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/" },
+  { name: "gcore.jsdelivr", url: "https://gcore.jsdelivr.net/pyodide/0.26.4/full/" },
+  { name: "jsdelivr",       url: "https://cdn.jsdelivr.net/pyodide/0.26.4/full/" },
 ];
 // indexURL 决定 pyodide 去哪儿取 stdlib；逐个尝试，成功即止
 var INDEX_SOURCES = [
-  { name: "gcore.jsdelivr", url: "https://gcore.jsdelivr.net/pyodide/v0.26.4/full/" },
-  { name: "jsdelivr",       url: "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/" },
+  { name: "selfhost",       url: LOCAL_PYODIDE, local: true },
+  { name: "gcore.jsdelivr", url: "https://gcore.jsdelivr.net/pyodide/0.26.4/full/" },
+  { name: "jsdelivr",       url: "https://cdn.jsdelivr.net/pyodide/0.26.4/full/" },
 ];
 var LOAD_TIMEOUT_MS = 20000;   // 单个源超过这个时间就换下一个
+var BOOT_TIMEOUT_MS = 45000;   // 启动 Python 的整体预算，超了换下一个 indexURL
 var BOOT_TIMEOUT_MS = 45000;   // 启动 Python 的整体预算，超了换下一个 indexURL
 
 (function(){
@@ -467,7 +470,7 @@ var BOOT_TIMEOUT_MS = 45000;   // 启动 Python 的整体预算，超了换下�
     function trySource(wi, ii){
       if (wi >= WASM_SOURCES.length){
         if (ii + 1 < INDEX_SOURCES.length) return trySource(0, ii + 1);
-        fail("所有镜像源都没能加载成功。可能是网络受限，请检查代理，或改用本地版：python scripts/server.py");
+        fail("运行时加载失败：自托管与所有公共镜像源都试过了。可能网络受限或站点部署异常，可检查代理，或改用本地版：python scripts/server.py");
         return;
       }
       var s = WASM_SOURCES[wi];
@@ -485,7 +488,7 @@ var BOOT_TIMEOUT_MS = 45000;   // 启动 Python 的整体预算，超了换下�
       // 已经加载过 pyodide.js 就不重复挂脚本，直接换 indexURL 试
       if (typeof loadPyodide !== "function"){
         var loader = document.createElement("script");
-        loader.src = s.url + "pyodide.js";
+        loader.src = (s.local ? new URL(s.url, location.href).href : s.url) + "pyodide.js";
         loader.onload = function(){ boot0(loader, s, idxSrc, wi, ii, t0, timer, settled); };
         loader.onerror = function(){
           if (settled) return; settled = true; clearTimeout(timer); trySource(wi + 1, ii);
@@ -506,7 +509,9 @@ var BOOT_TIMEOUT_MS = 45000;   // 启动 Python 的整体预算，超了换下�
 
       try {
         loadPyodide({
-          indexURL: idxSrc.url,
+          // 自托管源是相对路径，需解析成绝对 URL：pyodide 内部按 indexURL
+          // 拼接 python_stdlib.zip 等附属文件地址，相对路径会被当成非法 URL。
+          indexURL: idxSrc.local ? new URL(idxSrc.url, location.href).href : idxSrc.url,
           stdout: function(){}, stderr: function(){},
         }).then(function(instance){
           if (settled) return;

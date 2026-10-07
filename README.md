@@ -37,11 +37,12 @@
 
 ### 首次加载
 
-需要下载 Python 运行时：wasm 2.85MB + 标准库 2.20MB（服务端已做 brotli 压缩，
-实际传输约 5MB）。之后浏览器会缓存，第二次打开基本是瞬时的。
+Python 运行时**随站点一起发布**，浏览器从同源取（走 GitHub Pages 自己的 CDN），
+不依赖任何公共 CDN。wasm 2.85MB + 标准库 2.20MB（Pages 会 gzip 传输），
+之后浏览器缓存，第二次打开基本瞬时。
 
-页面内置**多镜像自动回退**（wasm 与标准库分别选源），国内走淘宝源通常 1~4 秒，
-并会显示实际使用的来源与耗时。单个源超时或失败会自动换下一个，不会卡死。
+页面同时保留公共源作为兜底（万一 Pages 部署异常），会显示实际使用的来源与耗时；
+单个源超时或失败会自动换下一个，不会卡死。
 
 ---
 
@@ -188,6 +189,9 @@ mingli-oracle/
 ├── examples/                 # 生成好的示例命盘（可直接打开）
 ├── web/                      # 网页版（Pyodide 跑同一份 Python 引擎）
 │   ├── build_web.py          # 生成器：把引擎内联成单个 HTML（零构建依赖）
+│   ├── fetch_pyodide.py      # 下载 Pyodide 运行时到本地（自托管）
+│   ├── verify_dist.py        # 部署前校验产物
+│   ├── check_secrets.py      # 扫仓库里的敏感信息
 │   └── app.html              # 网页版模板（构建时会填入引擎源码）
 └── .github/workflows/ci.yml  # 自测 + 自动部署到 GitHub Pages
 ```
@@ -207,9 +211,13 @@ scripts/*.py  ──►  web/build_web.py  ──►  web/dist/index.html  ─�
 自己构建：
 
 ```bash
-python web/build_web.py                    # 输出到 web/dist/
-python -m http.server -d web/dist 8000     # 本地预览（必须用 http:// 而非 file://）
+python web/build_web.py                        # 输出到 web/dist/index.html
+python web/fetch_pyodide.py --out web/dist/pyodide   # 下载运行时（约 12MB）
+python -m http.server -d web/dist 8000         # 本地预览（必须用 http:// 而非 file://）
 ```
+
+运行时随站点一起发布，所以 `web/dist/` 约 12MB（其中 wasm 占 9.6MB）。
+不提交进 git，由 CI 每次现下。
 
 部署由 `.github/workflows/ci.yml` 自动完成：先跑 `self_test.py`（Python 3.8 与 3.12 各一遍），
 **自测不过就不部署**，避免把坏版本推上线。

@@ -14,10 +14,13 @@
   因此网页结果与本地 CLI 逐字一致。零构建依赖，只用标准库。
 - `web/app.html`：网页版模板。计算全在本机，除首次取 Pyodide 运行时外不产生网络请求。
 - `web/verify_dist.py`：部署前静态校验产物（占位符、内联模块语法配平、
-  JS 结构、DOM 引用完整性、多镜像回退完备性、无本机痕迹）。纯标准库，不启动浏览器。
-- 多镜像自动回退：wasm 与标准库分别配源并逐个尝试。国内实测
-  npmmirror 的 wasm 为 1.6~4.4 MB/s，而 cdn.jsdelivr.net 仅 0.31 MB/s（慢一个量级）。
-  单源失败或超时会自动切换，全部失败时提示改用本地版。
+  JS 结构、DOM 引用完整性、镜像回退完备性、自托管文件齐全、无本机痕迹）。
+  纯标准库，不启动浏览器。
+- `web/fetch_pyodide.py`：把 Pyodide 运行时下载到 `web/dist/pyodide/` 随站点发布。
+  主路径取整包 tgz（npmmirror 约 3s / 5.6MB，四个运行必需文件齐全），
+  逐文件下载作为兜底。运行时因此从同源加载，不再依赖公共 CDN。
+- 镜像自动回退：自托管优先，公共 CDN 作为兜底；wasm 与标准库分别配源并逐个尝试。
+  国内实测 npmmirror 的 wasm 为 1.6~4.4 MB/s，cdn.jsdelivr.net 仅 0.31 MB/s。
 - `web/check_secrets.py`：按类别扫描将要公开的仓库内容，命中即让 CI 失败。
 - `.github/workflows/ci.yml`：Python 3.8 / 3.12 各跑一遍自测，构建并校验产物后
   部署到 GitHub Pages。**自测不过就不部署。**
@@ -62,6 +65,11 @@
   在 3.5 上直接 `ImportError`。改用 `random.SystemRandom()`（自 2.6 起可用，同样走系统 CSPRNG）。
 - README 补 Windows 提示：命令行 `python` 可能指向旧 3.5，此时 `server.py` 因
   `ThreadingHTTPServer`（3.7+）无法启动，建议改用官方启动器 `py -3`。
+- 网页版相对路径当 indexURL 传给 Pyodide 会被判为非法 URL（Pyodide 内部按
+  indexURL 拼接 `python_stdlib.zip` 等地址），自托管源必须先
+  `new URL(url, location.href).href` 转绝对。
+- `verify_dist.py` 的 `ck(name, ok, extra)` 第三个参数是说明文本而非条件 ——
+  曾误把条件写进第三个位置，导致断言恒真。已修正。
 - **中文输出乱码**：Windows 中文系统控制台代码页默认 936（GBK），`sys.stdout.encoding`
   变成 `gbk`。直接跑通常正常，但输出走管道 / 重定向 / 被 IDE 捕获时，
   GBK 字节被按 UTF-8 解码即出乱码。`almanac.py` 新增 `setup_console()`
