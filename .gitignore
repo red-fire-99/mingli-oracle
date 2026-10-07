@@ -35,3 +35,6 @@ Thumbs.db
 命盘*.html
 !examples/命盘*.html
 *.log
+
+# 网页版构建产物：由 web/build_web.py 生成，CI 每次现建，不入库
+web/dist/

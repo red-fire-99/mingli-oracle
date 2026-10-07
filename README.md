@@ -22,7 +22,24 @@
 
 ---
 
-## 快速开始
+## 在线使用
+
+**https://red-fire-99.github.io/mingli-oracle/**
+
+打开即用，不用装任何东西。填生日 → 出命盘 → 可切「说人话版 / 专业数据」→ 可保存成离线网页。
+
+技术上是把本仓库 `scripts/` 里**同一份 Python 引擎**跑在浏览器里（Pyodide = CPython 的 WASM 构建），
+不是另写了一个 JS 版本，所以**网页上的排盘结果和本地 CLI 完全一致**。
+
+关于隐私：Pyodide 是纯前端运行时，没有后端服务器。**生辰只在你自己的浏览器里计算，
+不发往任何地方**（页面除了首次下载 Pyodide 运行时外不产生任何网络请求）。
+不想在浏览器里跑、或者网络访问 CDN 受限时，用下面的本地版。
+
+首次打开需下载约 12MB 的 Python 运行时，之后浏览器会缓存。
+
+---
+
+## 本地使用
 
 要求：**Python 3.8+**（不需要装任何包）。
 
@@ -162,8 +179,34 @@ mingli-oracle/
 ├── templates/app.html        # 前端交互界面（原生 JS，响应式）
 ├── references/               # 解读规则知识库
 ├── tools/                    # 与第三方库的交叉验证脚本
-└── examples/                 # 生成好的示例命盘（可直接打开）
+├── examples/                 # 生成好的示例命盘（可直接打开）
+├── web/                      # 网页版（Pyodide 跑同一份 Python 引擎）
+│   ├── build_web.py          # 生成器：把引擎内联成单个 HTML（零构建依赖）
+│   └── app.html              # 网页版模板（构建时会填入引擎源码）
+└── .github/workflows/ci.yml  # 自测 + 自动部署到 GitHub Pages
 ```
+
+### 网页版是怎么工作的
+
+```
+scripts/*.py  ──►  web/build_web.py  ──►  web/dist/index.html  ──►  GitHub Pages
+（唯一一份引擎）      （内联成字符串）      （单文件，约 210KB）
+                          │
+                          └─ 浏览器加载 Pyodide，在 WebAssembly 里执行它
+```
+
+`build_web.py` 只用 Python 标准库，不需要 npm 或打包器，产物是单个 HTML 文件，
+扔进任意静态托管都能跑。CI 里每次 push 现建现部署，`web/dist/` 不入库。
+
+自己构建：
+
+```bash
+python web/build_web.py                    # 输出到 web/dist/
+python -m http.server -d web/dist 8000     # 本地预览（必须用 http:// 而非 file://）
+```
+
+部署由 `.github/workflows/ci.yml` 自动完成：先跑 `self_test.py`（Python 3.8 与 3.12 各一遍），
+**自测不过就不部署**，避免把坏版本推上线。
 
 ---
 

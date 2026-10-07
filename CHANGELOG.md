@@ -8,6 +8,17 @@
 
 ### 新增
 
+**网页版（GitHub Pages）**
+- `web/build_web.py`：把 `scripts/` 里**同一份引擎源码**内联成单个 HTML，
+  浏览器用 Pyodide（CPython 的 WASM 构建）执行它 —— 不是另写一份 JS 实现，
+  因此网页结果与本地 CLI 逐字一致。零构建依赖，只用标准库。
+- `web/app.html`：网页版模板。计算全在本机，除首次取 Pyodide 运行时外不产生网络请求。
+- `web/verify_dist.py`：部署前静态校验产物（占位符、内联模块语法配平、
+  JS 结构、DOM 引用完整性、无本机痕迹）。纯标准库，不启动浏览器。
+- `web/check_secrets.py`：按类别扫描将要公开的仓库内容，命中即让 CI 失败。
+- `.github/workflows/ci.yml`：Python 3.8 / 3.12 各跑一遍自测，构建并校验产物后
+  部署到 GitHub Pages。**自测不过就不部署。**
+
 **排盘引擎（纯 Python 标准库，零依赖）**
 - `almanac.py`：天文历法底座 —— Meeus 定气定朔、农历（定气定朔 + 无中气置闰）、干支纪日、
   日月行星地心黄经、真太阳时（均时差 + 经度修正）。
@@ -48,6 +59,10 @@
   在 3.5 上直接 `ImportError`。改用 `random.SystemRandom()`（自 2.6 起可用，同样走系统 CSPRNG）。
 - README 补 Windows 提示：命令行 `python` 可能指向旧 3.5，此时 `server.py` 因
   `ThreadingHTTPServer`（3.7+）无法启动，建议改用官方启动器 `py -3`。
+- **中文输出乱码**：Windows 中文系统控制台代码页默认 936（GBK），`sys.stdout.encoding`
+  变成 `gbk`。直接跑通常正常，但输出走管道 / 重定向 / 被 IDE 捕获时，
+  GBK 字节被按 UTF-8 解码即出乱码。`almanac.py` 新增 `setup_console()`
+  （代码页切 65001 + stdout/stderr 重配 UTF-8），七个入口统一调用它。
 
 ### 验证结果
 

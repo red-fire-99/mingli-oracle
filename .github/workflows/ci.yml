@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# 最小权限：默认只读
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: 回归自测
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # README 声明最低 3.8，就按最低版本也跑一遍
+        python-version: ["3.8", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: 跑自测
+        working-directory: scripts
+        run: python self_test.py
+
+  web:
+    name: 构建网页版
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 生成单文件网页
+        run: python web/build_web.py
+
+      # 构建产物必须自洽：占位符填完、7 个模块都在、内联的 Python 语法配平。
+      # 这些断言全部只用标准库，不给 CI 引入额外依赖。
+      - name: 校验产物
+        run: python web/verify_dist.py
+
+      - name: 扫敏感信息
+        run: python web/check_secrets.py
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/dist
+
+  deploy:
+    name: 部署到 GitHub Pages
+    needs: [test, web]        # 自测或构建不过就不上线
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

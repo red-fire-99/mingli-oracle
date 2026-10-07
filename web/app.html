@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>命理神机 · 在线排盘</title>
+<meta name="description" content="四柱八字、紫微斗数、西洋占星在线排盘。全部计算在你的浏览器里完成，生辰不上传任何服务器。">
+<style id="oracle-css">
+/*__ORACLE_CSS__*/
+/* ===================== 应用层样式 ===================== */
+:root{
+  --bg:#f7f4ee;--card:#fffdf8;--ink:#2b2621;--sub:#6b6154;--line:#e3dbcd;
+  --red:#a8322d;--gold:#a8842c;--green:#3f7a52;--blue:#2f5d7c;
+  --ok:#2f7a4a;--err:#b3403a;--radius:14px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;overflow-x:hidden}
+body{background:var(--bg);color:var(--ink);font-size:16px;
+  font-family:"PingFang SC","Microsoft YaHei","Noto Sans SC",system-ui,-apple-system,sans-serif;
+  line-height:1.65;-webkit-text-size-adjust:100%;overflow-wrap:break-word;word-break:break-word}
+input,select,button{min-width:0;max-width:100%}
+.dategrid>*,.seg>*,.btnrow>*{min-width:0}
+.app{max-width:760px;margin:0 auto;padding:0 14px 48px}
+header{padding:26px 0 16px;text-align:center}
+header h1{font-size:23px;margin:0 0 6px;letter-spacing:5px;color:var(--red);font-weight:700}
+header p{margin:0;font-size:13px;color:var(--sub);line-height:1.7}
+.badge{display:inline-block;margin-top:8px;font-size:12px;color:var(--green);
+  background:#eaf4ed;border-radius:20px;padding:3px 12px}
+
+/* 卡片 */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:18px 16px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.03)}
+.card h2{font-size:16px;margin:0 0 4px;padding-left:10px;border-left:4px solid var(--red);
+  letter-spacing:1px}
+.hint{font-size:13px;color:var(--sub);margin:0 0 16px;padding-left:10px;line-height:1.7}
+
+/* 表单 */
+.field{margin-bottom:18px}
+.field:last-child{margin-bottom:0}
+.field>label.lb{display:block;font-size:14px;font-weight:600;margin-bottom:8px}
+.field .note{font-size:12px;color:var(--sub);font-weight:400;margin-left:6px}
+input[type=date],input[type=time],input[type=number],select{
+  width:100%;height:46px;padding:0 12px;font-size:16px;color:var(--ink);
+  background:#fff;border:1px solid var(--line);border-radius:10px;outline:none;
+  font-family:inherit;appearance:none}
+input:focus,select:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(168,132,44,.13)}
+select{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' fill='none' stroke='%236b6154' stroke-width='1.6' stroke-linecap='round'/></svg>");
+  background-repeat:no-repeat;background-position:right 13px center;padding-right:34px}
+
+/* 分段选择（历法 / 性别） */
+.seg{display:flex;gap:8px}
+.seg button{flex:1;height:46px;font-size:15px;font-family:inherit;cursor:pointer;
+  background:#fff;color:var(--sub);border:1px solid var(--line);border-radius:10px;
+  transition:.15s;font-weight:500}
+.seg button[aria-pressed=true]{background:var(--red);color:#fff;border-color:var(--red);
+  font-weight:600;box-shadow:0 2px 8px rgba(168,50,45,.22)}
+.seg button:active{transform:scale(.98)}
+
+/* 日期三连 */
+.dategrid{display:grid;grid-template-columns:1.35fr 1fr 1fr;gap:8px}
+
+/* 时辰按钮组 */
+.shichen{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
+.shichen button{height:44px;font-size:14px;font-family:inherit;cursor:pointer;
+  background:#fff;border:1px solid var(--line);border-radius:9px;color:var(--sub)}
+.shichen button[aria-pressed=true]{background:var(--gold);color:#fff;border-color:var(--gold)}
+
+/* 折叠区 */
+details{margin-top:10px}
+details summary{cursor:pointer;font-size:13px;color:var(--blue);list-style:none;
+  padding:6px 0;user-select:none}
+details summary::-webkit-details-marker{display:none}
+details summary::before{content:"▸ ";display:inline-block;transition:.2s}
+details[open] summary::before{transform:rotate(90deg)}
+
+/* 按钮 */
+.btn{width:100%;height:52px;font-size:17px;font-weight:600;font-family:inherit;
+  border:none;border-radius:12px;cursor:pointer;transition:.15s;letter-spacing:1px}
+.btn-main{background:var(--red);color:#fff;box-shadow:0 3px 12px rgba(168,50,45,.25)}
+.btn-main:active{transform:translateY(1px);box-shadow:0 1px 6px rgba(168,50,45,.25)}
+.btn-main:disabled{background:#c9bdb0;box-shadow:none;cursor:not-allowed}
+.btn-ghost{background:transparent;color:var(--sub);border:1px solid var(--line);
+  height:46px;font-size:15px;font-weight:500}
+.btn-ghost:active{background:#f2ece1}
+.btnrow{display:flex;gap:10px;margin-top:20px}
+.btnrow .btn-main{flex:2}
+.btnrow .btn-ghost{flex:1}
+
+/* 状态提示 */
+.status{display:none;align-items:flex-start;gap:9px;padding:12px 14px;border-radius:11px;
+  font-size:14px;margin-bottom:14px;line-height:1.65}
+.status.show{display:flex}
+.status.loading{background:#fdf6e8;color:#8a6d1f;border:1px solid #eddfbe}
+.status.error{background:#fdeceb;color:var(--err);border:1px solid #f3cdca}
+.status.ok{background:#eaf4ed;color:var(--ok);border:1px solid #cfe6d7}
+.status .ico{flex:0 0 auto;font-size:15px;line-height:1.5}
+.spin{width:15px;height:15px;border:2px solid #e0d3b0;border-top-color:#8a6d1f;
+  border-radius:50%;animation:sp .8s linear infinite;flex:0 0 auto;margin-top:3px}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* 排完盘后把表单收起来，只留一行摘要 */
+.card.collapsed{display:none}
+.summary{display:none;align-items:center;gap:10px;background:#f1ece1;
+  border:1px solid var(--line);border-radius:11px;padding:10px 14px;margin-bottom:14px;font-size:14px}
+.summary.show{display:flex}
+.summary .txt{flex:1;color:var(--sub);line-height:1.6}
+.summary .txt b{color:var(--ink)}
+.summary button{flex:0 0 auto;background:#fff;border:1px solid var(--line);border-radius:8px;
+  padding:7px 14px;font-size:13px;font-family:inherit;color:var(--blue);cursor:pointer}
+.summary button:active{background:#f6f2e9}
+
+/* 结果区 */
+#result{display:none}
+#result.show{display:block}
+.headline{background:linear-gradient(135deg,#fdf6ee,#f6eee0);border:1px solid #e8dcc8;
+  border-radius:var(--radius);padding:18px 18px;margin-bottom:16px;text-align:center}
+.headline .big{font-size:17px;font-weight:700;color:var(--red);line-height:1.8}
+.headline .tip{font-size:13px;color:var(--sub);margin-top:7px}
+
+/* Tab */
+.tabs{display:flex;gap:0;background:#efe9dd;border-radius:11px;padding:4px;margin-bottom:16px}
+.tabs button{flex:1;height:42px;font-size:15px;font-weight:600;font-family:inherit;
+  border:none;background:transparent;color:var(--sub);border-radius:8px;cursor:pointer;
+  transition:.15s}
+.tabs button[aria-selected=true]{background:#fff;color:var(--red);
+  box-shadow:0 1px 4px rgba(0,0,0,.07)}
+.panel{display:none}
+.panel.show{display:block}
+
+/* 结果内的 section 收紧一点 */
+#result section{padding:18px 16px;margin-bottom:16px}
+#result h2{font-size:16px}
+
+/* 移动端微调 */
+@media(max-width:480px){
+  .app{padding:0 11px 40px}
+  header h1{font-size:20px;letter-spacing:3px}
+  .card{padding:16px 13px}
+  #result section{padding:16px 13px}
+  .btn{height:50px;font-size:16px}
+  .seg button{font-size:14px;padding:0 6px}
+  .tabs button{font-size:14px}
+  .dategrid{grid-template-columns:1.3fr 1fr 1fr;gap:6px}
+  .dategrid select{font-size:14px;padding:0 8px}
+  .shichen{grid-template-columns:repeat(3,1fr)}
+  .shichen button{font-size:13px}
+  .headline .big{font-size:16px}
+  #result .pan{max-width:100%}
+  #result .cell{padding:5px;font-size:10.5px}
+  #result .cell .gz2{font-size:13px}
+  #result .gloss{grid-template-columns:1fr}
+}
+/* 桌面端：结果区宽一点 */
+@media(min-width:900px){
+  .app{max-width:900px}
+}
+@media print{.card,#form,.tabs{display:none}}
+</style>
+<style>
+/* ---------- 网页版专属：加载态、隐私说明、运行时徽标 ---------- */
+.boot{position:fixed;inset:0;background:rgba(247,244,238,.96);display:flex;
+align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:99}
+.boot .bar{width:min(320px,72vw);height:8px;background:#e7e0d2;border-radius:4px;overflow:hidden}
+.boot .fill{height:100%;width:0;background:var(--red);border-radius:4px;transition:width .3s}
+.boot .t{font-size:14px;color:var(--sub);text-align:center;line-height:1.7}
+.boot h2{font-size:19px;color:var(--red);letter-spacing:4px;border:0;padding:0;margin:0}
+.boot .err{color:var(--red);font-size:13px;max-width:min(560px,86vw);text-align:center;line-height:1.8}
+.pill-runtime{position:fixed;right:10px;bottom:8px;font-size:11px;color:#a99f8c;z-index:5}
+</style>
+</head>
+<body>
+
+<div class="boot" id="boot">
+  <h2>命 理 神 机</h2>
+  <div class="bar"><div class="fill" id="bootFill"></div></div>
+  <div class="t" id="bootMsg">正在加载 Python 运行时…<br><span style="font-size:12px">首次约 12MB，之后浏览器会缓存</span></div>
+</div>
+<div class="pill-runtime" id="rtBadge"></div>
+
+<div class="app">
+  <header>
+    <h1>命 理 神 机</h1>
+    <p>输入生日，一次算出八字、紫微斗数、西洋占星</p>
+    <div class="badge">在你自己的电脑上算 · 不上传 · 不联网</div>
+  </header>
+
+  <form class="card" id="form" autocomplete="off" novalidate>
+    <h2>填写出生信息</h2>
+    <p class="hint">带 <span style="color:var(--red)">*</span> 的是必填，其他可以留空。</p>
+
+    <!-- 历法 -->
+    <div class="field">
+      <label class="lb">生日用哪种历法？</label>
+      <div class="seg" id="calSeg" role="group">
+        <button type="button" data-cal="solar" aria-pressed="true">阳历（公历）</button>
+        <button type="button" data-cal="lunar" aria-pressed="false">农历（阴历）</button>
+      </div>
+      <div class="note" style="margin:8px 0 0 0">不确定的话，身份证上的生日一般是阳历。</div>
+    </div>
+
+    <!-- 阳历 -->
+    <div class="field" id="solarBox">
+      <label class="lb" for="solarDate">出生日期 <span style="color:var(--red)">*</span></label>
+      <input type="date" id="solarDate" min="1900-01-01" max="2100-12-31">
+    </div>
+
+    <!-- 农历 -->
+    <div class="field" id="lunarBox" style="display:none">
+      <label class="lb">出生日期（农历） <span style="color:var(--red)">*</span></label>
+      <div class="dategrid">
+        <select id="lYear" aria-label="农历年"></select>
+        <select id="lMonth" aria-label="农历月"></select>
+        <select id="lDay" aria-label="农历日"></select>
+      </div>
+      <label style="display:flex;align-items:center;gap:7px;margin-top:10px;font-size:14px;color:var(--sub)">
+        <input type="checkbox" id="lLeap" style="width:18px;height:18px;accent-color:var(--red)">
+        这年有闰月，我生在闰月里
+      </label>
+    </div>
+
+    <!-- 时间 -->
+    <div class="field">
+      <label class="lb" for="birthTime">出生时间 <span class="note">记不清可以先不填</span></label>
+      <input type="time" id="birthTime">
+      <details>
+        <summary>记不清具体几点？直接选时辰也行</summary>
+        <div class="shichen" id="shichenGrid" role="group" aria-label="选择时辰"></div>
+        <div class="note" style="margin-top:8px">时辰对应：子时 23-1 点、丑时 1-3 点，每两小时一个时辰。</div>
+      </details>
+    </div>
+
+    <!-- 性别 -->
+    <div class="field">
+      <label class="lb">性别 <span style="color:var(--red)">*</span></label>
+      <div class="seg" id="sexSeg" role="group">
+        <button type="button" data-sex="男" aria-pressed="true">男</button>
+        <button type="button" data-sex="女" aria-pressed="false">女</button>
+      </div>
+      <div class="note" style="margin:8px 0 0 0">会影响大运的排法，一定要选对。</div>
+    </div>
+
+    <!-- 出生地 -->
+    <div class="field">
+      <label class="lb" for="city">出生地 <span class="note">可选，填了能算得更准</span></label>
+      <select id="city"></select>
+      <details>
+        <summary>找不到城市？手动填经纬度</summary>
+        <div class="dategrid" style="grid-template-columns:1fr 1fr;margin-top:8px">
+          <input type="number" id="lon" step="0.01" placeholder="经度 如 116.4" aria-label="经度">
+          <input type="number" id="lat" step="0.01" placeholder="纬度 如 39.9" aria-label="纬度">
+        </div>
+        <div class="note" style="margin-top:8px">
+          经度用来校正「真太阳时」，纬度用来算上升星座。两个都填才生效。
+        </div>
+      </details>
+    </div>
+
+    <div class="btnrow">
+      <button type="submit" class="btn btn-main" id="submitBtn">开始排盘</button>
+      <button type="button" class="btn btn-ghost" id="resetBtn">重填</button>
+    </div>
+    <div style="text-align:center;margin-top:12px">
+      <button type="button" id="demoBtn"
+        style="background:none;border:none;color:var(--blue);font-size:14px;
+        font-family:inherit;cursor:pointer;text-decoration:underline;padding:6px">
+        没有具体生日？先用示例试一下
+      </button>
+    </div>
+  </form>
+
+  <div class="status" id="status" role="status" aria-live="polite"></div>
+
+  <div class="summary" id="formSummary">
+    <span class="txt" id="summaryText"></span>
+    <button type="button" id="editBtn">修改信息</button>
+  </div>
+
+  <div id="result">
+    <div class="headline" id="headline"></div>
+    <div class="tabs" role="tablist">
+      <button type="button" data-tab="plain" role="tab" aria-selected="true">说人话版</button>
+      <button type="button" data-tab="pro" role="tab" aria-selected="false">专业数据</button>
+    </div>
+    <div class="panel show" id="panel-plain"></div>
+    <div class="panel" id="panel-pro"></div>
+    <button type="button" class="btn btn-ghost" id="saveBtn" style="margin-top:6px">
+      保存成网页文件（可离线打开 / 发给别人）
+    </button>
+  </div>
+
+  <div class="foot" style="text-align:center;color:var(--sub);font-size:12px;
+    margin-top:26px;line-height:1.8">
+    排盘结果按天文历法和命理规则算出来，解读仅供娱乐参考，不能当作医疗、投资或人生的决策依据。<br>
+    命盘显示的是可能性，路怎么走还是看你自己。
+  </div>
+</div>
+<script>
+/* ===================================================================
+   网页版：把 scripts/ 里的同一份 Python 引擎跑在浏览器里（Pyodide = CPython 的 WASM 构建）。
+   引擎源码由 web/build_web.py 在构建时内联进 window.MINGLI_SRC，
+   所以线上排盘结果与本地 CLI 完全一致 —— 不存在「两份实现」这种隐患。
+   计算全在本机，页面除首次取 Pyodide 运行时外不发任何网络请求。
+   =================================================================== */
+window.MINGLI_SRC = window.MINGLI_SRC || {};
+/*__MINGLI_MODULES__*/
+
+var PYODIDE_INDEX = /*__PYODIDE_INDEX__*/;
+var ENGINE_VERSION = /*__ENGINE_VERSION__*/;
+
+(function(){
+  "use strict";
+  var $ = function(s){ return document.querySelector(s); };
+
+  /* ---------- 城市经纬度（与本地版同一张表）---------- */
+  var CITIES = [
+    ["", null], ["北京",[116.41,39.90]], ["上海",[121.47,31.23]], ["广州",[113.26,23.13]],
+    ["深圳",[114.06,22.55]], ["成都",[104.07,30.57]], ["杭州",[120.15,30.28]],
+    ["武汉",[114.30,30.59]], ["西安",[108.94,34.34]], ["南京",[118.78,32.06]],
+    ["重庆",[106.55,29.56]], ["天津",[117.20,39.13]], ["苏州",[120.62,31.30]],
+    ["长沙",[112.94,28.23]], ["郑州",[113.62,34.75]], ["青岛",[120.38,36.07]],
+    ["沈阳",[123.43,41.80]], ["哈尔滨",[126.53,45.80]], ["昆明",[102.83,24.88]],
+    ["福州",[119.30,26.08]], ["厦门",[118.09,24.48]], ["济南",[117.12,36.65]],
+    ["合肥",[117.28,31.86]], ["南昌",[115.89,28.68]], ["贵阳",[106.63,26.65]],
+    ["南宁",[108.32,22.82]], ["兰州",[103.83,36.06]], ["太原",[112.55,37.87]],
+    ["石家庄",[114.51,38.04]], ["乌鲁木齐",[87.62,43.83]], ["拉萨",[91.11,29.97]],
+    ["呼和浩特",[111.75,40.84]], ["银川",[106.23,38.49]], ["西宁",[101.78,36.62]],
+    ["海口",[110.20,20.04]], ["长春",[125.32,43.82]], ["大连",[121.62,38.92]],
+    ["香港",[114.17,22.32]], ["澳门",[113.55,22.20]], ["台北",[121.52,25.03]]
+  ];
+  var SHICHEN = ["子","丑","寅","卯","辰","巳","午","未","申","酉","戌","亥"];
+
+  var state = { result:null, tab:"plain" };
+
+  function esc(s){ return String(s).replace(/[&<>]/g, function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;"}[c];
+  }); }
+
+  function setStatus(type, msg){
+    var el = $("#status");
+    el.className = "status " + (type||"");
+    el.textContent = msg || "";
+  }
+
+  function summarize(v){
+    var parts = [];
+    parts.push(v.solar ? v.solar.join("-") : ("农历 " + v.lunar.join("/") + (v.leap ? "（闰月）" : "")));
+    parts.push(v.shichen ? (v.shichen + "时") : v.hour);
+    parts.push(v.sex);
+    if (v.place) parts.push(v.place);
+    return parts.join(" · ");
+  }
+
+  /* ---------- 收集表单参数 ---------- */
+  function collect(){
+    var calBtn = $(".seg [data-cal].on");
+    var sexBtn = $(".seg [data-sex].on");
+    var useLunar = calBtn && calBtn.getAttribute("data-cal") === "lunar";
+    var sex = sexBtn ? sexBtn.getAttribute("data-sex") : "男";
+    var sel = $("#shichenGrid .on");
+    var out = { sex: sex, shichen: sel ? sel.dataset.v : null };
+
+    if (useLunar){
+      var ly = $("#lYear").value, lm = $("#lMonth").value, ld = $("#lDay").value;
+      if (!ly || !lm || !ld) throw "请把农历的年、月、日都选上。";
+      out.lunar = [Number(ly), Number(lm), Number(ld)];
+      out.leap = $("#lLeap").checked;
+    } else {
+      if (!$("#solarDate").value) throw "请先选择阳历生日。";
+      out.solar = $("#solarDate").value.split("-").map(Number);
+    }
+    if (!out.shichen){
+      if (!$("#birthTime").value) throw "请选择出生时间，或直接点一个时辰。";
+      out.hour = $("#birthTime").value;
+    }
+    var city = $("#city").value;
+    if (city){
+      var c = CITIES.filter(function(x){ return x[0] === city; })[0];
+      if (c && c[1]){ out.lon = c[1][0]; out.lat = c[1][1]; out.place = city; }
+    } else if ($("#lon").value && $("#lat").value){
+      out.lon = Number($("#lon").value); out.lat = Number($("#lat").value);
+      out.place = "自定义";
+    }
+    return out;
+  }
+
+  /* ---------- 在 Pyodide 里排盘 ---------- */
+  var py = null;
+
+  function runPython(v){
+    // 参数以 JSON 传入，交给 Python 侧 json.loads 解析：
+    // 这样不必在 JS 里手拼 Python 字面量，杜绝引号/转义类注入问题。
+    var lines = [
+      "import json, oracle as O",
+      "_v = json.loads(" + JSON.stringify(JSON.stringify(v)) + ")",
+      "kw = {'sex': _v['sex']}",
+      "if _v.get('place'): kw['place'] = _v['place']",
+      "if _v.get('lat') is not None: kw['lat'] = float(_v['lat'])",
+      "if _v.get('lon') is not None: kw['lon'] = float(_v['lon'])",
+      "if _v.get('solar'): kw['solar'] = tuple(int(x) for x in _v['solar'])",
+      "else:",
+      "    kw['lunar'] = tuple(int(x) for x in _v['lunar'])",
+      "    kw['leap'] = bool(_v.get('leap'))",
+      "if _v.get('shichen'): kw['shichen'] = _v['shichen']",
+      "elif _v.get('hour'):",
+      "    kw['hour'] = tuple(int(x) for x in _v['hour'].split(':'))",
+      "import plain as PL",
+      "_d = O.build(**kw)",
+      "_head = PL.headline(_d)",
+      "_pro = O.render_bazi(_d['八字']) if '八字' in _d else ''",
+      "_pro += O.render_ziwei(_d['紫微']) if '紫微' in _d else ''",
+      "_pro += O.render_astro(_d['占星']) if '占星' in _d else ''",
+      "_pro += O.render_glossary()",
+      "result = {'headline': _head, 'plain_html': O.render_plain(_d), 'pro_html': _pro}",
+      "result",
+    ];
+    return py.runPython(lines.join("
+")).toJs();
+  }
+
+  /* ---------- 启动 Pyodide ---------- */
+  function boot(){
+    var fill = $("#bootFill"), msg = $("#bootMsg");
+    $("#rtBadge").textContent = "Pyodide · " + ENGINE_VERSION;
+
+    function fail(m){
+      msg.innerHTML = '<div class="err">加载失败<br><br>' + esc(m)
+        + '<br><br>若网络无法访问 CDN，可改用本地版：<br><code>python scripts/server.py</code></div>';
+    }
+
+    function start(instance){
+      py = instance;
+      msg.innerHTML = "正在装入排盘引擎…";
+      var names = Object.keys(window.MINGLI_SRC);
+      names.forEach(function(n, i){
+        py.FS.writeFile("/home/pyodide/" + n + ".py", window.MINGLI_SRC[n]);
+        fill.style.width = Math.round(20 + 60 * ((i + 1) / names.length)) + "%";
+      });
+      py.runPython("import sys\nsys.path.insert(0, '/home/pyodide')\nimport oracle\nassert callable(oracle.build)");
+      fill.style.width = "100%";
+      $("#boot").remove();
+      bind();
+      setStatus("ok", "就绪。填生日即可排盘 —— 全程在你的浏览器里算，不上传。");
+    }
+
+    if (typeof loadPyodide !== "function"){
+      var s = document.createElement("script");
+      s.src = PYODIDE_INDEX + "pyodide.js";
+      s.onload = function(){
+        loadPyodide({ indexURL: PYODIDE_INDEX }).then(start).catch(function(e){ fail(e && e.message || e); });
+      };
+      s.onerror = function(){ fail("无法加载 Pyodide 运行时（CDN 不通或被拦截）。"); };
+      document.head.appendChild(s);
+    } else {
+      loadPyodide({ indexURL: PYODIDE_INDEX }).then(start).catch(function(e){ fail(e && e.message || e); });
+    }
+  }
+
+  /* ---------- 表单与结果交互 ---------- */
+  function bind(){
+    // 单选分段控件。原模板标记是 class="seg" + data-cal / data-sex（没有 id，
+    // 也没有预置 .on），所以按 class 定位，并自行维护 on 类与 aria-pressed。
+    function segBind(cls, attr, cb){
+      var box = document.querySelector("." + cls);
+      if (!box) return;
+      var btns = Array.prototype.slice.call(box.querySelectorAll("[" + attr + "]"));
+      if (!btns.length) return;
+      var pick = function(b){
+        btns.forEach(function(x){ x.classList.remove("on"); x.setAttribute("aria-pressed", "false"); });
+        b.classList.add("on"); b.setAttribute("aria-pressed", "true");
+        if (cb) cb(b.getAttribute(attr));
+      };
+      btns.forEach(function(b){
+        b.addEventListener("click", function(){ pick(b); });
+      });
+      pick(btns[0]);   // 默认选第一个，并触发一次回调以同步初始显隐
+    }
+    segBind("seg", "data-cal", function(v){
+      $("#solarBox").style.display = (v === "solar") ? "" : "none";
+      $("#lunarBox").style.display = (v === "lunar") ? "" : "none";
+    });
+    segBind("seg", "data-sex");
+
+    var grid = $("#shichenGrid");
+    SHICHEN.forEach(function(s){
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "sc"; b.textContent = s; b.dataset.v = s;
+      b.addEventListener("click", function(){
+        Array.prototype.forEach.call(grid.children, function(x){ x.classList.remove("on"); });
+        b.classList.add("on");
+        $("#birthTime").value = "";
+      });
+      grid.appendChild(b);
+    });
+
+    // 注意：原模板里经纬度手填区没有 id="manualLon"，只有 city 的父节点内有 details，
+    // 所以下面用 querySelector 定位，而不是查一个不存在的 id。
+    var sel = $("#city");
+    CITIES.forEach(function(c){
+      var o = document.createElement("option");
+      o.value = c[0];
+      o.textContent = c[0] || "（不填，占星无法定上升点）";
+      sel.appendChild(o);
+    });
+    sel.addEventListener("change", function(){
+      var has = !!sel.value;
+      var details = sel.parentNode.querySelector("details");
+      // 选了城市就把「手填经纬度」收起来，避免两处填了不知道听谁的
+      if (details) details.style.display = has ? "none" : "";
+    });
+
+    fillLunar();
+
+    $("#form").addEventListener("submit", function(e){
+      e.preventDefault();
+      var v;
+      try { v = collect(); } catch (msg){ setStatus("error", msg); return; }
+      var btn = $("#submitBtn");
+      btn.disabled = true;
+      setStatus("loading", "正在排盘…");
+      // 先让 loading 态渲染出来，再进同步计算，避免界面卡住无反馈
+      setTimeout(function(){
+        try {
+          var res = runPython(v);
+          state.result = res;
+          $("#headline").innerHTML = '<div class="big">' + esc(res.headline) + '</div>'
+            + '<div class="tip">↑ 这是你命盘的三个关键词，下面用大白话展开</div>';
+          $("#panel-plain").innerHTML = res.plain_html;
+          $("#panel-pro").innerHTML = res.pro_html;
+          $("#result").classList.add("show");
+          $("#summaryText").innerHTML = "已按 <b>" + esc(summarize(v)) + "</b> 排盘";
+          $("#formSummary").classList.add("show");
+          $("#form").classList.add("collapsed");
+          setStatus("ok", "排盘完成！结果在下面 ↓");
+        } catch (err){
+          setStatus("error", "排盘失败：" + (err && err.message || err));
+        } finally { btn.disabled = false; }
+      }, 30);
+    });
+
+    $("#resetBtn").addEventListener("click", function(){ location.href = location.pathname; });
+    $("#editBtn").addEventListener("click", function(){
+      $("#formSummary").classList.remove("show");
+      $("#form").classList.remove("collapsed");
+    });
+    $("#demoBtn").addEventListener("click", function(){
+      $("#solarDate").value = "1990-05-15";
+      $("#birthTime").value = "12:00";
+      sel.value = "北京";
+      $("#form").requestSubmit();
+    });
+    $("#saveBtn").addEventListener("click", function(){
+      if (!state.result) return;
+      var html = "<!DOCTYPE html><html lang='zh-CN'><head><meta charset='utf-8'>"
+        + "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+        + "<title>命理神机 · 命盘</title><style>" + $("#oracle-css").textContent + "<\/style></head>"
+        + "<body><div class='wrap'><h1>命 理 神 机</h1>"
+        + "<div class='headline'><div class='big'>" + esc(state.result.headline) + "</div></div>"
+        + state.result.plain_html
+        + "<div class='secnote' style='text-align:center;margin:6px 0 16px'>———— 专业排盘数据 ————</div>"
+        + state.result.pro_html
+        + "<div class='foot'>排盘结果按天文历法与命理规则计算得出，解读仅供文化研究与娱乐参考，"
+        + "不能作为医疗、投资或人生决策的依据。<br>命盘显示的是可能性，路怎么走还是看你自己。</div>"
+        + "</div></body></html>";
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([html], {type:"text/html;charset=utf-8"}));
+      a.download = "命盘.html";
+      a.click();
+      setStatus("ok", "已保存到下载目录，可离线双击打开。");
+    });
+
+    // 切页按钮在原模板里用 class="tabs" + data-tab（没有 id），所以按这两个特征找
+    var tabs = Array.prototype.slice.call(document.querySelectorAll(".tabs [data-tab]"));
+    tabs.forEach(function(b){
+      b.addEventListener("click", function(){
+        tabs.forEach(function(x){
+          x.classList.remove("on");
+          x.setAttribute("aria-selected", "false");
+        });
+        b.classList.add("on");
+        b.setAttribute("aria-selected", "true");
+        state.tab = b.dataset.tab;
+        $("#panel-plain").classList.toggle("show", state.tab === "plain");
+        $("#panel-pro").classList.toggle("show", state.tab === "pro");
+      });
+    });
+  }
+
+  /* ---------- 农历下拉 ---------- */
+  function fillLunar(){
+    var y = $("#lYear"), m = $("#lMonth"), d = $("#lDay");
+    var ms = ["正月","二月","三月","四月","五月","六月","七月","八月","九月","十月","冬月","腊月"];
+    var ds = ["初一","初二","初三","初四","初五","初六","初七","初八","初九","初十",
+      "十一","十二","十三","十四","十五","十六","十七","十八","十九","二十",
+      "廿一","廿二","廿三","廿四","廿五","廿六","廿七","廿八","廿九","三十"];
+    for (var yy = 2100; yy >= 1900; yy--){
+      var o = document.createElement("option"); o.value = yy; o.textContent = yy + " 年"; y.appendChild(o);
+    }
+    ms.forEach(function(v, i){
+      var o = document.createElement("option"); o.value = i + 1; o.textContent = v; m.appendChild(o);
+    });
+    ds.forEach(function(v, i){
+      var o = document.createElement("option"); o.value = i + 1; o.textContent = v; d.appendChild(o);
+    });
+    y.value = 1990; m.value = 4; d.value = 21;
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>
