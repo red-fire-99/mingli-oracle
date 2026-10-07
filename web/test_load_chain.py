@@ -201,15 +201,21 @@ def main(argv=None):
     if "error" in r:
         print("  无法运行：%s" % r["error"]); return 2
     ck("无死循环（挂载次数有界）", r["scriptMounts"] <= 8, r["scriptMounts"])
-    ck("提示改用本地版", "scripts/server.py" in r["bootMsgHTML"])
+    ck("提示改用本地版或说明真实原因",
+       "scripts/server.py" in r["bootMsgHTML"] or "部署不完整" in r["bootMsgHTML"])
 
     print("\n场景 5：所有脚本挂载都失败")
     r = run(node, js, {"combos": [{"ok": True}], "scriptFails": list(range(1, 9))})
     if "error" in r:
         print("  无法运行：%s" % r["error"]); return 2
     ck("有界失败", r["scriptMounts"] <= 8, r["scriptMounts"])
+    # 失败时必须列出每次的真实原因，而不是只说一句「都试过了」
     ck("给出可操作提示",
        "scripts/server.py" in r["bootMsgHTML"] or "加载失败" in r["bootMsgHTML"])
+    ck("列出各次失败原因", "各次失败的具体原因" in r["bootMsgHTML"],
+       r["bootMsgHTML"][:60])
+    ck("提示区分网络问题与部署不完整",
+       "pyodide.asm.js" in r["bootMsgHTML"] or "部署不完整" in r["bootMsgHTML"])
 
     print("\n" + "=" * 56)
     if FAILS:

@@ -14,11 +14,12 @@
 连接可复用、无跨域协商，也不受第三方波动影响。
 
 实测体积（Pyodide 0.26.4，未压缩）
-    pyodide.asm.wasm    10,088,051
-    python_stdlib.zip    2,341,872
-    pyodide.js              14,761
-    pyodide-lock.json      106,335
-    合计约 12.6MB（GitHub Pages 会为 .wasm / .zip 做 gzip 传输，线上更小）
+    pyodide.asm.js      1,229,099     ← 必需：提供模块工厂，pyodide.js 会动态 import 它
+    pyodide.asm.wasm   10,088,051
+    python_stdlib.zip   2,341,872
+    pyodide.js             14,761
+    pyodide-lock.json     106,335
+    合计约 13.8MB（GitHub Pages 会为 .wasm / .zip 做 gzip 传输，线上更小）
 
 下载方式
 --------
@@ -44,8 +45,16 @@ import urllib.request
 
 PYODIDE_VERSION = "0.26.4"
 
-# 只需要运行必需的四个文件，不取 .d.ts / .map / console.html 等开发物料
-FILES = ["pyodide.js", "pyodide.asm.wasm", "python_stdlib.zip", "pyodide-lock.json"]
+# 运行必需的文件。
+#
+# pyodide.asm.js 与 pyodide.asm.wasm 都必须带上，缺一不可：
+# pyodide.js 里有这么一段 —— typeof _createPyodideModule != "function" 时，
+# 会 await import(`${indexURL}pyodide.asm.js`)，浏览器同样走这条动态 ESM 路径。
+# 也就是说 .asm.js 提供模块工厂（Emscripten glue），.asm.wasm 只是二进制本体。
+# 漏掉 .asm.js 时 import() 直接失败，loadPyodide reject —— 表现为「所有源都试过了」
+# 但其实一个都没真正起来。autoinstall 的包同理。
+FILES = ["pyodide.js", "pyodide.asm.js", "pyodide.asm.wasm",
+         "python_stdlib.zip", "pyodide-lock.json"]
 
 # 整包源（含 stdlib，是主路径）
 TARBALL_SOURCES = [

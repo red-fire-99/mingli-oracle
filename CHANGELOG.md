@@ -14,11 +14,13 @@
   因此网页结果与本地 CLI 逐字一致。零构建依赖，只用标准库。
 - `web/app.html`：网页版模板。计算全在本机，除首次取 Pyodide 运行时外不产生网络请求。
 - `web/verify_dist.py`：部署前静态校验产物（占位符、内联模块语法配平、
-  JS 结构、DOM 引用完整性、镜像回退完备性、自托管文件齐全、无本机痕迹）。
-  纯标准库，不启动浏览器。
+  JS 结构、DOM 引用完整性、镜像回退完备性、运行时文件齐全且与 `pyodide.js` 的
+  引用对得上、无本机痕迹）。纯标准库，不启动浏览器。
 - `web/fetch_pyodide.py`：把 Pyodide 运行时下载到 `web/dist/pyodide/` 随站点发布。
-  主路径取整包 tgz（npmmirror 约 3s / 5.6MB，四个运行必需文件齐全），
-  逐文件下载作为兜底。运行时因此从同源加载，不再依赖公共 CDN。
+  主路径取整包 tgz（npmmirror 约 1.6s / 5.6MB），逐文件下载作为兜底。
+  运行时因此从同源加载，不再依赖公共 CDN。
+- `web/test_load_chain.py`：端到端跑加载状态机（最小 DOM 桩 + 可编排的假
+  `loadPyodide`），覆盖 5 种失败组合。作用域绑定、递归守卫这类问题静态检查测不出来。
 - 镜像自动回退：自托管优先，公共 CDN 作为兜底；wasm 与标准库分别配源并逐个尝试。
   国内实测 npmmirror 的 wasm 为 1.6~4.4 MB/s，cdn.jsdelivr.net 仅 0.31 MB/s。
 - `web/check_secrets.py`：按类别扫描将要公开的仓库内容，命中即让 CI 失败。
@@ -48,6 +50,17 @@
 **验证**
 - `self_test.py`：157 项回归断言，无需外部依赖。
 - `tools/`：与 `ephem`（行星）、`iztro`（紫微）的交叉验证脚本，以及农历对照脚本。
+
+- **网页版自托管后完全打不开**（第二次线上事故）：
+  `pyodide.js` 里有 `if (typeof _createPyodideModule != "function")
+  await import(`${indexURL}pyodide.asm.js`)` —— `.asm.js` 提供模块工厂、
+  `.asm.wasm` 只是二进制本体，**两个都必须下发**。只下了 `.wasm` 时，
+  动态 import 直接失败、`loadPyodide` reject，页面表现为「所有源都试过了」。
+  修法：`fetch_pyodide.py` 补上 `pyodide.asm.js`；
+  `verify_dist.py` 增加交叉检查 —— 解析 `pyodide.js` 里拼进 URL 的资源名，
+  逐个确认在场（这条检查就是为同类漏文件而加）。
+- 加载失败提示改为列出**每次失败的原始原因**，并区分「网络受限」与
+  「站点部署不完整」两类根因，避免再把构建问题误报成网络问题。
 
 ### 修复（开发中发现并回归固化）
 

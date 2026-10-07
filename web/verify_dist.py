@@ -214,10 +214,29 @@ def main():
 
     # ---- 自托管文件必须真的在 dist 里，否则页面一定打不开 ----
     pdir = os.path.join(os.path.dirname(DIST), "pyodide")
-    need = ["pyodide.js", "pyodide.asm.wasm", "python_stdlib.zip", "pyodide-lock.json"]
-    for n in need:
+    for n in ["pyodide.js", "pyodide.asm.js", "pyodide.asm.wasm",
+              "python_stdlib.zip", "pyodide-lock.json", "manifest.json"]:
         ck("dist/pyodide/%s 存在" % n, os.path.isfile(os.path.join(pdir, n)))
-    ck("dist/pyodide/manifest.json 存在", os.path.isfile(os.path.join(pdir, "manifest.json")))
+
+    # ---- 交叉检查：pyodide.js 会去取哪些文件，这些文件必须在场 ----
+    # 这条检查是专门为「漏下 pyodide.asm.js」加的：那是个线上事故，
+    # 文件存在性与 SHA 全部通过，但 pyodide.js 里的
+    #   if (typeof _createPyodideModule != "function") await import(`${indexURL}pyodide.asm.js`)
+    # 会去动态 import 一个我们没下载的文件，import 失败 -> loadPyodide reject
+    # -> 页面表现为「所有源都试过了」，极具误导性。
+    pjs = os.path.join(pdir, "pyodide.js")
+    if os.path.isfile(pjs):
+        src = io.open(pjs, encoding="utf-8", errors="replace").read()
+        # 只认运行时真会拼进 URL 的那几种资源，排除 .d.ts/.map 之类开发物料
+        refs = set(re.findall(r"indexURL`?\s*\+\s*[\"']([^\"']+)[\"']", src))
+        refs |= set(re.findall(r"\$\{[^}]*indexURL\}([A-Za-z0-9_.\-/]+\.(?:js|wasm|zip|json))", src))
+        refs |= set(re.findall(r"indexURL`?\s*\+\s*`([^`]+)`", src))
+        for r in sorted(refs):
+            if not re.search(r"\.(js|wasm|zip|json)$", r):
+                continue
+            ck("pyodide.js 引用的 %s 在场" % r, os.path.isfile(os.path.join(pdir, r)))
+        ck("pyodide.js 会动态 import pyodide.asm.js（故该文件不可省）",
+           "pyodide.asm.js" in src)
 
     print("\n" + "=" * 56)
     if fails:

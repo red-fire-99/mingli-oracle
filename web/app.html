@@ -457,7 +457,8 @@ var BOOT_TIMEOUT_MS = 45000;   // 启动 Python 的整体预算，超了换下�
     var st = {
       settled: false,      // 本轮是否已结束（超时/成功/失败置 true）
       scriptAdded: false,  // pyodide.js 是否已挂过，挂过就别再挂
-      booted: false        // 是否已成功初始化
+      booted: false,       // 是否已成功初始化
+      errors: []           // 每次失败的原始原因，最后一并展示
     };
 
     // 真实字节进度：Pyodide 的 progressCallback 给出 loaded/total
@@ -479,7 +480,15 @@ var BOOT_TIMEOUT_MS = 45000;   // 启动 Python 的整体预算，超了换下�
 
     function fail(m){
       stage("加载失败");
+      // 把每次失败的原始原因带出来。笼统说「所有源都试过了」极具误导性：
+      // 上一次线上事故的根因是构建产物缺 pyodide.asm.js，跟网络毫无关系。
+      var detail = "";
+      if (st.errors.length){
+        detail = '<br><br><b>各次失败的具体原因：</b><br>'
+          + st.errors.slice(0, 6).map(function(x){ return "· " + esc(x); }).join("<br>");
+      }
       msg.innerHTML = '<div class="err">加载失败<br><br>' + esc(m)
+        + detail
         + '<br><br>若网络受限，可检查代理，或改用本地版：<br>'
         + '<code>python scripts/server.py</code></div>';
     }
@@ -510,7 +519,10 @@ var BOOT_TIMEOUT_MS = 45000;   // 启动 Python 的整体预算，超了换下�
 
     function retry(wi, ii, why){
       st.settled = false;
-      if (why) console.warn("[mingli] 换源:", why);
+      if (why){
+        st.errors.push(why);
+        console.warn("[mingli] 换源:", why);
+      }
       var nx = nextCombo(wi, ii);
       if (!nx){                          // 无下一个组合 -> 直接判定失败
         trySource(WASM_SOURCES.length, 0);
@@ -526,7 +538,10 @@ var BOOT_TIMEOUT_MS = 45000;   // 启动 Python 的整体预算，超了换下�
 
       if (wi >= WASM_SOURCES.length || ii >= INDEX_SOURCES.length){
         fail("运行时加载失败：自托管与所有公共镜像源都试过了。"
-             + "可能网络受限或站点部署异常，可检查代理，或改用本地版：python scripts/server.py");
+             + "常见原因有两个：一、网络受限（CDN 被墙 / 代理异常）；"
+             + "二、站点部署不完整（缺 pyodide.asm.js 等运行时文件）。"
+             + "若页面下方列出的原因里出现 Cannot find module / Failed to fetch，"
+             + "属于后者，请向仓库反馈。");
         return;
       }
 
@@ -537,6 +552,8 @@ var BOOT_TIMEOUT_MS = 45000;   // 启动 Python 的整体预算，超了换下�
       var s = WASM_SOURCES[wi];
       var idxSrc = INDEX_SOURCES[ii];
       var label = s.name + " wasm / " + idxSrc.name + " stdlib";
+      st.errors.push("尝试组合 [" + (wi + 1) + "/" + WASM_SOURCES.length
+                     + " × " + (ii + 1) + "/" + INDEX_SOURCES.length + "] " + label);
       st.settled = false;                 // 本轮开始，解除上一轮的结束标记
       var t0 = Date.now();
 
