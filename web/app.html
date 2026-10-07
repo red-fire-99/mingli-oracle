@@ -346,7 +346,11 @@ var ENGINE_VERSION = /*__ENGINE_VERSION__*/;
 
   function setStatus(type, msg){
     var el = $("#status");
-    el.className = "status " + (type||"");
+    // 必须带 show：样式是 .status{display:none} / .status.show{display:flex}。
+    // 漏了 show 的话，状态条永远不可见 —— 于是「填错生日」「少填城市」
+    // 这类提示全都变成静默失败，用户看到的现象就是「点了没反应」。
+    // 这个 bug 在 Pyodide 时代就存在，只是没人报（大家默认是自己没填对）。
+    el.className = "status show " + (type||"");
     el.textContent = msg || "";
   }
 
