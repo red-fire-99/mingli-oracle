@@ -18,7 +18,7 @@ import math
 import sys
 
 from almanac import (PLANETS, planet_geocentric_longitude, jd_from_datetime, J2000,
-                     beijing, solar_to_lunar, format_lunar)
+                     beijing, solar_to_lunar, format_lunar, setup_console)
 
 SIGNS = ("白羊", "金牛", "双子", "巨蟹", "狮子", "处女",
          "天秤", "天蝎", "射手", "摩羯", "水瓶", "双鱼")
@@ -218,6 +218,7 @@ def parse_hour(text):
 
 
 def main(argv=None):
+    setup_console()
     p = argparse.ArgumentParser(description="西洋占星本命盘 —— 输入生日，排出星盘")
     p.add_argument("--solar", type=parse_date)
     p.add_argument("--lunar", type=parse_date)

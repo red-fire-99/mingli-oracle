@@ -187,10 +187,7 @@ def lan_ip():
 
 
 def main(argv=None):
-    try:
-        sys.stdout.reconfigure(encoding="utf-8")
-    except Exception:
-        pass
+    O.setup_console()
 
     p = argparse.ArgumentParser(
         description="命理神机 · 本地排盘服务 —— 在浏览器里填表排盘，不联网、不上传")

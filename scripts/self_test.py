@@ -309,6 +309,7 @@ def test_regression():
 
 
 def main():
+    A.setup_console()
     print("=" * 52)
     print("  命理神机 · 回归自测")
     print("=" * 52)

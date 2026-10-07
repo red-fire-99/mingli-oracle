@@ -32,8 +32,35 @@
 """
 
 import math
+import os
+import sys
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
+
+
+def setup_console():
+    """把 stdout/stderr 统一成 UTF-8，避免中文输出乱码。
+
+    Windows 中文系统默认控制台代码页是 936（GBK），Python 的
+    ``sys.stdout.encoding`` 会变成 ``gbk``。直接跑在终端里通常正常，
+    但一旦输出走管道、重定向到文件、或被 IDE / CI 捕获，GBK 字节会被
+    按 UTF-8 解码，中文立刻变成乱码。这里把控制台代码页切到 65001
+    并把两个流重配为 UTF-8，让「终端 / 管道 / 文件」三处输出一致。
+    """
+    if os.name != "nt":
+        return
+    try:
+        import ctypes
+        ctypes.windll.kernel32.SetConsoleOutputCP(65001)
+        ctypes.windll.kernel32.SetConsoleCP(65001)
+    except Exception:
+        pass
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
 
 # ---------------------------------------------------------------------------
 # 常量

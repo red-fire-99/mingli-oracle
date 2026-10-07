@@ -22,7 +22,7 @@ import json
 import random
 import sys
 
-from almanac import GAN, ZHI, ZHI_WUXING, solar_to_lunar, format_lunar
+from almanac import GAN, ZHI, ZHI_WUXING, solar_to_lunar, format_lunar, setup_console
 
 # 摇卦用系统 CSPRNG（random.SystemRandom 自 Python 2.6 起可用，不依赖 3.6+ 的 secrets）
 _RNG = random.SystemRandom()
@@ -325,6 +325,7 @@ def parse_hour(text):
 
 
 def main(argv=None):
+    setup_console()
     p = argparse.ArgumentParser(description="六爻占卜 —— 起一卦，看看所问之事的吉凶")
     g = p.add_mutually_exclusive_group(required=True)
     g.add_argument("--time", action="store_true", help="按当前时间起卦（最常用）")

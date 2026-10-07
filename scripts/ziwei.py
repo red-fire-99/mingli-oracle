@@ -18,7 +18,8 @@ import json
 import sys
 
 from almanac import (GAN, ZHI, solar_to_lunar,
-                     lunar_to_solar, YUE_GAN_YIN, nayin_wuxing, GAN_YINYANG, format_lunar)
+                     lunar_to_solar, YUE_GAN_YIN, nayin_wuxing, GAN_YINYANG, format_lunar,
+                     setup_console)
 
 GONG_NAMES = ["命宫", "兄弟", "夫妻", "子女", "财帛", "疾厄",
               "迁移", "交友", "官禄", "田宅", "福德", "父母"]
@@ -307,6 +308,7 @@ def parse_date(text):
 
 
 def main(argv=None):
+    setup_console()
     p = argparse.ArgumentParser(description="紫微斗数排盘 —— 输入生日，排出紫微命盘")
     p.add_argument("--solar", type=parse_date)
     p.add_argument("--lunar", type=parse_date)

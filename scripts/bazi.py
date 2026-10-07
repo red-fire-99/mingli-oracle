@@ -21,7 +21,7 @@ from almanac import (
     GAN, ZHI, GAN_WUXING, ZHI_WUXING, GAN_YINYANG, ZHI_CANGGAN,
     beijing, day_gz_index, month_gz, year_gz, year_gz_index, hour_gz, shichen_of,
     gz_from_index, ganzhi_hour_label, jie_events_around, solar_to_lunar,
-    lunar_to_solar, format_lunar, true_solar_time, nayin_of,
+    lunar_to_solar, format_lunar, true_solar_time, nayin_of, setup_console,
 )
 
 WUXING = "木火土金水"
@@ -486,6 +486,7 @@ def parse_hour(text):
 
 
 def main(argv=None):
+    setup_console()
     p = argparse.ArgumentParser(description="四柱八字排盘 —— 输入生日，算出你的八字命盘")
     p.add_argument("--solar", type=parse_date, help="阳历生日，例如 1990-05-15")
     p.add_argument("--lunar", type=parse_date, help="农历生日，例如 1990-04-21")

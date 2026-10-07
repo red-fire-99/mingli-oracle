@@ -18,6 +18,7 @@ import argparse
 import json
 import sys
 
+from almanac import setup_console
 import bazi as M_bazi
 import ziwei as M_ziwei
 import astro as M_astro
@@ -492,6 +493,7 @@ def render_html(data, title="命理神机 · 命盘"):
 
 
 def main(argv=None):
+    setup_console()
     p = argparse.ArgumentParser(description="命理神机 · 八字/紫微/占星综合排盘（零依赖、可离线）")
     p.add_argument("--solar", type=parse_date, help="阳历生日，例如 1990-05-15")
     p.add_argument("--lunar", type=parse_date, help="农历生日，例如 1990-04-21")
