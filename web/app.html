@@ -408,16 +408,23 @@ var ENGINE_VERSION = /*__ENGINE_VERSION__*/;
      保留这个检查是为了「构建产物缺了引擎」时给出明确提示，
      而不是让用户点排盘后才看到一个看不懂的报错。 */
   function boot(){
-    if (window.MingLi && typeof window.MingLi.run === "function"){
-      $("#rtBadge").textContent = "纯 JS 引擎 · " + ENGINE_VERSION;
-      $("#boot").hidden = true;
+    if (!(window.MingLi && typeof window.MingLi.run === "function")){
+      var fill = $("#bootFill"), msg = $("#bootMsg"), srcEl = $("#bootSrc");
+      fill.style.width = "100%";
+      fill.className = "fill err";
+      msg.innerHTML = "排盘引擎没能加载进来。<br>请刷新一次页面；若仍然如此，说明站点部署不完整。";
+      srcEl.textContent = "window.MingLi = " + (typeof window.MingLi);
       return;
     }
-    var fill = $("#bootFill"), msg = $("#bootMsg"), srcEl = $("#bootSrc");
-    fill.style.width = "100%";
-    fill.className = "fill err";
-    msg.innerHTML = "排盘引擎没能加载进来。<br>请刷新一次页面；若仍然如此，说明站点部署不完整。";
-    srcEl.textContent = "window.MingLi = " + (typeof window.MingLi);
+    // 引擎就绪后再把加载层撤掉并开始接线。
+    //
+    // 注意 bind() 必须在这里调用：引擎换成内联 JS 之前，bind() 是在
+    // Pyodide 加载成功分支的最后一行调用的。删掉整个加载状态机时如果
+    // 顺手把它一起删了，页面上所有事件监听都不会绑上 —— 表现是
+    // 「页面打开了，但点排盘毫无反应」，而且不报任何错。
+    $("#rtBadge").textContent = "纯 JS 引擎 · " + ENGINE_VERSION;
+    bind();
+    if ($("#boot") && $("#boot").remove) $("#boot").remove();
   }
   /* ---------- 表单与结果交互 ---------- */
   function bind(){

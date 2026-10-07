@@ -125,7 +125,12 @@ def main():
     ck("无外链 script 标签", not re.findall(r'<script[^>]+src=', html))
     ck("无 link rel=stylesheet 外链",
        not re.findall(r'<link[^>]+rel="stylesheet"', html))
-    ck("无 wasm 运行时", "pyodide" not in html.lower())
+    # 检查「页面真的不再依赖 WASM 版 CPython」。
+    # 只看**代码**，不看注释 —— 注释里提到 Pyodide 是正常的（说明历史沿革、
+    # 解释某个坑的由来），把注释也算进来会让这条检查永远误报。
+    code_only = strip_js("\n".join(re.findall(r"<script>(.*?)</script>", html, re.S)))
+    ck("代码中无 wasm 运行时引用", "pyodide" not in code_only.lower())
+    ck("无 .wasm 文件引用", ".wasm" not in code_only)
     for host in EXTERNAL_HOSTS:
         n = html.count(host)
         ck("不含外部主机 %s" % host, n == 0, "出现 %d 次" % n if n else "")

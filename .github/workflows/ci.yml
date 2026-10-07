@@ -57,6 +57,13 @@ jobs:
       - name: 端到端验证内联引擎
         run: python web/test_load_chain.py
 
+      # 引擎对了不等于页面能用：表单交互（bind/collect/submit）挂在 DOM 事件上，
+      # 引擎全对、界面全哑是完全可能的，而且不报任何错。
+      # 实际踩过：换成内联 JS 时把加载成功分支里的 bind() 一起删了，
+      # 线上「页面正常打开但点排盘毫无反应」。这条门禁专门防这个。
+      - name: 端到端验证页面交互
+        run: python web/test_ui_chain.py
+
       # JS 移植与 Python 引擎的逐案对拍。
       # 引入第二份实现后，两边必然漂移；这条门禁保证它们始终一致。
       # 含 render 层：HTML 逐字比对，能抓出「值对了但拼错位置」的错误。
