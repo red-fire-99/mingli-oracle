@@ -155,6 +155,138 @@ def cases_almanac():
 
 LAYERS = {"almanac": cases_almanac}
 
+# 钉死的「当前年」：Python 与 JS 必须用同一年，否则流年必然对不上。
+PINNED_YEAR = 2026
+
+
+def cases_bazi():
+    """产出 (op, 标签, 输入, Python 基准)。"""
+    import bazi as B
+    from datetime import datetime
+    out = []
+    add = lambda op, label, inp, want: out.append((op, label, inp, want))
+
+    # 覆盖面：平胎 / 早子 / 晚子(23点) / 跨时辰 / 边界年 / 闰月 / 无时刻
+    combos = [
+        dict(solar=(1990, 5, 15), hour=(12, 0), sex="男", place="北京",
+             longitude=116.4, label="1990-05-15 午 北京 男"),
+        dict(solar=(1990, 5, 15), hour=(12, 0), sex="女", place="北京",
+             longitude=116.4, label="1990-05-15 午 北京 女"),
+        dict(solar=(1991, 8, 15), hour=(1, 0), sex="男", place="上海",
+             longitude=121.5, label="1991-08-15 丑 上海 男"),
+        dict(solar=(1991, 8, 15), hour=(23, 30), sex="男", place="上海",
+             longitude=121.5, label="1991-08-15 晚子 上海"),
+        dict(solar=(2000, 1, 1), hour=(0, 30), sex="女", label="2000-01-01 子 女"),
+        dict(solar=(1984, 2, 4), hour=(23, 0), sex="男", label="1984-02-04 晚子"),
+        dict(solar=(2020, 6, 21), hour=(12, 0), sex="男", place="乌鲁木齐",
+             longitude=87.62, label="2020-06-21 夏至日 乌鲁木齐"),
+        dict(solar=(2014, 12, 22), hour=(12, 0), sex="男", label="2014-12-22 冬至日"),
+        dict(solar=(2024, 2, 4), hour=(12, 0), sex="女", label="2024-02-04 立春"),
+        dict(solar=(1900, 1, 1), hour=(12, 0), sex="男", label="1900 边界"),
+        dict(solar=(2100, 12, 31), hour=(23, 59), sex="女", label="2100 边界"),
+        dict(solar=(1990, 5, 15), hour=None, sex="男", label="无时刻"),
+        dict(lunar=(1990, 5, 15), leap=True, hour=(12, 0), sex="男", label="闰五月"),
+        dict(lunar=(2020, 4, 1), leap=True, hour=(12, 0), sex="女", label="闰四月"),
+        dict(solar=(2026, 10, 7), hour=(22, 0), sex="男", place="北京",
+             longitude=116.4, label="今天附近"),
+    ]
+
+    for c in combos:
+        label = c["label"]
+        kw = dict(solar=c.get("solar"), lunar=c.get("lunar"), leap=c.get("leap", False),
+                  hour=c.get("hour"), shichen=None, sex=c.get("sex", "男"),
+                  place=c.get("place"), longitude=c.get("longitude"),
+                  deceased_year=None,
+                  now=datetime(PINNED_YEAR, 1, 1))
+        r = B.pai_pan(**kw)
+        want = {
+            "四柱": r["四柱"],
+            "输入": {k: v for k, v in r["输入"].items() if k != "真太阳时"},
+            "真太阳时": r["输入"]["真太阳时"],
+            "日主": r["日主"],
+            "柱详解": r["柱详解"],
+            "五行统计": r["五行统计"],
+            "日主强弱": r["日主强弱"],
+            "格局": r["格局"],
+            "旬空": r["旬空"],
+            "神煞": [[s["神煞"], s["落支"], s["位置"]] for s in r["神煞"]],
+            "大运": {"顺逆": r["大运"]["顺逆"], "起运": r["大运"]["起运"],
+                     "起运虚岁": r["大运"]["起运虚岁"],
+                     "列表": [[d["序"], d["干支"], d["十神"], d["起始虚岁"],
+                                d["结束虚岁"], d["起始公历"]] for d in r["大运"]["列表"]]},
+            "流年": [[x["年"], x["干支"], x["十神"], x["虚岁"], x["大运"]]
+                     for x in r["流年"]],
+            "警告": r["警告"],
+            "当前时间": r["当前时间"],
+        }
+        inp = {"solar": c.get("solar"), "lunar": c.get("lunar"),
+               "leap": c.get("leap", False), "hour": c.get("hour"),
+               "sex": c.get("sex", "男"), "place": c.get("place"),
+               "longitude": c.get("longitude"), "nowYear": PINNED_YEAR}
+        add("pai_pan", "pai_pan(%s)" % label, inp, want)
+
+    # 十神：日干 × 其他天干全覆盖
+    for dg in "甲乙丙丁戊己庚辛壬癸":
+        row = [B.shishen(dg, og) for og in "甲乙丙丁戊己庚辛壬癸"]
+        add("shishen_row", "shishen_row(%s)" % dg, {"dayGan": dg}, {"row": row})
+
+    # 旬空：六十甲子全覆盖
+    for i in range(60):
+        gz = __import__("almanac").gz_from_index(i)
+        add("kongwang", "kongwang(%s)" % gz,
+            {"idx": __import__("almanac").day_gz_index(1984, 1, 1) + i},
+            {"kw": B.kongwang(__import__("almanac").day_gz_index(1984, 1, 1) + i)})
+    return out
+
+
+LAYERS["bazi"] = cases_bazi
+
+def cases_astro():
+    """占星层对拍：十天体黄经、星座度数、上升天顶、相位、元素分布、整宫制。"""
+    import astro as AS
+    out = []
+    add = lambda op, label, inp, want: out.append((op, label, inp, want))
+
+    combos = [
+        dict(solar=(1990, 5, 15), hour=(12, 0), lat=39.9, lon=116.4, sex="男", place="北京"),
+        dict(solar=(1990, 5, 15), hour=(12, 0), lat=39.9, lon=116.4, sex="女", place="北京"),
+        dict(solar=(2000, 1, 1), hour=(0, 0), lat=31.2, lon=121.5, sex="男", place="上海"),
+        dict(solar=(2024, 6, 1), hour=(6, 0), lat=87.6, lon=113.3, sex="女", place="拉萨"),
+        dict(solar=(1900, 3, 1), hour=(18, 0), lat=40.0, lon=-74.0, sex="男", place="纽约"),
+        dict(solar=(2100, 9, 9), hour=(18, 0), lat=-33.9, lon=151.2, sex="女", place="悉尼"),
+        dict(solar=(2020, 6, 21), hour=(12, 0), lat=None, lon=None, sex="男"),
+        dict(lunar=(1990, 5, 15), leap=True, hour=(12, 0), lat=39.9, lon=116.4, sex="男"),
+    ]
+    for c in combos:
+        r = AS.pai_pan(solar=c.get("solar"), lunar=c.get("lunar"), leap=c.get("leap", False),
+                        hour=c.get("hour"), sex=c.get("sex", "男"),
+                        lat=c.get("lat"), lon=c.get("lon"), place=c.get("place"))
+        want = {
+            "输入": r["输入"],
+            "天体": [[p["天体"], p["黄经"], p["星座"], p["度数"], p["星座内度"],
+                       p["元素"], p["性质"]] for p in r["天体"]],
+            "轴点": {k: [v["黄经"], v["星座"], v["度数"], v["星座内度"]]
+                     for k, v in r["轴点"].items()},
+            "相位": [[a["天体1"], a["天体2"], a["相位"], a["标准角"], a["偏差"], a["强度"]]
+                     for a in sorted(r["相位"], key=lambda x: -x["强度"])[:14]],
+            "元素分布": r["元素分布"],
+            "性质分布": r["性质分布"],
+            "宫位": [[h["宫"], h["星座"], h["内行星"]] for h in r["宫位"]],
+            "太阳星座": r["太阳星座"], "月亮星座": r["月亮星座"],
+            "上升星座": r["上升星座"],
+        }
+        add("astro_pai_pan", "astro_pai_pan(%s)" % str(c.get("solar") or c.get("lunar")),
+            {"solar": c.get("solar"), "lunar": c.get("lunar"),
+             "leap": c.get("leap", False), "hour": c.get("hour"),
+             "lat": c.get("lat"), "lon": c.get("lon"),
+             "sex": c.get("sex", "男"), "place": c.get("place")}, want)
+    return out
+
+
+LAYERS["astro"] = cases_astro
+
+
+
 
 def gen_baseline(layer):
     return LAYERS[layer]()
@@ -171,6 +303,8 @@ import { pathToFileURL } from 'node:url';
 const CASES = JSON.parse(readFileSync(process.env.__CASES, 'utf8'));
 const mod  = await import(pathToFileURL(process.env.__ALMANAC).href);
 const K    = await import(pathToFileURL(process.env.__KERNEL).href);
+const B    = await import(pathToFileURL(process.env.__BAZI).href);
+const A    = await import(pathToFileURL(process.env.__ASTRO).href);
 
 const R = [];
 for (const c of CASES) {
@@ -217,6 +351,52 @@ for (const c of CASES) {
       case "hour_gz":       got = { gz: mod.hourGz(i.gan, i.zhi_i) }; break;
       case "nayin":         got = { nayin: mod.nayinOf(i.gan, i.zhi),
                                     wx: mod.nayinWuxing(i.gan, i.zhi) }; break;
+      case "pai_pan": {
+        const r = B.paiPan({ solar: i.solar || null, lunar: i.lunar || null,
+                             leap: !!i.leap, hour: i.hour || null, shichen: null,
+                             sex: i.sex, place: i.place || null,
+                             longitude: (i.longitude === null || i.longitude === undefined)
+                                        ? null : i.longitude,
+                             nowYear: i.nowYear });
+        got = {
+          四柱: r.四柱,
+          输入: (({ 真太阳时, ...rest }) => rest)(r.输入),
+          真太阳时: r.输入.真太阳时,
+          日主: r.日主, 柱详解: r.柱详解, 五行统计: r.五行统计,
+          日主强弱: r.日主强弱, 格局: r.格局, 旬空: r.旬空,
+          神煞: r.神煞.map(s => [s.神煞, s.落支, s.位置]),
+          大运: { 顺逆: r.大运.顺逆, 起运: r.大运.起运,
+                  起运虚岁: r.大运.起运虚岁,
+                  列表: r.大运.列表.map(d => [d.序, d.干支, d.十神,
+                                            d.起始虚岁, d.结束虚岁, d.起始公历]) },
+          流年: r.流年.map(x => [x.年, x.干支, x.十神, x.虚岁, x.大运]),
+          警告: r.警告, 当前时间: r.当前时间,
+        };
+        break;
+      }
+      case "shishen_row": {
+        got = { row: "甲乙丙丁戊己庚辛壬癸".split("").map(g => B.shishen(i.dayGan, g)) };
+        break;
+      }
+      case "kongwang": got = { kw: B.kongwang(i.idx) }; break;
+      case "astro_pai_pan": {
+        const r = A.paiPan({ solar: i.solar || null, lunar: i.lunar || null,
+                             leap: !!i.leap, hour: i.hour || null, sex: i.sex,
+                             lat: i.lat, lon: i.lon, place: i.place || null });
+        got = {
+          输入: r.输入,
+          天体: r.天体.map(p => [p.天体, p.黄经, p.星座, p.度数, p.星座内度,
+                                  p.元素, p.性质]),
+          轴点: Object.fromEntries(Object.entries(r.轴点).map(
+                    ([k, v]) => [k, [v.黄经, v.星座, v.度数, v.星座内度]])),
+          相位: r.相位.slice().sort((a, b) => b.强度 - a.强度).slice(0, 14)
+                  .map(a => [a.天体1, a.天体2, a.相位, a.标准角, a.偏差, a.强度]),
+          元素分布: r.元素分布, 性质分布: r.性质分布,
+          宫位: r.宫位.map(h => [h.宫, h.星座, h.内行星]),
+          太阳星座: r.太阳星座, 月亮星座: r.月亮星座, 上升星座: r.上升星座,
+        };
+        break;
+      }
       default: got = { __unknown_op: c.op };
     }
   } catch (e) {
@@ -230,13 +410,15 @@ process.stdout.write("@@R@@" + JSON.stringify(R));
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Python 引擎与 JS 移植逐案对拍")
-    ap.add_argument("--layer", default="almanac", choices=sorted(LAYERS))
+    ap.add_argument("--layer", default="all", choices=sorted(LAYERS) + ["all"])
     ap.add_argument("--js", default="node", help="Node 可执行文件")
     ap.add_argument("--tol", type=float, default=TOL)
     a = ap.parse_args(argv)
 
+    layers = sorted(LAYERS) if a.layer == "all" else [a.layer]
     cases = []
-    for op, label, inp, want in gen_baseline(a.layer):
+    for _layer in layers:
+      for op, label, inp, want in gen_baseline(_layer):
         cases.append({"op": op, "label": label, "in": inp, "want": want})
 
     # JSON 往返会把整数变成浮点，先把该当整数的字段钉回去，
@@ -268,6 +450,8 @@ def main(argv=None):
     env["__CASES"] = d
     env["__ALMANAC"] = os.path.join(HERE, "js", "almanac.js")
     env["__KERNEL"] = os.path.join(HERE, "js", "kernel.js")
+    env["__BAZI"] = os.path.join(HERE, "js", "bazi.js")
+    env["__ASTRO"] = os.path.join(HERE, "js", "astro.js")
     try:
         r = subprocess.run([a.js, runner], capture_output=True, env=env, timeout=600)
     finally:

@@ -366,12 +366,17 @@ def pai_pan(solar=None, lunar=None, leap=False, hour=None, shichen=None, sex="�
         })
 
     # 11. 流年（当前年 ±3，或到去世年）
-    cur_year = (now or beijing(2020, 1, 1)).year if now else 2026
-    try:
-        from datetime import datetime as _dt
-        cur_year = _dt.now().year
-    except Exception:
-        pass
+    # `now` 参数原本被下面无条件取系统年份覆盖掉，是个形同虚设的参数：
+    # 传什么都不起作用，也没法做可复现的测试（JS 侧对拍需要钉住年份）。
+    # 现在显式尊重 now，只在未传时才取系统年份。
+    if now is not None:
+        cur_year = now.year
+    else:
+        try:
+            from datetime import datetime as _dt
+            cur_year = _dt.now().year
+        except Exception:
+            cur_year = 2026
     if deceased_year:
         cur_year = min(cur_year, int(deceased_year))
     liunian = []

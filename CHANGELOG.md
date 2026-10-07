@@ -2,6 +2,35 @@
 
 本项目使用语义化版本号（MAJOR.MINOR.PATCH）。
 
+## [Unreleased] — 进行中
+
+### 进行中：网页版改为纯 JS 引擎（去掉 Pyodide 依赖）
+
+网页版此前靠 Pyodide 跑 Python，首次需下载 13MB 运行时。现改为把引擎移植成 JS，
+目标「打开即用」。**注意：线上尚未切换，当前仍走 Pyodide 路线。**
+
+已完成并与 Python 引擎**逐案对拍一致**（`web/diff_py_js.py`，CI 门禁）：
+
+| 模块 | 用例数 | 状态 |
+|---|---|---|
+| `web/js/kernel.js` Python 语义对齐 | — | 完成 |
+| `web/js/almanac.js` 天文历法底座 | 327 | 一致 |
+| `web/js/bazi.js` 四柱八字 | 85 | 一致 |
+| `web/js/astro.js` 西洋占星 | 8 | 一致 |
+| `web/js/plain-data.json` 文案数据 | — | 完成（31 字典 / 30.5KB，机器生成） |
+
+合计 **420 个用例全部一致**。待移植：`ziwei`、`divination`、`plain` 的 6 个函数、
+HTML 渲染层，以及 `build_web.py` 改为内联 JS。
+
+移植期间被对拍抓出的错误（静态检查全都发现不了）：
+- 定朔公式系数手抄错 1000 倍（`0.00000227` → `0.00200227`）
+- `pyRound(x*10^n)/10^n` 与 Python `round(x, n)` 不等价：乘法先丢精度，
+  会把「略低于平局点的值」误判成平局（占星相位强度 0.97 被算成 0.98）。
+  已改为 `pyRoundN()`（`toFixed` 基于精确值舍入）
+- JS number 分不清 `40` 与 `40.0`，而 Python float 一定带 `.0`
+
+---
+
 ## [1.0.0] — 2026-10-07
 
 首个可开源版本。

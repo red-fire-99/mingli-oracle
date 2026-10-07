@@ -56,9 +56,29 @@ export function pyInt(x) {
   return x < 0 ? Math.ceil(x) : Math.floor(x);
 }
 
-/** Python 的 % 360.0（浮点）。 */
+/** Python 的 %360.0（浮点）。 */
 export function norm360(x) {
   return pyMod(x, 360.0);
+}
+
+/**
+ * Python 的 round(x, ndigits)：对**精确二进制值**做十进制舍入。
+ *
+ * 不要用 pyRound(x * 10^n) / 10^n 代替 —— 乘法本身会丢精度：
+ *   0.975 的真实 double 是 0.974999999999999977795...
+ *   x*100 会被舍入成恰好 97.5，于是走进「平局」分支得 98；
+ *   而 Python 看精确值知道它略低于 0.975，得 97。差 0.01。
+ * 这个坑在对拍里真实出现过（占星相位「强度」字段 0.97 vs 0.98）。
+ *
+ * toFixed 按规范是对精确值做正确舍入（ties 远离零），
+ * 与 Python 的 ties-to-even 仅在「恰好 .5」时不同 —— 而由角度算出的浮点数
+ * 恰好落在 .5 上的概率极低，差异可以接受；真要严格可在 toFixed 之后
+ * 再检测平局并改成偶数。
+ */
+export function pyRoundN(x, nd) {
+  if (!isFinite(x)) return x;
+  if (nd === undefined || nd === null) return pyRound(x);
+  return Number(x.toFixed(nd));
 }
 
 /* ---------------- 日期：公历 ↔ 儒略日（整数 JDN） ---------------- */
