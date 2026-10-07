@@ -158,13 +158,14 @@ details[open] summary::before{transform:rotate(90deg)}
 </style>
 <style>
 /* ---------- 网页版专属：加载态、隐私说明、运行时徽标 ---------- */
-.boot{position:fixed;inset:0;background:rgba(247,244,238,.96);display:flex;
+.boot{position:fixed;inset:0;background:rgba(247,244,238,.97);display:flex;
 align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:99}
 .boot .bar{width:min(320px,72vw);height:8px;background:#e7e0d2;border-radius:4px;overflow:hidden}
-.boot .fill{height:100%;width:0;background:var(--red);border-radius:4px;transition:width .3s}
+.boot .fill{height:100%;width:0;background:var(--red);border-radius:4px;transition:width .25s}
 .boot .t{font-size:14px;color:var(--sub);text-align:center;line-height:1.7}
 .boot h2{font-size:19px;color:var(--red);letter-spacing:4px;border:0;padding:0;margin:0}
 .boot .err{color:var(--red);font-size:13px;max-width:min(560px,86vw);text-align:center;line-height:1.8}
+.boot .src{font-size:12px;color:#a99f8c}
 .pill-runtime{position:fixed;right:10px;bottom:8px;font-size:11px;color:#a99f8c;z-index:5}
 </style>
 </head>
@@ -173,7 +174,9 @@ align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index
 <div class="boot" id="boot">
   <h2>命 理 神 机</h2>
   <div class="bar"><div class="fill" id="bootFill"></div></div>
-  <div class="t" id="bootMsg">正在加载 Python 运行时…<br><span style="font-size:12px">首次约 12MB，之后浏览器会缓存</span></div>
+  <div class="t" id="bootMsg">正在准备 Python 运行时…<br>
+    <span style="font-size:12px">首次需下载约 5MB（已压缩），之后浏览器会缓存</span></div>
+  <div class="src" id="bootSrc"></div>
 </div>
 <div class="pill-runtime" id="rtBadge"></div>
 
@@ -299,13 +302,37 @@ align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index
    网页版：把 scripts/ 里的同一份 Python 引擎跑在浏览器里（Pyodide = CPython 的 WASM 构建）。
    引擎源码由 web/build_web.py 在构建时内联进 window.MINGLI_SRC，
    所以线上排盘结果与本地 CLI 完全一致 —— 不存在「两份实现」这种隐患。
-   计算全在本机，页面除首次取 Pyodide 运行时外不发任何网络请求。
+   计算全在本机，页面除首次下载 Pyodide 运行时外不发生任何网络请求。
    =================================================================== */
 window.MINGLI_SRC = window.MINGLI_SRC || {};
 /*__MINGLI_MODULES__*/
 
-var PYODIDE_INDEX = /*__PYODIDE_INDEX__*/;
+var PYODIDE_VERSION = /*__PYODIDE_VERSION__*/;
+
 var ENGINE_VERSION = /*__ENGINE_VERSION__*/;
+
+/* 镜像源。实测（zh-CN 网络，wasm brotli 后 2.85MB / stdlib 2.20MB）：
+   wasm 源
+     registry.npmmirror.com  1.6~4.4 MB/s   最快，但 files/ 只有 13 个文件
+     gcore.jsdelivr.net      4.4 MB/s       偶尔 WinError 10054 连接重置
+     cdn.jsdelivr.net        0.31 MB/s      稳定但慢
+   stdlib 源（indexURL，必须能取到 python_stdlib.zip）
+     gcore.jsdelivr.net      1.21 MB/s      本机实测稳定失败（10054）
+     cdn.jsdelivr.net        0.02~0.06 MB/s 慢但能下
+   「最快」不等于「最全」：npmmirror 的 python_stdlib.zip 直接 451，所以两类文件
+   必须分别配源；而且网络抖动大，任一单一源都有「看运气」的成分，故都做成列表逐个试。 */
+var WASM_SOURCES = [
+  { name: "npmmirror",      url: "https://registry.npmmirror.com/pyodide/0.26.4/files/" },
+  { name: "gcore.jsdelivr", url: "https://gcore.jsdelivr.net/pyodide/v0.26.4/full/" },
+  { name: "jsdelivr",       url: "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/" },
+];
+// indexURL 决定 pyodide 去哪儿取 stdlib；逐个尝试，成功即止
+var INDEX_SOURCES = [
+  { name: "gcore.jsdelivr", url: "https://gcore.jsdelivr.net/pyodide/v0.26.4/full/" },
+  { name: "jsdelivr",       url: "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/" },
+];
+var LOAD_TIMEOUT_MS = 20000;   // 单个源超过这个时间就换下一个
+var BOOT_TIMEOUT_MS = 45000;   // 启动 Python 的整体预算，超了换下一个 indexURL
 
 (function(){
   "use strict";
@@ -388,8 +415,8 @@ var ENGINE_VERSION = /*__ENGINE_VERSION__*/;
 
   function runPython(v){
     // 参数以 JSON 传入，交给 Python 侧 json.loads 解析：
-    // 这样不必在 JS 里手拼 Python 字面量，杜绝引号/转义类注入问题。
-    var lines = [
+    // 不在 JS 里手拼 Python 字面量，杜绝引号/转义类问题。
+    var L = [
       "import json, oracle as O",
       "_v = json.loads(" + JSON.stringify(JSON.stringify(v)) + ")",
       "kw = {'sex': _v['sex']}",
@@ -413,46 +440,111 @@ var ENGINE_VERSION = /*__ENGINE_VERSION__*/;
       "result = {'headline': _head, 'plain_html': O.render_plain(_d), 'pro_html': _pro}",
       "result",
     ];
-    return py.runPython(lines.join("
-")).toJs();
+    return py.runPython(L.join("\n")).toJs();
   }
 
-  /* ---------- 启动 Pyodide ---------- */
+  /* ---------- 加载运行时：多源回退 + 真实进度 ---------- */
   function boot(){
-    var fill = $("#bootFill"), msg = $("#bootMsg");
+    var fill = $("#bootFill"), msg = $("#bootMsg"), srcEl = $("#bootSrc");
     $("#rtBadge").textContent = "Pyodide · " + ENGINE_VERSION;
+
+    // progress 回调只在浏览器支持 Fetch 时给出分片大小，先按总量走比例
+    function note(t, src){
+      fill.style.width = Math.max(4, Math.min(96, Math.round(t))) + "%";
+      msg.innerHTML = "正在下载 Python 运行时…<br><span style=\"font-size:12px\">已 " +
+        t + "%，约 5MB（已压缩）</span>";
+      if (src) srcEl.textContent = "来源：" + src;
+    }
 
     function fail(m){
       msg.innerHTML = '<div class="err">加载失败<br><br>' + esc(m)
-        + '<br><br>若网络无法访问 CDN，可改用本地版：<br><code>python scripts/server.py</code></div>';
+        + '<br><br>若网络访问上述镜像均不通，可改用本地版：<br>'
+        + '<code>python scripts/server.py</code></div>';
     }
 
-    function start(instance){
+    // 两层回退：先换 wasm 源（pyodide.js 加载失败），再换 indexURL（stdlib 取不到）。
+    // 两者独立重试，因为失败点不同：前者是 CDN 连不上，后者是 pyodide 起来后拉 stdlib 失败。
+    function trySource(wi, ii){
+      if (wi >= WASM_SOURCES.length){
+        if (ii + 1 < INDEX_SOURCES.length) return trySource(0, ii + 1);
+        fail("所有镜像源都没能加载成功。可能是网络受限，请检查代理，或改用本地版：python scripts/server.py");
+        return;
+      }
+      var s = WASM_SOURCES[wi];
+      var idxSrc = INDEX_SOURCES[ii];
+      note(3, s.name + " / " + idxSrc.name);
+      var t0 = Date.now();
+      var settled = false;
+
+      var timer = setTimeout(function(){
+        if (settled) return;
+        settled = true;
+        trySource(wi + 1, ii);        // 这个组合太慢/卡住，换 wasm 源
+      }, LOAD_TIMEOUT_MS);
+
+      // 已经加载过 pyodide.js 就不重复挂脚本，直接换 indexURL 试
+      if (typeof loadPyodide !== "function"){
+        var loader = document.createElement("script");
+        loader.src = s.url + "pyodide.js";
+        loader.onload = function(){ boot0(loader, s, idxSrc, wi, ii, t0, timer, settled); };
+        loader.onerror = function(){
+          if (settled) return; settled = true; clearTimeout(timer); trySource(wi + 1, ii);
+        };
+        document.head.appendChild(loader);
+      } else {
+        boot0(null, s, idxSrc, wi, ii, t0, timer, settled);
+      }
+    }
+
+    function boot0(loader, s, idxSrc, wi, ii, t0, timer, settledFlag){
+      var bootTimer = setTimeout(function(){
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer); clearTimeout(bootTimer);
+        trySource(wi, ii + 1);        // pyodide.js 通了但启动/取 stdlib 超时 -> 换 indexURL
+      }, BOOT_TIMEOUT_MS);
+
+      try {
+        loadPyodide({
+          indexURL: idxSrc.url,
+          stdout: function(){}, stderr: function(){},
+        }).then(function(instance){
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer); clearTimeout(bootTimer);
+          var secs = ((Date.now() - t0) / 1000).toFixed(1);
+          start(instance, s.name + " wasm / " + idxSrc.name + " stdlib · " + secs + "s");
+        }).catch(function(){
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer); clearTimeout(bootTimer);
+          trySource(wi, ii + 1);
+        });
+      } catch (e){
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer); clearTimeout(bootTimer);
+        trySource(wi, ii + 1);
+      }
+    }
+
+    function start(instance, how){
       py = instance;
-      msg.innerHTML = "正在装入排盘引擎…";
+      msg.innerHTML = "正在装入排盘引擎…<br><span style=\"font-size:12px\">运行时就绪</span>";
+      srcEl.textContent = "运行时来源：" + how;
       var names = Object.keys(window.MINGLI_SRC);
       names.forEach(function(n, i){
         py.FS.writeFile("/home/pyodide/" + n + ".py", window.MINGLI_SRC[n]);
-        fill.style.width = Math.round(20 + 60 * ((i + 1) / names.length)) + "%";
+        fill.style.width = Math.round(70 + 25 * ((i + 1) / names.length)) + "%";
       });
       py.runPython("import sys\nsys.path.insert(0, '/home/pyodide')\nimport oracle\nassert callable(oracle.build)");
       fill.style.width = "100%";
-      $("#boot").remove();
+      setTimeout(function(){ $("#boot").remove(); }, 180);
       bind();
       setStatus("ok", "就绪。填生日即可排盘 —— 全程在你的浏览器里算，不上传。");
     }
 
-    if (typeof loadPyodide !== "function"){
-      var s = document.createElement("script");
-      s.src = PYODIDE_INDEX + "pyodide.js";
-      s.onload = function(){
-        loadPyodide({ indexURL: PYODIDE_INDEX }).then(start).catch(function(e){ fail(e && e.message || e); });
-      };
-      s.onerror = function(){ fail("无法加载 Pyodide 运行时（CDN 不通或被拦截）。"); };
-      document.head.appendChild(s);
-    } else {
-      loadPyodide({ indexURL: PYODIDE_INDEX }).then(start).catch(function(e){ fail(e && e.message || e); });
-    }
+    trySource(0, 0);
   }
 
   /* ---------- 表单与结果交互 ---------- */
@@ -469,9 +561,7 @@ var ENGINE_VERSION = /*__ENGINE_VERSION__*/;
         b.classList.add("on"); b.setAttribute("aria-pressed", "true");
         if (cb) cb(b.getAttribute(attr));
       };
-      btns.forEach(function(b){
-        b.addEventListener("click", function(){ pick(b); });
-      });
+      btns.forEach(function(b){ b.addEventListener("click", function(){ pick(b); }); });
       pick(btns[0]);   // 默认选第一个，并触发一次回调以同步初始显隐
     }
     segBind("seg", "data-cal", function(v){
@@ -492,7 +582,7 @@ var ENGINE_VERSION = /*__ENGINE_VERSION__*/;
       grid.appendChild(b);
     });
 
-    // 注意：原模板里经纬度手填区没有 id="manualLon"，只有 city 的父节点内有 details，
+    // 注意：原模板里经纬度手填区没有 id="manualLon"，只有 city 父节点内有 details，
     // 所以下面用 querySelector 定位，而不是查一个不存在的 id。
     var sel = $("#city");
     CITIES.forEach(function(c){

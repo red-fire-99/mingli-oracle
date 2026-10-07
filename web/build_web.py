@@ -41,11 +41,11 @@ MODULES = [
 ]
 
 # Pyodide 版本（锁死，避免上游变更导致行为漂移）
+# 页面里配了多镜像源，npmmirror 国内优先；这个版本只用于占位符替换与提示文案。
 PYODIDE_VERSION = "0.26.4"
-PYODIDE_INDEX = "https://cdn.jsdelivr.net/pyodide/v%s/full/" % PYODIDE_VERSION
 
 PLACEHOLDER_MODULES = "/*__MINGLI_MODULES__*/"
-PLACEHOLDER_PYODIDE = "/*__PYODIDE_INDEX__*/"
+PLACEHOLDER_PYODIDE = "/*__PYODIDE_VERSION__*/"
 
 
 def read(path):
@@ -84,9 +84,10 @@ def main(argv=None):
         return 1
 
     html = html.replace(PLACEHOLDER_MODULES, build_modules())
-    html = html.replace(PLACEHOLDER_PYODIDE, json.dumps(PYODIDE_INDEX))
+    html = html.replace(PLACEHOLDER_PYODIDE, json.dumps(PYODIDE_VERSION))
     # 顺带把引擎版本写进页面，便于线上排查
-    html = html.replace("/*__ENGINE_VERSION__*/", json.dumps(read(os.path.join(ROOT, "CHANGELOG.md")).splitlines()[2].strip("[] ")))
+    html = html.replace("/*__ENGINE_VERSION__*/",
+                        json.dumps(read(os.path.join(ROOT, "CHANGELOG.md")).splitlines()[2].strip("[] ")))
 
     os.makedirs(a.out, exist_ok=True)
     dest = os.path.join(a.out, "index.html")
@@ -100,7 +101,7 @@ def main(argv=None):
 
     kb = os.path.getsize(dest) / 1024.0
     print("已生成 %s (%.1f KB, 内联 %d 个模块)" % (dest, kb, len(MODULES)))
-    print("Pyodide: %s" % PYODIDE_INDEX)
+    print("Pyodide: v%s（页面内置多镜像源回退，npmmirror 优先）" % PYODIDE_VERSION)
     print("提示: 本地预览用  python -m http.server -d web/dist 8000"
           "（需 http:// 而非 file://，否则浏览器不让加载 WASM）")
     return 0

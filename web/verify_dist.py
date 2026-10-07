@@ -152,7 +152,31 @@ def main():
         ck("不含 %s" % needle, needle not in html)
     ck("无外部 script 标签（Pyodide 由 JS 动态注入）",
        not re.findall(r'<script[^>]+src="[^"]+"', html))
-    ck("Pyodide 版本已锁定", 'pyodide/v0.26.4/full/' in html)
+    ck("Pyodide 版本已锁定", 'var PYODIDE_VERSION = "0.26.4"' in html)
+    # 两类文件分别配源：npmmirror 的 python_stdlib.zip 是 451，必须换源
+    ck("wasm 配了多个候选源", "var WASM_SOURCES = [" in html
+       and html.count('url: "https://') >= 4)
+    ck("stdlib 配了多个候选源", "var INDEX_SOURCES = [" in html)
+    # 顺序判断必须在数组内部，避免注释里先出现某源名导致误判
+    warr = html[html.index("var WASM_SOURCES = ["):html.index("];", html.index("var WASM_SOURCES = ["))]
+    ck("wasm 源 npmmirror 优先", warr.index("npmmirror") < warr.index("gcore.jsdelivr"))
+    ck("indexURL 未硬编码单源（改成逐个试）",
+       "indexURL: idxSrc.url" in html and "var INDEX_URL" not in html)
+    # 两层回退：wasm 源失败换源，indexURL 失败也换源
+    ck("两层回退已实现", "trySource(wi, ii)" in html
+       and "trySource(wi, ii + 1)" in html and "trySource(wi + 1, ii)" in html)
+    ck("回退入口带双索引", "trySource(0, 0)" in html)
+    ck("wasm 源耗尽后转下一个 indexURL",
+       "if (ii + 1 < INDEX_SOURCES.length) return trySource(0, ii + 1);" in html)
+    ck("全部源失败时给出可操作提示",
+       "所有镜像源都没能加载成功" in html and "scripts/server.py" in html)
+    # 超时兜底：单源卡死必须能换下一个，否则永久白屏
+    ck("下载超时已设死", "LOAD_TIMEOUT_MS = 20000" in html)
+    ck("启动超时已设死", "BOOT_TIMEOUT_MS = 45000" in html)
+    ck("超时会清理定时器", html.count("clearTimeout(bootTimer)") >= 2)
+    ck("已加载的 pyodide.js 不重复挂载",
+       'typeof loadPyodide !== "function"' in html)
+    ck("加载完成显示来源与耗时", "运行时来源：" in html)
     ck("声明生辰不上传", "不上传" in html)
 
     print("\n" + "=" * 56)
