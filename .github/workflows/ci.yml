@@ -63,6 +63,11 @@ jobs:
       - name: 端到端验证加载状态机
         run: python web/test_load_chain.py
 
+      # JS 移植与 Python 引擎的逐案对拍。
+      # 引入第二份实现后，两边必然漂移；这条门禁保证它们始终一致。
+      - name: Python ↔ JS 引擎对拍
+        run: python web/diff_py_js.py --layer almanac
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web/dist
