@@ -446,97 +446,169 @@ var BOOT_TIMEOUT_MS = 45000;   // 启动 Python 的整体预算，超了换下�
     return py.runPython(L.join("\n")).toJs();
   }
 
-  /* ---------- 加载运行时：多源回退 + 真实进度 ---------- */
+  /* ---------- 加载运行时：自托管优先，公共源兜底，真实进度 ---------- */
   function boot(){
     var fill = $("#bootFill"), msg = $("#bootMsg"), srcEl = $("#bootSrc");
     $("#rtBadge").textContent = "Pyodide · " + ENGINE_VERSION;
 
-    // progress 回调只在浏览器支持 Fetch 时给出分片大小，先按总量走比例
-    function note(t, src){
-      fill.style.width = Math.max(4, Math.min(96, Math.round(t))) + "%";
-      msg.innerHTML = "正在下载 Python 运行时…<br><span style=\"font-size:12px\">已 " +
-        t + "%，约 5MB（已压缩）</span>";
-      if (src) srcEl.textContent = "来源：" + src;
+    // 所有尝试共享这一份状态。必须用对象而不是多个裸变量 ——
+    // 上一次这里用形参传 settledFlag，函数体里却写 settled，
+    // 标识符落到全局 window.settled，所有守卫失效，导致脚本反复重复挂载。
+    var st = {
+      settled: false,      // 本轮是否已结束（超时/成功/失败置 true）
+      scriptAdded: false,  // pyodide.js 是否已挂过，挂过就别再挂
+      booted: false        // 是否已成功初始化
+    };
+
+    // 真实字节进度：Pyodide 的 progressCallback 给出 loaded/total
+    function onBytes(loaded, total, srcName){
+      if (!total) return;
+      var pct = Math.round(loaded / total * 100);
+      fill.style.width = Math.max(3, Math.min(97, pct)) + "%";
+      msg.innerHTML = "正在下载 Python 运行时…<br><span style=\"font-size:12px\">"
+        + pct + "% · " + (loaded / 1048576).toFixed(1) + " / "
+        + (total / 1048576).toFixed(1) + " MB</span>";
+      srcEl.textContent = "来源：" + srcName;
+    }
+
+    function stage(text, pct, srcName){
+      if (pct != null) fill.style.width = Math.max(3, Math.min(97, pct)) + "%";
+      msg.textContent = text;
+      if (srcName) srcEl.textContent = srcName;
     }
 
     function fail(m){
+      stage("加载失败");
       msg.innerHTML = '<div class="err">加载失败<br><br>' + esc(m)
-        + '<br><br>若网络访问上述镜像均不通，可改用本地版：<br>'
+        + '<br><br>若网络受限，可检查代理，或改用本地版：<br>'
         + '<code>python scripts/server.py</code></div>';
     }
 
-    // 两层回退：先换 wasm 源（pyodide.js 加载失败），再换 indexURL（stdlib 取不到）。
-    // 两者独立重试，因为失败点不同：前者是 CDN 连不上，后者是 pyodide 起来后拉 stdlib 失败。
-    function trySource(wi, ii){
-      if (wi >= WASM_SOURCES.length){
-        if (ii + 1 < INDEX_SOURCES.length) return trySource(0, ii + 1);
-        fail("运行时加载失败：自托管与所有公共镜像源都试过了。可能网络受限或站点部署异常，可检查代理，或改用本地版：python scripts/server.py");
-        return;
-      }
-      var s = WASM_SOURCES[wi];
-      var idxSrc = INDEX_SOURCES[ii];
-      note(3, s.name + " / " + idxSrc.name);
-      var t0 = Date.now();
-      var settled = false;
-
-      var timer = setTimeout(function(){
-        if (settled) return;
-        settled = true;
-        trySource(wi + 1, ii);        // 这个组合太慢/卡住，换 wasm 源
-      }, LOAD_TIMEOUT_MS);
-
-      // 已经加载过 pyodide.js 就不重复挂脚本，直接换 indexURL 试
-      if (typeof loadPyodide !== "function"){
-        var loader = document.createElement("script");
-        loader.src = (s.local ? new URL(s.url, location.href).href : s.url) + "pyodide.js";
-        loader.onload = function(){ boot0(loader, s, idxSrc, wi, ii, t0, timer, settled); };
-        loader.onerror = function(){
-          if (settled) return; settled = true; clearTimeout(timer); trySource(wi + 1, ii);
-        };
-        document.head.appendChild(loader);
-      } else {
-        boot0(null, s, idxSrc, wi, ii, t0, timer, settled);
-      }
+    function abs(src){
+      // 自托管源是相对路径；Pyodide 内部按 indexURL 拼接附属文件地址，
+      // 相对路径会被判为非法 URL，必须先转绝对。
+      return src.local ? new URL(src.url, location.href).href : src.url;
     }
 
-    function boot0(loader, s, idxSrc, wi, ii, t0, timer, settledFlag){
-      var bootTimer = setTimeout(function(){
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer); clearTimeout(bootTimer);
-        trySource(wi, ii + 1);        // pyodide.js 通了但启动/取 stdlib 超时 -> 换 indexURL
-      }, BOOT_TIMEOUT_MS);
+    // 组合尝试：wasm 源 × indexURL 源。失败路径不同 —— 前者是 pyodide.js 取不到，
+    // 后者是 pyodide 起来了但 python_stdlib.zip 取不到 —— 故两层都要能换。
+    // 统一的「放弃本轮、换下一个组合」出口。
+    // 必须先清 settled 再递归 —— trySource 入口会检查它，
+    // 不清就会把自己挡掉，重试永远不会发生。
+    // 试过的组合，防止重复走同一条失败路径。
+    // wasm 索引会回卷、index 索引会单调推进，两者不同步，
+    // 不去重就会反复重试已失败的组合（甚至取到 undefined 元素）。
+    var tried = {};
 
-      try {
-        loadPyodide({
-          // 自托管源是相对路径，需解析成绝对 URL：pyodide 内部按 indexURL
-          // 拼接 python_stdlib.zip 等附属文件地址，相对路径会被当成非法 URL。
-          indexURL: idxSrc.local ? new URL(idxSrc.url, location.href).href : idxSrc.url,
-          stdout: function(){}, stderr: function(){},
-        }).then(function(instance){
-          if (settled) return;
-          settled = true;
-          clearTimeout(timer); clearTimeout(bootTimer);
-          var secs = ((Date.now() - t0) / 1000).toFixed(1);
-          start(instance, s.name + " wasm / " + idxSrc.name + " stdlib · " + secs + "s");
-        }).catch(function(){
-          if (settled) return;
-          settled = true;
-          clearTimeout(timer); clearTimeout(bootTimer);
-          trySource(wi, ii + 1);
-        });
-      } catch (e){
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer); clearTimeout(bootTimer);
-        trySource(wi, ii + 1);
+    // 取下一个待试组合：先沿 wasm 列表走，走完再换 indexURL 回到 wasm 首位。
+    // 这样 (0,0) (1,0) (2,0) (3,0) (0,1) (1,1) ... 顺序推进，不重不漏。
+    function nextCombo(wi, ii){
+      if (wi + 1 < WASM_SOURCES.length) return [wi + 1, ii];
+      if (ii + 1 < INDEX_SOURCES.length) return [0, ii + 1];
+      return null;                       // 全部组合已穷尽
+    }
+
+    function retry(wi, ii, why){
+      st.settled = false;
+      if (why) console.warn("[mingli] 换源:", why);
+      var nx = nextCombo(wi, ii);
+      if (!nx){                          // 无下一个组合 -> 直接判定失败
+        trySource(WASM_SOURCES.length, 0);
+        return;
+      }
+      trySource(nx[0], nx[1]);
+    }
+
+    function trySource(wi, ii){
+      // 只检查 booted，不检查 settled —— settled 由 retry() 递归前清掉，
+      // 否则重试会被自己的守卫挡掉（这个 bug 已经犯过一次）。
+      if (st.booted) return;
+
+      if (wi >= WASM_SOURCES.length || ii >= INDEX_SOURCES.length){
+        fail("运行时加载失败：自托管与所有公共镜像源都试过了。"
+             + "可能网络受限或站点部署异常，可检查代理，或改用本地版：python scripts/server.py");
+        return;
+      }
+
+      var key = wi + ":" + ii;
+      if (tried[key]) return;            // 这个组合已经试过，不再重复
+      tried[key] = true;
+
+      var s = WASM_SOURCES[wi];
+      var idxSrc = INDEX_SOURCES[ii];
+      var label = s.name + " wasm / " + idxSrc.name + " stdlib";
+      st.settled = false;                 // 本轮开始，解除上一轮的结束标记
+      var t0 = Date.now();
+
+      stage("正在连接 " + s.name + "…", 2, "来源：" + label);
+
+      var dlTimer = setTimeout(function(){
+        if (st.settled || st.booted) return;
+        st.settled = true;
+        retry(wi + 1, ii, "下载 pyodide.js 超时 " + LOAD_TIMEOUT_MS + "ms");
+      }, LOAD_TIMEOUT_MS);
+
+      function boot0(){
+        var bootTimer = setTimeout(function(){
+          if (st.settled || st.booted) return;
+          st.settled = true;
+          clearTimeout(dlTimer); clearTimeout(bootTimer);
+          retry(wi, ii + 1, "启动 Python 超时 " + BOOT_TIMEOUT_MS + "ms");
+        }, BOOT_TIMEOUT_MS);
+
+        stage("正在下载运行时（" + idxSrc.name + "）…", 3, "来源：" + label);
+
+        try {
+          loadPyodide({
+            indexURL: abs(idxSrc),
+            stdout: function(){}, stderr: function(){},
+            // 真实进度：不再显示硬编码的假百分比
+            progressCallback: function(p){
+              if (p && p.type === "progress" && p.loaded != null){
+                onBytes(p.loaded, p.total || 0, label);
+              }
+            }
+          }).then(function(instance){
+            if (st.booted) return;
+            st.settled = true; st.booted = true;
+            clearTimeout(dlTimer); clearTimeout(bootTimer);
+            var secs = ((Date.now() - t0) / 1000).toFixed(1);
+            start(instance, label + " · " + secs + "s");
+          }).catch(function(e){
+            if (st.settled || st.booted) return;
+            st.settled = true;
+            clearTimeout(dlTimer); clearTimeout(bootTimer);
+            retry(wi, ii + 1, "loadPyodide 失败: " + ((e && e.message) || e));
+          });
+        } catch (e){
+          if (st.settled || st.booted) return;
+          st.settled = true;
+          clearTimeout(dlTimer); clearTimeout(bootTimer);
+          retry(wi, ii + 1, "loadPyodide 抛错: " + ((e && e.message) || e));
+        }
+      }
+
+      // pyodide.js 只挂一次：挂过就直接换 indexURL 试，
+      // 否则每次换源都会再追加一个 <script>，导致 Pyodide 重复初始化。
+      if (st.scriptAdded){
+        boot0();
+      } else {
+        var loader = document.createElement("script");
+        loader.src = abs(s) + "pyodide.js";
+        loader.onload = function(){ st.scriptAdded = true; boot0(); };
+        loader.onerror = function(){
+          if (st.settled || st.booted) return;
+          st.settled = true;
+          clearTimeout(dlTimer);
+          retry(wi + 1, ii, "pyodide.js 加载失败: " + String(loader.src));
+        };
+        document.head.appendChild(loader);
       }
     }
 
     function start(instance, how){
       py = instance;
-      msg.innerHTML = "正在装入排盘引擎…<br><span style=\"font-size:12px\">运行时就绪</span>";
-      srcEl.textContent = "运行时来源：" + how;
+      stage("正在装入排盘引擎…", 70, "运行时来源：" + how);
       var names = Object.keys(window.MINGLI_SRC);
       names.forEach(function(n, i){
         py.FS.writeFile("/home/pyodide/" + n + ".py", window.MINGLI_SRC[n]);

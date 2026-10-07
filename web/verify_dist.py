@@ -165,26 +165,50 @@ def main():
     ck("两个源数组都含自托管项", 'local: true' in warr and 'local: true' in iarr)
     # pyodide 内部按 indexURL 拼接附属文件地址，相对路径会被当成非法 URL，
     # 所以 local 源必须先 new URL(..., location.href) 转绝对
-    ck("indexURL 已转绝对 URL", "idxSrc.local ? new URL(" in html)
-    ck("pyodide.js 已转绝对 URL", "s.local ? new URL(" in html)
+    ck("有 abs() 负责把相对源转绝对 URL",
+       "function abs(src)" in html and "new URL(src.url, location.href).href" in html)
+    ck("indexURL 走 abs()", re.search(r"indexURL:\s*abs\(", html) is not None)
+    ck("pyodide.js 走 abs()", re.search(r"loader\.src\s*=\s*abs\(", html) is not None)
     # 公共源仍要保留作为兜底
     ck("保留公共源兜底（npmmirror/gcore/jsdelivr）",
        all(k in html for k in ("registry.npmmirror.com", "gcore.jsdelivr.net",
                                "cdn.jsdelivr.net")))
     # 两层回退：wasm 源失败换源，indexURL 失败也换源
-    ck("两层回退已实现", "trySource(wi, ii)" in html
-       and "trySource(wi, ii + 1)" in html and "trySource(wi + 1, ii)" in html)
     ck("回退入口带双索引", "trySource(0, 0)" in html)
-    ck("wasm 源耗尽后转下一个 indexURL",
-       "if (ii + 1 < INDEX_SOURCES.length) return trySource(0, ii + 1);" in html)
+    ck("组合推进由 nextCombo 统一负责",
+       re.search(r"if \(wi \+ 1 < WASM_SOURCES\.length\) return \[wi \+ 1, ii\];", html) is not None
+       and re.search(r"if \(ii \+ 1 < INDEX_SOURCES\.length\) return \[0, ii \+ 1\];", html) is not None)
+    ck("失败后统一经 retry() 换源",
+       html.count("retry(") - 1 >= 4, "%d 处" % (html.count("retry(") - 1))
     ck("全部源失败时给出可操作提示",
        "运行时加载失败" in html and "scripts/server.py" in html)
+    # ---- 加载状态机：这类 bug 静态检查看不出来，靠 web/test_load_chain.py 端到端跑 ----
+    # 曾经踩过：形参叫 settledFlag、函数体写 settled，标识符落到全局 window.settled，
+    # 守卫全部失效 -> 脚本反复重复挂载、Pyodide 重复初始化。
+    ck("加载状态用共享对象而非裸变量", "var st = {" in html and "st.settled" in html)
+    ck("无残留 settledFlag 形参", "settledFlag" not in html.split("settledFlag")[0][-0:] if False
+       else "settledFlag," not in html)
+    ck("入口守卫只查 booted（否则重试被自己挡掉）", "if (st.booted) return;" in html)
+    ck("重试统一走 retry()（先清 settled 再递归）",
+       "function retry(wi, ii, why)" in html and "st.settled = false;\n      if (why)" in html)
+    ck("pyodide.js 只挂一次", "st.scriptAdded" in html)
+    ck("组合推进统一（nextCombo）",
+       "function nextCombo(wi, ii)" in html and "var tried = {}" in html)
+    ck("组合去重", "if (tried[key]) return;" in html)
+    # 进度必须是实测字节，不能是硬编码百分比
+    ck("进度来自 progressCallback", "progressCallback:" in html)
+    ck("进度按 loaded/total 计算", "loaded / total * 100" in html)
+    # 加载页的静态说明文案里出现「约 5MB」是正常的（说明首次下载量）；
+    # 要禁的是「已 3%」这类假装在动的进度话术。
+    ck("无硬编码假进度话术", "已 3%" not in html and "已 3 %" not in html)
+    ck("加载文案含实测 MB 数", "(loaded / 1048576).toFixed(1)" in html)
+
     # 超时兜底：单源卡死必须能换下一个，否则永久白屏
     ck("下载超时已设死", "LOAD_TIMEOUT_MS = 20000" in html)
     ck("启动超时已设死", "BOOT_TIMEOUT_MS = 45000" in html)
     ck("超时会清理定时器", html.count("clearTimeout(bootTimer)") >= 2)
-    ck("已加载的 pyodide.js 不重复挂载",
-       'typeof loadPyodide !== "function"' in html)
+    ck("pyodide.js 只挂一次（scriptAdded 守卫）",
+       "st.scriptAdded" in html and "if (st.scriptAdded){" in html)
     ck("加载完成显示来源与耗时", "运行时来源：" in html)
     ck("声明生辰不上传", "不上传" in html)
 

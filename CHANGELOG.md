@@ -65,11 +65,25 @@
   在 3.5 上直接 `ImportError`。改用 `random.SystemRandom()`（自 2.6 起可用，同样走系统 CSPRNG）。
 - README 补 Windows 提示：命令行 `python` 可能指向旧 3.5，此时 `server.py` 因
   `ThreadingHTTPServer`（3.7+）无法启动，建议改用官方启动器 `py -3`。
-- 网页版相对路径当 indexURL 传给 Pyodide 会被判为非法 URL（Pyodide 内部按
-  indexURL 拼接 `python_stdlib.zip` 等地址），自托管源必须先
-  `new URL(url, location.href).href` 转绝对。
+- **网页版一直卡在「已 3%」**（线上事故，三个叠加的 bug）：
+  1. 进度条从未接线 —— 加载阶段只有 `note(3, ...)` 一个调用点，「已 3%，约 5MB」
+     是硬编码文案而非测量值。改用 Pyodide 的 `progressCallback` 按实测字节推进。
+  2. 守卫全部失效 —— 形参叫 `settledFlag`、函数体 8 处却写 `settled`，
+     标识符落到全局 `window.settled`，于是下载超时与启动超时同时触发、
+     每轮都追加一个 `<script pyodide.js>`，Pyodide 被反复重复初始化。
+  3. 重试被自己的守卫挡掉 —— `st.settled = true` 后立刻递归，而入口检查
+     `settled`，所有重试都在入口被挡回；且 wasm 索引回卷与 index 索引单调加
+     不同步，会重复试已失败的组合。
+  修复：状态改用共享对象 `st`；新增 `retry()` 统一收口（递归前先清 settled）、
+  `nextCombo()` 一维推进、`tried` 组合去重、`scriptAdded` 保证脚本只挂一次。
+- **新增 `web/test_load_chain.py`**：端到端跑加载状态机（最小 DOM 桩 + 可编排的
+  假 `loadPyodide`），覆盖 5 种失败组合。上面三个 bug 静态检查全都能通过，
+  只有真跑才暴露。
 - `verify_dist.py` 的 `ck(name, ok, extra)` 第三个参数是说明文本而非条件 ——
   曾误把条件写进第三个位置，导致断言恒真。已修正。
+- 上述 bug 修复后，`verify_dist.py` 有 6 条断言仍在匹配旧实现的具体拼写，
+  报出一堆假失败。已改为匹配语义不变量（如断言「存在 `abs()` 且内部用
+  `new URL`」而非「全文出现某个表达式」）。
 - **中文输出乱码**：Windows 中文系统控制台代码页默认 936（GBK），`sys.stdout.encoding`
   变成 `gbk`。直接跑通常正常，但输出走管道 / 重定向 / 被 IDE 捕获时，
   GBK 字节被按 UTF-8 解码即出乱码。`almanac.py` 新增 `setup_console()`

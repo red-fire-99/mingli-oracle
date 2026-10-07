@@ -53,6 +53,16 @@ jobs:
       - name: 扫敏感信息
         run: python web/check_secrets.py
 
+      # 加载回退逻辑的 bug 静态检查抓不到（作用域绑定、递归守卫、
+      # 组合推进顺序），必须真跑一遍。历史上就因此把「进度条永远停在 3%」
+      # 发布到了线上。
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: 端到端验证加载状态机
+        run: python web/test_load_chain.py
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web/dist
