@@ -64,6 +64,13 @@ jobs:
       - name: 端到端验证页面交互
         run: python web/test_ui_chain.py
 
+      # 元素「有内容但不可见」这类 bug，逻辑测试抓不到 ——
+      # innerHTML 确实写进去了，只是 CSS 的 display:none 把它藏了。
+      # 实际踩过：setStatus() 忘了加 show，于是「请先选择阳历生日」
+      # 这类提示全部隐形，用户看到的现象是「点排盘没反应」。
+      - name: 校验显隐契约
+        run: python web/check_visibility.py
+
       # JS 移植与 Python 引擎的逐案对拍。
       # 引入第二份实现后，两边必然漂移；这条门禁保证它们始终一致。
       # 含 render 层：HTML 逐字比对，能抓出「值对了但拼错位置」的错误。
