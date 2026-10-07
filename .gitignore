@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.venv/
+venv/
+env/
+
+# 环境变量 / 密钥
+.env
+.env.local
+
+# 本地缓存
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# 本项目的临时产物
+命盘*.html
+!examples/命盘*.html
+*.log
