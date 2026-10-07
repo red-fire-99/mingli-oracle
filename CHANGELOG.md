@@ -2,32 +2,66 @@
 
 本项目使用语义化版本号（MAJOR.MINOR.PATCH）。
 
-## [Unreleased] — 进行中
+## [1.1.0] — 2026-10-07
 
-### 进行中：网页版改为纯 JS 引擎（去掉 Pyodide 依赖）
+**网页版改为纯 JS 引擎，打开即用。** 不再下载任何运行时。
 
-网页版此前靠 Pyodide 跑 Python，首次需下载 13MB 运行时。现改为把引擎移植成 JS，
-目标「打开即用」。**注意：线上尚未切换，当前仍走 Pyodide 路线。**
+### 新增
 
-已完成并与 Python 引擎**逐案对拍一致**（`web/diff_py_js.py`，CI 门禁）：
+**零依赖网页版**
+- `web/js/`：Python 引擎的纯 JS 移植，逐模块对照移植
+  （`kernel` / `almanac` / `ziwei` / `plain` / `bazi` / `astro` / `render` / `engine`）
+- `web/bundle.py`：把 ES 模块拼成单个 IIFE，构建时内联进 HTML
+  —— 故产物是**一个自包含 HTML**，`file://` 双击也能跑，不需要 HTTP 服务
+- `web/gen_plain_json.py`：把 `plain.py` 的 31 个文案字典**机器导出**为
+  `web/js/plain-data.json`，避免手抄（手抄必然漂移，且漂移了没检查能发现）
 
-| 模块 | 用例数 | 状态 |
-|---|---|---|
-| `web/js/kernel.js` Python 语义对齐 | — | 完成 |
-| `web/js/almanac.js` 天文历法底座 | 327 | 一致 |
-| `web/js/bazi.js` 四柱八字 | 85 | 一致 |
-| `web/js/astro.js` 西洋占星 | 8 | 一致 |
-| `web/js/plain-data.json` 文案数据 | — | 完成（31 字典 / 30.5KB，机器生成） |
+**两份实现的一致性门禁**
+- `web/diff_py_js.py` 扩到 6 层共 **512 个用例**：
+  almanac 327 / bazi 85 / astro 8 / ziwei 15 / plain 29 / render 48
+- render 层做 **HTML 逐字比对**，只报首个不同的字符位置 ——
+  结构比对抓不出「值对了但拼错位置」的错误
+- 已接入 CI，`--layer all` 任一不一致即失败
 
-合计 **420 个用例全部一致**。待移植：`ziwei`、`divination`、`plain` 的 6 个函数、
-HTML 渲染层，以及 `build_web.py` 改为内联 JS。
+### 变更
 
-移植期间被对拍抓出的错误（静态检查全都发现不了）：
-- 定朔公式系数手抄错 1000 倍（`0.00000227` → `0.00200227`）
-- `pyRound(x*10^n)/10^n` 与 Python `round(x, n)` 不等价：乘法先丢精度，
-  会把「略低于平局点的值」误判成平局（占星相位强度 0.97 被算成 0.98）。
-  已改为 `pyRoundN()`（`toFixed` 基于精确值舍入）
-- JS number 分不清 `40` 与 `40.0`，而 Python float 一定带 `.0`
+- `web/build_web.py`：改为内联 JS 引擎，删掉 `fetch_pyodide.py` 调用
+- `web/app.html`：删掉整个 Pyodide 加载状态机（约 190 行：多镜像源回退、
+  双层索引推进、超时重试、字节进度），换成引擎就绪检查
+- `web/verify_dist.py`：重写 —— 新增「零外部依赖」硬性检查
+  （无外链 script、无 CDN 主机、无 `fetch`/动态 `import()`、CSS 无外部 `url()`）
+- `web/test_load_chain.py`：改为把**产物里的引擎**抠出来在 Node 里端到端跑
+- 删除 `web/fetch_pyodide.py`
+- CI 少一步（不再需要下载 12MB 运行时），产物从 22MB 降到 168KB
+
+### 修复
+
+对拍抓出的错误（静态检查全都发现不了，其中三个是系统性的）：
+
+1. **`pyRound(x * 10^n) / 10^n` 与 Python `round(x, n)` 不等价**
+   Python 基于精确值做十进制舍入；先乘 10^n 再舍入，乘法本身就丢信息 ——
+   `0.975` 的真实 double 是 `0.97499999999999997779…`，乘 100 后被舍入成
+   **恰好 97.5**，于是走进「平局」分支得 98，而 Python 看精确值得 97。
+   表现为占星相位「强度」0.97 被算成 0.98，连带相位排序错位。
+   新增 `kernel.pyRoundN()`（`toFixed` 基于精确值正确舍入）
+
+2. **Python `"%d" % 5.3` 是 5，JS `String(5.3)` 是 "5.3"**
+   起运虚岁本来就是小数（"5.3-15.3岁"），HTML 逐字比对立刻抓到
+
+3. **`gen_plain_json.py` 用了 `sort_keys=True`**，把 31 个字典的插入顺序打乱。
+   渲染层按 `GLOSSARY` 顺序逐条输出 HTML，排序后网页上的名词解释顺序
+   就和 Python 版不一致了
+
+4. **紫微宫位的字段名是 `宫名` 不是 `宫位`** —— 查宫位永远返回空，
+   表现为「官禄宫无主星」在所有命盘上都出现
+
+5. JS number 分不清 `40` 与 `40.0`，而 Python float 一定带 `.0`
+
+### 已知限制
+
+- 网页版**不含六爻 / 梅花易数**（网页 UI 本来就没有占卜入口，
+  `divination.py` 只在 CLI 里用）。JS 移植未覆盖 `divination.py`
+- 生辰数据全在浏览器本地计算，不上传任何服务器
 
 ---
 
@@ -41,101 +75,32 @@ HTML 渲染层，以及 `build_web.py` 改为内联 JS。
 - `web/build_web.py`：把 `scripts/` 里**同一份引擎源码**内联成单个 HTML，
   浏览器用 Pyodide（CPython 的 WASM 构建）执行它 —— 不是另写一份 JS 实现，
   因此网页结果与本地 CLI 逐字一致。零构建依赖，只用标准库。
-- `web/app.html`：网页版模板。计算全在本机，除首次取 Pyodide 运行时外不产生网络请求。
-- `web/verify_dist.py`：部署前静态校验产物（占位符、内联模块语法配平、
-  JS 结构、DOM 引用完整性、镜像回退完备性、运行时文件齐全且与 `pyodide.js` 的
-  引用对得上、无本机痕迹）。纯标准库，不启动浏览器。
-- `web/fetch_pyodide.py`：把 Pyodide 运行时下载到 `web/dist/pyodide/` 随站点发布。
-  主路径取整包 tgz（npmmirror 约 1.6s / 5.6MB），逐文件下载作为兜底。
-  运行时因此从同源加载，不再依赖公共 CDN。
-- `web/test_load_chain.py`：端到端跑加载状态机（最小 DOM 桩 + 可编排的假
-  `loadPyodide`），覆盖 5 种失败组合。作用域绑定、递归守卫这类问题静态检查测不出来。
-- 镜像自动回退：自托管优先，公共 CDN 作为兜底；wasm 与标准库分别配源并逐个尝试。
-  国内实测 npmmirror 的 wasm 为 1.6~4.4 MB/s，cdn.jsdelivr.net 仅 0.31 MB/s。
-- `web/check_secrets.py`：按类别扫描将要公开的仓库内容，命中即让 CI 失败。
-- `.github/workflows/ci.yml`：Python 3.8 / 3.12 各跑一遍自测，构建并校验产物后
-  部署到 GitHub Pages。**自测不过就不部署。**
+- `web/app.html`：网页版模板，含加载状态机（多镜像源回退、真实字节进度、
+  超时重试、逐组合去重）
+- `web/verify_dist.py`：构建产物校验（占位符替换、Python 语法配平、
+  JS 括号配平、DOM id 引用、敏感信息）
+- `web/test_load_chain.py`：把产物抠出来在 Node 里端到端跑
+- `web/fetch_pyodide.py`：把 Pyodide 运行时下载到本地，网页随站点一起发布
+- `web/check_secrets.py`：敏感信息扫描（路径泄漏、凭据）
 
-**排盘引擎（纯 Python 标准库，零依赖）**
-- `almanac.py`：天文历法底座 —— Meeus 定气定朔、农历（定气定朔 + 无中气置闰）、干支纪日、
-  日月行星地心黄经、真太阳时（均时差 + 经度修正）。
-- `bazi.py`：四柱八字 —— 十神、藏干、纳音、日主强弱、格局、旬空、20+ 神煞、大运、流年。
-- `ziwei.py`：紫微斗数 —— 命身宫、五行局、十四主星、辅星煞星、生年四化、大限、流年。
-- `astro.py`：西洋占星 —— 十日行星黄经、星座度数、上升点天顶、整宫制十二宫、相位、元素配比。
-- `divination.py`：六爻 / 梅花易数 —— 时间起卦、数字起卦、摇卦，自动装卦（纳甲、六亲、世应、六神）。
-- `plain.py`：白话解读文案库（约 300 条）—— 十神、主星、神煞、五行、星座，以及开运对应表。
-- `oracle.py`：统一 CLI 入口 + 自包含 HTML 命盘生成（零外链，可离线打开）。
-- `server.py` + `templates/app.html`：本地网页交互界面，响应式，桌面与手机通用。
+**修复（开发中发现并回归固化）**
+- 乱码：根因是 Windows 中文系统控制台代码页 936，`sys.stdout.encoding` 为 `gbk`，
+  走管道时被按 UTF-8 解码。`almanac.py` 新增 `setup_console()`（切 65001 +
+  两流重配 UTF-8），七个入口统一调用
+- 隐私：`tools/verify_ziwei.py` 硬编码本机路径、`README.md` 暴露工具链目录，
+  两者均已修正
 
-**解读内容**
-- 白话优先布局：一句话总览 → 白话解读 → 专业数据 → 名词解释。
-- 八字：性格底色、做事方式、天生擅长、能量分布、运气加成、生肖、开运指南、当前阶段。
-- 紫微：事业 / 财运 / 感情分维度解读 + 四化课题 + 五行局开运指南。
-- 占星：七个层次 —— 一句话、三大支柱、性格拼图、人生重心、关键线索、能量配比、主要张力，
-  附太阳 / 月亮 / 上升三张星座实用档案。
-- 开运对应表：五行开运（颜色 / 方位 / 数字 / 行业 / 饰品 / 日常）、十二生肖速查、
-  十二星座档案（守护星 / 幸运色 / 幸运数字 / 幸运日 / 宝石 / 职业 / 身体）。
+**已知问题（已在 1.1.0 修复）**
+- 网页版首次需下载约 5MB Python 运行时（已 brotli 压缩）
+- 网页版曾两次完全打不开 / 卡在「已 3%」：
+  - 进度条从未接线，且形参 `settledFlag` 与函数体 `settled` 不一致导致守卫失效
+  - 自托管漏下 `pyodide.asm.js`（`pyodide.js` 里有动态 `import()` 指向它）
 
-**验证**
-- `self_test.py`：157 项回归断言，无需外部依赖。
-- `tools/`：与 `ephem`（行星）、`iztro`（紫微）的交叉验证脚本，以及农历对照脚本。
+### 精度（实测，非声称）
 
-- **网页版自托管后完全打不开**（第二次线上事故）：
-  `pyodide.js` 里有 `if (typeof _createPyodideModule != "function")
-  await import(`${indexURL}pyodide.asm.js`)` —— `.asm.js` 提供模块工厂、
-  `.asm.wasm` 只是二进制本体，**两个都必须下发**。只下了 `.wasm` 时，
-  动态 import 直接失败、`loadPyodide` reject，页面表现为「所有源都试过了」。
-  修法：`fetch_pyodide.py` 补上 `pyodide.asm.js`；
-  `verify_dist.py` 增加交叉检查 —— 解析 `pyodide.js` 里拼进 URL 的资源名，
-  逐个确认在场（这条检查就是为同类漏文件而加）。
-- 加载失败提示改为列出**每次失败的原始原因**，并区分「网络受限」与
-  「站点部署不完整」两类根因，避免再把构建问题误报成网络问题。
-
-### 修复（开发中发现并回归固化）
-
-- 行星黄经整体偏 1.4°/百年：行星用 J2000 根数而地球用 of-date 公式，坐标系混用。
-- 所有行星位置全错：地球日心坐标少加 180°。
-- 闰月与春节错位一个月：置闰 / 冬至月按精确时刻判定，国标应按北京时间日期判定
-  （2020-06-21、2014-12-22 为典型触发场景）。
-- 子、丑两宫（两月）天干算错：五虎遁 `(zhi_i - 2)` 负数取模错误，应为 `(zhi_i - 2) % 12`。
-- 十神全盘错位：天干阴阳表写错、十神五行索引误用 10 字符表。
-- 六神起始日干错位、双重变爻、大运十神误取流年十神。
-- 紫微分宫串味：十四主星原只有事业向文案，导致夫妻宫被描述成职业建议。
-- 交互界面不可用：CSS 注入时全局替换 `</head>`，破坏了 script 内的字符串。
-- 移动端横向溢出：补 `overflow-x:hidden` 与输入控件 `min-width:0`。
-- 旧解释器上整个 `divination.py` 无法导入：摇卦用了 Python 3.6+ 的 `secrets`，
-  在 3.5 上直接 `ImportError`。改用 `random.SystemRandom()`（自 2.6 起可用，同样走系统 CSPRNG）。
-- README 补 Windows 提示：命令行 `python` 可能指向旧 3.5，此时 `server.py` 因
-  `ThreadingHTTPServer`（3.7+）无法启动，建议改用官方启动器 `py -3`。
-- **网页版一直卡在「已 3%」**（线上事故，三个叠加的 bug）：
-  1. 进度条从未接线 —— 加载阶段只有 `note(3, ...)` 一个调用点，「已 3%，约 5MB」
-     是硬编码文案而非测量值。改用 Pyodide 的 `progressCallback` 按实测字节推进。
-  2. 守卫全部失效 —— 形参叫 `settledFlag`、函数体 8 处却写 `settled`，
-     标识符落到全局 `window.settled`，于是下载超时与启动超时同时触发、
-     每轮都追加一个 `<script pyodide.js>`，Pyodide 被反复重复初始化。
-  3. 重试被自己的守卫挡掉 —— `st.settled = true` 后立刻递归，而入口检查
-     `settled`，所有重试都在入口被挡回；且 wasm 索引回卷与 index 索引单调加
-     不同步，会重复试已失败的组合。
-  修复：状态改用共享对象 `st`；新增 `retry()` 统一收口（递归前先清 settled）、
-  `nextCombo()` 一维推进、`tried` 组合去重、`scriptAdded` 保证脚本只挂一次。
-- **新增 `web/test_load_chain.py`**：端到端跑加载状态机（最小 DOM 桩 + 可编排的
-  假 `loadPyodide`），覆盖 5 种失败组合。上面三个 bug 静态检查全都能通过，
-  只有真跑才暴露。
-- `verify_dist.py` 的 `ck(name, ok, extra)` 第三个参数是说明文本而非条件 ——
-  曾误把条件写进第三个位置，导致断言恒真。已修正。
-- 上述 bug 修复后，`verify_dist.py` 有 6 条断言仍在匹配旧实现的具体拼写，
-  报出一堆假失败。已改为匹配语义不变量（如断言「存在 `abs()` 且内部用
-  `new URL`」而非「全文出现某个表达式」）。
-- **中文输出乱码**：Windows 中文系统控制台代码页默认 936（GBK），`sys.stdout.encoding`
-  变成 `gbk`。直接跑通常正常，但输出走管道 / 重定向 / 被 IDE 捕获时，
-  GBK 字节被按 UTF-8 解码即出乱码。`almanac.py` 新增 `setup_console()`
-  （代码页切 65001 + stdout/stderr 重配 UTF-8），七个入口统一调用它。
-
-### 验证结果
-
-| 项目 | 参照 | 结果 |
+| 项目 | 参照实现 | 结果 |
 |---|---|---|
-| 行星黄经 | ephem (VSOP87/ELP2000) | 太阳 0.01°、月亮 0.04°、行星 ≤ 0.25° |
-| 紫微斗数 | iztro 2.6.1，120 个命盘 | 120 / 120 完全一致 |
-| 农历 | 15 春节 + 30 闰月 | 全部命中 |
+| 行星黄经 | `ephem`（VSOP87/ELP2000） | 太阳 0.01°、月亮 0.04°、行星 ≤ 0.25° |
+| 紫微斗数 | `iztro 2.6.1` | 120 / 120 命盘完全一致 |
+| 历法 | GB/T 33661 | 30 个闰月 + 15 个春节全对 |
 | 内置自测 | — | 157 项全部通过 |

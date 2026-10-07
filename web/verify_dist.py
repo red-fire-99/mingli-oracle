@@ -5,31 +5,45 @@
 这些断言刻意做成「静态可判定」：不启动浏览器、不联网。
 目的是在部署前把明显的构建错误挡住，而不是替浏览器做端到端测试。
 
+真正「跑一下」的验证在另外两处，别以为这里过了就等于能用：
+  - web/test_load_chain.py   把产物里的引擎抠出来在 Node 里跑通端到端
+  - web/diff_py_js.py        JS 引擎与 Python 引擎逐案对拍
+
 检查项
 ------
 1. 构建占位符已全部替换（否则页面会拿到字面量 /*__...__*/）
-2. 7 个引擎模块都在，且内联内容是合法 JSON 字符串、Python 语法真实配平
-3. JS 结构配平（剥掉字符串与注释后计数）
-4. JS 引用的 DOM id 都真实存在，避免运行时报「null」
-5. 页面自身不含本机痕迹或凭据
+2. 内联的引擎 IIFE 结构完整（8 个模块都在、window.MingLi 挂上了）
+3. 页面**零外部依赖**：没有外链 script、没有 CDN、没有 wasm 运行时
+4. JS 结构配平（剥掉字符串与注释后计数）
+5. JS 引用的 DOM id 都真实存在，避免运行时报「null」
+6. 页面自身不含本机痕迹或凭据
 """
 import io
-import json
 import os
 import re
 import sys
-import tokenize
-import io as _io
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DIST = os.path.join(HERE, "dist", "index.html")
 
-EXPECT_MODULES = ["almanac", "plain", "bazi", "ziwei", "astro", "divination", "oracle"]
-PLACEHOLDERS = ["/*__MINGLI_MODULES__*/", "/*__PYODIDE_INDEX__*/", "/*__ENGINE_VERSION__*/"]
+# 引擎模块，顺序与 bundle.py 的拓扑排序一致
+EXPECT_MODULES = ["kernel", "almanac", "ziwei", "plain", "bazi", "astro",
+                  "render", "engine"]
+
+PLACEHOLDERS = ["/*__MINGLI_ENGINE__*/", "__ENGINE_VERSION__", "/*__ORACLE_CSS__*/"]
 
 # 本机痕迹与凭据：进 CI 就等于进公网，必须拦住
 FORBIDDEN = ["cuiyuxin", "C:/Users", "C:\\Users", ".workbuddy-ai",
-             "ghp_", "github_pat_", "BEGIN RSA PRIVATE KEY", "BEGIN OPENSSH PRIVATE KEY"]
+             "ghp_", "github_pat_", "BEGIN RSA PRIVATE KEY",
+             "BEGIN OPENSSH PRIVATE KEY"]
+
+# 「打开即用」的硬性保证：页面不得从任何外部**主机**取东西。
+# 注意不能查 "https://" / "http://" 裸串：内联 SVG 的 xmlns 就是
+# http://www.w3.org/2000/svg，那是 XML 命名空间标识符，不是网络请求。
+EXTERNAL_HOSTS = ["registry.npmmirror.com", "gcore.jsdelivr.net",
+                  "cdn.jsdelivr.net", "unpkg.com", "cdnjs.cloudflare.com",
+                  "googleapis.com", "github.com", "githubusercontent.com",
+                  "ajax.googleapis", "esm.sh", "skypack.dev", "jspm.dev"]
 
 fails = []
 
@@ -73,25 +87,6 @@ def strip_js(s):
     return "".join(out)
 
 
-def balanced_python(src):
-    """Python 源码的括号是否在语法层配平（剥字符串与注释后再数）。
-
-    不能直接对原文字符计数：中文 docstring 里常有字面括号，
-    例如 almanac.py 的「归一到 (−180, 180]」，会让朴素计数误报。
-    """
-    cnt = {"(": 0, ")": 0, "[": 0, "]": 0, "{": 0, "}": 0}
-    try:
-        for t in tokenize.generate_tokens(_io.StringIO(src).readline):
-            if t.type == tokenize.OP and t.string in cnt:
-                cnt[t.string] += 1
-    except (tokenize.TokenError, IndentationError, SyntaxError):
-        return False, "语法错误"
-    ok = (cnt["("] == cnt[")"] and cnt["["] == cnt["]"] and cnt["{"] == cnt["}"])
-    detail = "( %d/%d  [ %d/%d  { %d/%d" % (cnt["("], cnt[")"], cnt["["], cnt["]"],
-                                            cnt["{"], cnt["}"])
-    return ok, detail
-
-
 def main():
     if not os.path.isfile(DIST):
         print("找不到产物 %s，请先运行 build_web.py" % DIST)
@@ -102,28 +97,57 @@ def main():
     print("1) 构建占位符")
     for ph in PLACEHOLDERS:
         ck("已替换 %s" % ph, ph not in html)
+    ck("无任何未替换的 /*__ 占位符",
+       not re.findall(r"/\*__[A-Z_]+__\*/", html),
+       "残留=%s" % (set(re.findall(r"/\*__[A-Z_]+__\*/", html)) or "无"))
 
-    print("\n2) 内联的引擎模块")
-    found = re.findall(r'window\.MINGLI_SRC\["([^"]+)"\]', html)
+    print("\n2) 内联的引擎")
+    found = re.findall(r"/\* ====== ([\w.]+) ====== \*/", html)
     ck("模块数量 = %d" % len(EXPECT_MODULES), len(found) == len(EXPECT_MODULES),
        "-> " + ",".join(found))
     for m in EXPECT_MODULES:
-        ck("含模块 " + m, m in found)
-    for name, lit in re.findall(r'window\.MINGLI_SRC\["([^"]+)"\] = (".*?");\n', html, re.S):
-        try:
-            src = json.loads(lit)
-        except Exception as e:
-            ck("模块 %s 是合法 JSON" % name, False, str(e))
-            continue
-        ok, detail = balanced_python(src)
-        ck("模块 %s Python 语法配平" % name, ok, detail)
+        # bundle.py 打印的是带 .js 的模块名
+        ck("含模块 " + m, (m + ".js") in found)
+    ck("模块顺序与依赖一致",
+       found == [m + ".js" for m in EXPECT_MODULES],
+       "实际=%s" % ",".join(found))
+    ck("引擎挂到 window.MingLi", "window.MingLi = API" in html)
+    ck("导出 run()（页面唯一入口）",
+       re.search(r"const\s+API\s*=\s*\{\s*run", html) is not None
+       or re.search(r"\brun,\s*\n\s*build,", html) is not None)
+    ck("无残留 import 语句（应已解析掉）",
+       not re.findall(r'^\s*import\s+\{[^}]*\}\s+from\s+["\']\.', html, re.M))
+    ck("文案数据已内联",
+       re.search(r'const DATA = JSON\.parse\("\{', html) is not None
+       or "DAY_MASTER" in html)
 
-    print("\n3) JS 结构")
-    m = re.search(r"<script>(.*)</script>", html, re.S)
-    if not m:
-        ck("找到内联 script", False)
-        return 1
-    code = strip_js(m.group(1))
+    print("\n3) 零外部依赖（打开即用的硬性保证）")
+    ck("无外链 script 标签", not re.findall(r'<script[^>]+src=', html))
+    ck("无 link rel=stylesheet 外链",
+       not re.findall(r'<link[^>]+rel="stylesheet"', html))
+    ck("无 wasm 运行时", "pyodide" not in html.lower())
+    for host in EXTERNAL_HOSTS:
+        n = html.count(host)
+        ck("不含外部主机 %s" % host, n == 0, "出现 %d 次" % n if n else "")
+    # 逐个抠出所有 src=/href= 的取值，确认没有协议头或 //开头的协议相对地址
+    urls = re.findall(r'(?:src|href)\s*=\s*["\']([^"\']+)["\']', html)
+    remote = [u for u in urls
+              if re.match(r"^(https?:)?//", u) or re.match(r"^[a-z]+:", u, re.I)]
+    ck("无任何远程资源引用", not remote, "-> %s" % (remote or "无"))
+    # CSS 里的 url() 同理
+    cssurls = [u for u in re.findall(r"url\(\s*[\"']?([^\"')]+)", html)
+               if not u.startswith("data:")]
+    ck("CSS 里无外部 url()", not cssurls, "-> %s" % (cssurls or "无"))
+    # data: URI 是自包含的（内联 SVG 之类），不算外部请求
+    ck("无 fetch / XMLHttpRequest",
+       not re.findall(r"\bfetch\s*\(|XMLHttpRequest", html))
+    ck("无动态 import()", not re.findall(r"\bimport\s*\(", html))
+    ck("无 require(", not re.findall(r"\brequire\s*\(", html))
+
+    print("\n4) JS 结构")
+    scripts = re.findall(r"<script>(.*?)</script>", html, re.S)
+    ck("找到内联 script", len(scripts) >= 1, "%d 段" % len(scripts))
+    code = strip_js(scripts[0])
     for a, b, nm in [("(", ")", "圆"), ("{", "}", "花"), ("[", "]", "方")]:
         ck("JS %s括号配平" % nm, code.count(a) == code.count(b),
            "%d/%d" % (code.count(a), code.count(b)))
@@ -132,7 +156,7 @@ def main():
         depth += (ch == "{") - (ch == "}")
     ck("JS 花括号深度归零", depth == 0, "depth=%d" % depth)
 
-    print("\n4) DOM 引用")
+    print("\n5) DOM 引用")
     ids = set(re.findall(r'id="([^"]+)"', html))
     used = set(re.findall(r'\$\("#([A-Za-z0-9_-]+)"\)', html))
     missing = sorted(used - ids)
@@ -147,96 +171,17 @@ def main():
        'data-cal="solar"' in html and 'data-sex="男"' in html
        and 'getAttribute("data-cal")' in html)
 
-    print("\n5) 敏感信息")
+    print("\n6) 敏感信息")
     for needle in FORBIDDEN:
         ck("不含 %s" % needle, needle not in html)
-    ck("无外部 script 标签（Pyodide 由 JS 动态注入）",
-       not re.findall(r'<script[^>]+src="[^"]+"', html))
-    ck("Pyodide 版本已锁定", 'var PYODIDE_VERSION = "0.26.4"' in html)
-    # ---- 自托管 ----
-    ck("定义了自托管路径", 'var LOCAL_PYODIDE = "pyodide/"' in html)
-    # 顺序比较必须在各自数组切片内部做：全文下标会被注释里的源名干扰
-    warr = html[html.index("var WASM_SOURCES = ["):]
-    warr = warr[:warr.index("];")]
-    iarr = html[html.index("var INDEX_SOURCES = ["):]
-    iarr = iarr[:iarr.index("];")]
-    ck("wasm 首选自托管", warr.index('"selfhost"') < warr.index('"npmmirror"'))
-    ck("index 首选自托管", iarr.index('"selfhost"') < iarr.index('"gcore.jsdelivr"'))
-    ck("两个源数组都含自托管项", 'local: true' in warr and 'local: true' in iarr)
-    # pyodide 内部按 indexURL 拼接附属文件地址，相对路径会被当成非法 URL，
-    # 所以 local 源必须先 new URL(..., location.href) 转绝对
-    ck("有 abs() 负责把相对源转绝对 URL",
-       "function abs(src)" in html and "new URL(src.url, location.href).href" in html)
-    ck("indexURL 走 abs()", re.search(r"indexURL:\s*abs\(", html) is not None)
-    ck("pyodide.js 走 abs()", re.search(r"loader\.src\s*=\s*abs\(", html) is not None)
-    # 公共源仍要保留作为兜底
-    ck("保留公共源兜底（npmmirror/gcore/jsdelivr）",
-       all(k in html for k in ("registry.npmmirror.com", "gcore.jsdelivr.net",
-                               "cdn.jsdelivr.net")))
-    # 两层回退：wasm 源失败换源，indexURL 失败也换源
-    ck("回退入口带双索引", "trySource(0, 0)" in html)
-    ck("组合推进由 nextCombo 统一负责",
-       re.search(r"if \(wi \+ 1 < WASM_SOURCES\.length\) return \[wi \+ 1, ii\];", html) is not None
-       and re.search(r"if \(ii \+ 1 < INDEX_SOURCES\.length\) return \[0, ii \+ 1\];", html) is not None)
-    ck("失败后统一经 retry() 换源",
-       html.count("retry(") - 1 >= 4, "%d 处" % (html.count("retry(") - 1))
-    ck("全部源失败时给出可操作提示",
-       "运行时加载失败" in html and "scripts/server.py" in html)
-    # ---- 加载状态机：这类 bug 静态检查看不出来，靠 web/test_load_chain.py 端到端跑 ----
-    # 曾经踩过：形参叫 settledFlag、函数体写 settled，标识符落到全局 window.settled，
-    # 守卫全部失效 -> 脚本反复重复挂载、Pyodide 重复初始化。
-    ck("加载状态用共享对象而非裸变量", "var st = {" in html and "st.settled" in html)
-    ck("无残留 settledFlag 形参", "settledFlag" not in html.split("settledFlag")[0][-0:] if False
-       else "settledFlag," not in html)
-    ck("入口守卫只查 booted（否则重试被自己挡掉）", "if (st.booted) return;" in html)
-    ck("重试统一走 retry()（先清 settled 再递归）",
-       "function retry(wi, ii, why)" in html and "st.settled = false;\n      if (why)" in html)
-    ck("pyodide.js 只挂一次", "st.scriptAdded" in html)
-    ck("组合推进统一（nextCombo）",
-       "function nextCombo(wi, ii)" in html and "var tried = {}" in html)
-    ck("组合去重", "if (tried[key]) return;" in html)
-    # 进度必须是实测字节，不能是硬编码百分比
-    ck("进度来自 progressCallback", "progressCallback:" in html)
-    ck("进度按 loaded/total 计算", "loaded / total * 100" in html)
-    # 加载页的静态说明文案里出现「约 5MB」是正常的（说明首次下载量）；
-    # 要禁的是「已 3%」这类假装在动的进度话术。
-    ck("无硬编码假进度话术", "已 3%" not in html and "已 3 %" not in html)
-    ck("加载文案含实测 MB 数", "(loaded / 1048576).toFixed(1)" in html)
 
-    # 超时兜底：单源卡死必须能换下一个，否则永久白屏
-    ck("下载超时已设死", "LOAD_TIMEOUT_MS = 20000" in html)
-    ck("启动超时已设死", "BOOT_TIMEOUT_MS = 45000" in html)
-    ck("超时会清理定时器", html.count("clearTimeout(bootTimer)") >= 2)
-    ck("pyodide.js 只挂一次（scriptAdded 守卫）",
-       "st.scriptAdded" in html and "if (st.scriptAdded){" in html)
-    ck("加载完成显示来源与耗时", "运行时来源：" in html)
+    print("\n7) 文案与隐私")
     ck("声明生辰不上传", "不上传" in html)
+    ck("引擎标识已写进页面", "纯 JS 引擎" in html)
 
-    # ---- 自托管文件必须真的在 dist 里，否则页面一定打不开 ----
-    pdir = os.path.join(os.path.dirname(DIST), "pyodide")
-    for n in ["pyodide.js", "pyodide.asm.js", "pyodide.asm.wasm",
-              "python_stdlib.zip", "pyodide-lock.json", "manifest.json"]:
-        ck("dist/pyodide/%s 存在" % n, os.path.isfile(os.path.join(pdir, n)))
-
-    # ---- 交叉检查：pyodide.js 会去取哪些文件，这些文件必须在场 ----
-    # 这条检查是专门为「漏下 pyodide.asm.js」加的：那是个线上事故，
-    # 文件存在性与 SHA 全部通过，但 pyodide.js 里的
-    #   if (typeof _createPyodideModule != "function") await import(`${indexURL}pyodide.asm.js`)
-    # 会去动态 import 一个我们没下载的文件，import 失败 -> loadPyodide reject
-    # -> 页面表现为「所有源都试过了」，极具误导性。
-    pjs = os.path.join(pdir, "pyodide.js")
-    if os.path.isfile(pjs):
-        src = io.open(pjs, encoding="utf-8", errors="replace").read()
-        # 只认运行时真会拼进 URL 的那几种资源，排除 .d.ts/.map 之类开发物料
-        refs = set(re.findall(r"indexURL`?\s*\+\s*[\"']([^\"']+)[\"']", src))
-        refs |= set(re.findall(r"\$\{[^}]*indexURL\}([A-Za-z0-9_.\-/]+\.(?:js|wasm|zip|json))", src))
-        refs |= set(re.findall(r"indexURL`?\s*\+\s*`([^`]+)`", src))
-        for r in sorted(refs):
-            if not re.search(r"\.(js|wasm|zip|json)$", r):
-                continue
-            ck("pyodide.js 引用的 %s 在场" % r, os.path.isfile(os.path.join(pdir, r)))
-        ck("pyodide.js 会动态 import pyodide.asm.js（故该文件不可省）",
-           "pyodide.asm.js" in src)
+    # ---- 产物目录不应再有运行时文件：留着只会让人以为还需要下载 ----
+    ddir = os.path.dirname(DIST)
+    ck("dist/pyodide 已移除", not os.path.isdir(os.path.join(ddir, "pyodide")))
 
     print("\n" + "=" * 56)
     if fails:

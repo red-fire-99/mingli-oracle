@@ -74,7 +74,11 @@ def main():
         print("  %-20s %5d 项" % (n, len(conv)))
 
     dest = os.path.join(HERE, "js", "plain-data.json")
-    text = json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    # 不能加 sort_keys=True —— 插入顺序是有意义的：
+    # render_glossary 按 GLOSSARY 的顺序逐条渲染成 HTML，
+    # 排序后网页上的名词解释顺序会和 Python 版不一致。
+    # Python 3.7+ 的 dict 插入顺序本身是确定的，不排序就已经可复现。
+    text = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
     with io.open(dest, "w", encoding="utf-8") as f:
         f.write(text)
     kb = len(text.encode("utf-8")) / 1024.0

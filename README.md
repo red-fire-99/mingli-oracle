@@ -26,25 +26,15 @@
 
 **https://red-fire-99.github.io/mingli-oracle/**
 
-打开即用，不用装任何东西。填生日 → 出命盘 → 可切「说人话版 / 专业数据」→ 可保存成离线网页。
+打开即用。填生日 → 出命盘 → 可切「说人话版 / 专业数据」→ 可保存成离线网页。
 
-技术上是把本仓库 `scripts/` 里**同一份 Python 引擎**跑在浏览器里（Pyodide = CPython 的 WASM 构建），
-不是另写了一个 JS 版本，所以**网页上的排盘结果和本地 CLI 完全一致**。
+页面加载后**不发起任何网络请求**，不需要下载任何运行时，
+`file://` 双击打开也能跑（产物是单个自包含 HTML，168KB）。
 
-关于隐私：Pyodide 是纯前端运行时，没有后端服务器。**生辰只在你自己的浏览器里计算，
-不发往任何地方**（页面除了首次下载 Pyodide 运行时外不产生任何网络请求）。
-不想在浏览器里跑、或者网络访问 CDN 受限时，用下面的本地版。
+关于隐私：纯前端计算，没有后端服务器。**生辰只在你自己的浏览器里算，
+不发往任何地方**，关掉页面什么都不留。
 
-### 首次加载
-
-Python 运行时**随站点一起发布**，浏览器从同源取（走 GitHub Pages 自己的 CDN），
-不依赖任何公共 CDN。wasm 2.85MB + 标准库 2.20MB（Pages 会 gzip 传输），
-之后浏览器缓存，第二次打开基本瞬时。
-
-页面同时保留公共源作为兜底（万一 Pages 部署异常），会显示实际使用的来源与耗时；
-单个源超时或失败会自动换下一个，不会卡死。
-
----
+不想在浏览器里跑，用下面的本地版。
 
 ## 本地使用
 
@@ -137,6 +127,7 @@ python self_test.py
 | 紫微星定位 | 与 iztro 文档算法对比 5 局 × 30 日 | 150 组全等，文档三示例全吻合 |
 | 农历 | 15 个历年春节 + 30 组闰月 + 朔望自洽 + 往返一致 | 全部命中 |
 | 八字 | 日柱 / 月柱 / 年柱 / 时柱锚点、400 天日柱连续性 | 全部通过 |
+| JS 移植 | 与 Python 引擎逐案对拍 512 例（render 层 HTML 逐字比对） | **512 / 512 一致** |
 
 运行内置自测（157 项断言，无需任何外部依赖）：
 
@@ -165,6 +156,16 @@ cd tools && python verify_calendar.py   # 农历对照（无额外依赖）
    典型触发场景：2020-06-21 夏至与朔同日、2014-12-22 冬至与朔同日。
 4. **子、丑两宫（两月）天干算错** —— 五虎遁公式里 `(zhi_i - 2)` 为负数时取模结果错误，应为 `(zhi_i - 2) % 12`。
 
+JS 移植阶段又踩了几个（只靠逐案对拍抓得到，静态检查全都发现不了）：
+
+5. **`pyRound(x * 10^n) / 10^n` 与 Python `round(x, n)` 不等价** ——
+   Python 基于精确值做十进制舍入，先乘 10^n 会丢精度：
+   `0.975` 的真实 double 是 `0.97499999999999997779…`，乘 100 后被舍入成
+   **恰好 97.5**，于是误判成平局得 98，而 Python 看精确值得 97。
+6. **Python `"%d" % 5.3` 是 5，JS `String(5.3)` 是 `"5.3"`** —— 起运虚岁本来就是小数。
+7. **字典导出时用了 `sort_keys=True`**，打乱了 31 个文案字典的插入顺序，
+   而渲染层是按插入顺序输出 HTML 的。
+
 ---
 
 ## 项目结构
@@ -187,40 +188,70 @@ mingli-oracle/
 ├── references/               # 解读规则知识库
 ├── tools/                    # 与第三方库的交叉验证脚本
 ├── examples/                 # 生成好的示例命盘（可直接打开）
-├── web/                      # 网页版（Pyodide 跑同一份 Python 引擎）
-│   ├── build_web.py          # 生成器：把引擎内联成单个 HTML（零构建依赖）
-│   ├── fetch_pyodide.py      # 下载 Pyodide 运行时到本地（自托管）
+├── web/                      # 网页版（纯 JS 引擎，打开即用）
+│   ├── js/                   # JS 引擎（Python 的移植，逐模块对照）
+│   │   ├── kernel.js         # Python 语义对齐层（% / // / round / 浮点）
+│   │   ├── almanac.js        # 天文历法底座
+│   │   ├── bazi.js  ziwei.js  astro.js
+│   │   ├── plain.js          # 白话解读（文案数据由 gen_plain_json.py 生成）
+│   │   └── render.js         # HTML 渲染层
+│   ├── bundle.py             # 把 js/*.js 拼成单文件 IIFE
+│   ├── build_web.py          # 生成器：内联引擎成单个 HTML（零构建依赖）
+│   ├── diff_py_js.py         # Python ↔ JS 逐案对拍（CI 门禁，512 例）
+│   ├── gen_plain_json.py     # 把 plain.py 的文案字典机器导出为 JSON
 │   ├── verify_dist.py        # 部署前校验产物
+│   ├── test_load_chain.py    # 把产物里的引擎抠出来端到端跑
 │   ├── check_secrets.py      # 扫仓库里的敏感信息
-│   └── app.html              # 网页版模板（构建时会填入引擎源码）
+│   └── app.html              # 网页版模板（构建时填入引擎）
 └── .github/workflows/ci.yml  # 自测 + 自动部署到 GitHub Pages
 ```
 
 ### 网页版是怎么工作的
 
 ```
-scripts/*.py  ──►  web/build_web.py  ──►  web/dist/index.html  ──►  GitHub Pages
-（唯一一份引擎）      （内联成字符串）      （单文件，约 210KB）
-                          │
-                          └─ 浏览器加载 Pyodide，在 WebAssembly 里执行它
+scripts/*.py ──移植──► web/js/*.js ──打包──► web/dist/index.html ──► GitHub Pages
+（唯一事实来源）            （第二实现）        （单文件 168KB）
+                              │
+                              └─ web/bundle.py 拼成 IIFE 内联进 HTML
 ```
 
-`build_web.py` 只用 Python 标准库，不需要 npm 或打包器，产物是单个 HTML 文件，
-扔进任意静态托管都能跑。CI 里每次 push 现建现部署，`web/dist/` 不入库。
+网页版跑的是 `web/js/` 里的 **JS 引擎**，不是 Python。仓库里因此有两份实现 ——
+这不是疏忽，是「打开即用」的代价（另一条路是下载 13MB 的 WASM 版 CPython）。
+
+两份实现的一致性由 `web/diff_py_js.py` 保证：
+
+```bash
+python web/diff_py_js.py --layer all      # 512 个用例逐项比对
+```
+
+| 层 | 用例 | 覆盖 |
+|---|---|---|
+| almanac | 327 | 干支纪日、定气定朔、节气、行星黄经、真太阳时 |
+| bazi | 85 | 四柱全流程、十神全覆盖、六十甲子旬空 |
+| render | 48 | **HTML 逐字比对** |
+| plain | 29 | 6 个白话解读函数 |
+| ziwei | 15 | 命身宫、安星、十二宫、大限、流年 |
+| astro | 8 | 十天体、上升天顶、相位、整宫制 |
+
+render 层做的是**逐字符**比对，只报第一个不同的位置 —— 
+结构比对抓不出「值对了但拼错位置」这类错误，而那恰好是渲染层最容易犯的错。
+
+这条门禁确实有用：移植期间它抓出了几个静态检查完全发现不了的错误，
+比如 Python 的 `round(x, 2)` 基于精确值舍入，而 JS 常见的
+`pyRound(x * 100) / 100` 会因为乘法丢精度，把「略低于平局点的值」误判成平局。
+
+`build_web.py` 与 `bundle.py` 都只用 Python 标准库，不需要 npm 或打包器。
+CI 里每次 push 现建现部署，`web/dist/` 不入库。
 
 自己构建：
 
 ```bash
-python web/build_web.py                        # 输出到 web/dist/index.html
-python web/fetch_pyodide.py --out web/dist/pyodide   # 下载运行时（约 12MB）
-python -m http.server -d web/dist 8000         # 本地预览（必须用 http:// 而非 file://）
+python web/build_web.py          # 输出到 web/dist/index.html（168KB）
+python web/verify_dist.py        # 校验产物（零外链、无占位符残留）
+python web/test_load_chain.py    # 把产物里的引擎抠出来在 Node 里跑一遍
 ```
 
-运行时随站点一起发布，所以 `web/dist/` 约 12MB（其中 wasm 占 9.6MB）。
-不提交进 git，由 CI 每次现下。
-
-部署由 `.github/workflows/ci.yml` 自动完成：先跑 `self_test.py`（Python 3.8 与 3.12 各一遍），
-**自测不过就不部署**，避免把坏版本推上线。
+产物是**单文件**，`file://` 双击就能用，不需要起 HTTP 服务。
 
 ---
 

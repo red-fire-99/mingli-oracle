@@ -1,16 +1,22 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""生成网页版：把整个排盘引擎内联进一个自包含的 HTML 文件。
+"""生成网页版：把纯 JS 排盘引擎内联进一个自包含的 HTML 文件。
 
 设计要点
 --------
-1. **不重写引擎**：网页版跑的就是 scripts/ 里同一份 Python 源码，
-   通过 Pyodide（CPython 的 WASM 构建）在浏览器里执行。
-   因此网页版和本地 CLI 的排盘结果逐字一致，不存在「两份实现」。
-2. **数据不出浏览器**：Pyodide 是纯前端运行时，没有后端。
-   生辰只在本机内存里计算，不发往任何服务器。
-3. **零构建依赖**：只用标准库，不需要 npm / 打包器。
-   产物是单个 HTML + 一份 LICENSE 说明，扔进任意静态托管都能跑。
+1. **打开即用**：引擎（web/js/*.js）在构建时由 web/bundle.py 拼成一个
+   IIFE 直接内联进 HTML。页面加载后**不发起任何网络请求**，
+   也不需要 HTTP 服务 —— file:// 双击打开就能排盘。
+2. **结果一致**：JS 引擎是 Python 引擎的移植，两份实现由
+   web/diff_py_js.py 逐案对拍保证一致（CI 门禁，不过不部署）。
+3. **数据不出浏览器**：纯前端计算，没有后端。生辰只在本机内存里。
+4. **零构建依赖**：只用标准库，不需要 npm / 打包器。
+
+与上一版的区别
+--------------
+上一版把 scripts/ 的 Python 源码内联、靠 Pyodide（WASM 版 CPython）
+在浏览器里执行。首次打开需下载约 5MB 运行时，且必须走 HTTP。
+现在改成纯 JS 移植，代价是仓库里有两份实现 —— 这个代价由对拍工具消化。
 
 用法
 ----
@@ -22,30 +28,25 @@ import io
 import json
 import os
 import shutil
+import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-SCRIPTS = os.path.join(ROOT, "scripts")
 TEMPLATE = os.path.join(HERE, "app.html")
 
-# 需要内联的模块：almanac 是底座，其余按依赖顺序
-MODULES = [
-    "almanac.py",
-    "plain.py",
-    "bazi.py",
-    "ziwei.py",
-    "astro.py",
-    "divination.py",
-    "oracle.py",
-]
+PLACEHOLDER_ENGINE = "/*__MINGLI_ENGINE__*/"
+PLACEHOLDER_CSS = "/*__ORACLE_CSS__*/"
 
-# Pyodide 版本（锁死，避免上游变更导致行为漂移）
-# 页面里配了多镜像源，npmmirror 国内优先；这个版本只用于占位符替换与提示文案。
-PYODIDE_VERSION = "0.26.4"
+# 引擎版本号的占位符。刻意**不带引号**：注入的是 json.dumps(ver) 的结果，
+# 自带引号；模板里若写成 "/*__...__*/" 就会变成 ""1.0.0"" 这种坏代码。
+# 同一个字符串在 app.html（JS 表达式）与 engine.js（JS 字符串字面量）里
+# 各用一次形式不同，所以要同时接受两种写法。
+VERSION_TOKENS = ["/*__ENGINE_VERSION__*/", '"__ENGINE_VERSION__"',
+                  "__ENGINE_VERSION__"]
 
-PLACEHOLDER_MODULES = "/*__MINGLI_MODULES__*/"
-PLACEHOLDER_PYODIDE = "/*__PYODIDE_VERSION__*/"
+# 需要内联的渲染层 CSS：命盘 HTML 靠它成型（scripts/oracle.py 里的 CSS 常量）
+CSS_FROM = os.path.join(ROOT, "scripts", "oracle.py")
 
 
 def read(path):
@@ -53,16 +54,53 @@ def read(path):
         return f.read()
 
 
-def build_modules():
-    """把每个 .py 模块包成 JS 字符串常量，拼成一段可注入的 JS。"""
-    out = ["// 由 web/build_web.py 自动生成，请勿手改。", "// 引擎源码逐字内联，保证与本地 CLI 结果一致。", ""]
-    for name in MODULES:
-        src = read(os.path.join(SCRIPTS, name))
-        module = name[:-3]  # 去掉 .py
-        # 用 JSON 字符串字面量承载源码，转义交给 json.dumps，不手拼
-        out.append("window.MINGLI_SRC[%s] = %s;"
-                   % (json.dumps(module), json.dumps(src, ensure_ascii=False)))
-    return "\n".join(out)
+def engine_version():
+    """从 CHANGELOG 头一行取版本号，用于页面上的运行时标识。"""
+    head = read(os.path.join(ROOT, "CHANGELOG.md")).splitlines()
+    for line in head:
+        s = line.strip()
+        if not s.startswith("## ["):
+            continue
+        # s 形如 "## [1.0.0] — 2026-10-07"，从 '[' 之后取到 ']'
+        name = s[s.index("[") + 1:s.index("]")].strip()
+        # 「[Unreleased]」是占位标题，不是版本号，往后找第一个真实版本
+        if name and name.lower() != "unreleased":
+            return name
+    return "dev"
+
+
+def oracle_css():
+    """从 oracle.py 里抠出 CSS 常量。
+
+    渲染层 HTML 与它的样式是一套的，CSS 也归 Python 管（CLI 导出的命盘
+    网页要用同一份）。这里用「找常量起止」而不是手抄一份 CSS 文件 ——
+    手抄必然漂移，且漂移了没有任何检查能发现。
+    """
+    src = read(CSS_FROM)
+    start = src.index('CSS = """')
+    body_start = src.index("\n", start) + 1
+    end = src.index('"""', body_start)
+    return src[body_start:end]
+
+
+def bundle_js():
+    """调 bundle.py 生成引擎 IIFE。"""
+    out = os.path.join(HERE, ".engine_bundle.js")
+    try:
+        r = subprocess.run(
+            [sys.executable, os.path.join(HERE, "bundle.py"), "--out", out],
+            capture_output=True)
+        if r.returncode != 0:
+            sys.stderr.write(r.stderr.decode("utf-8", "replace"))
+            raise SystemExit("引擎打包失败")
+        sys.stdout.write(r.stdout.decode("utf-8", "replace"))
+        with io.open(out, encoding="utf-8") as f:
+            return f.read()
+    finally:
+        try:
+            os.remove(out)
+        except OSError:
+            pass
 
 
 def main(argv=None):
@@ -70,24 +108,42 @@ def main(argv=None):
     p.add_argument("--out", default=os.path.join(HERE, "dist"), help="输出目录")
     a = p.parse_args(argv)
 
-    for name in MODULES:
-        if not os.path.isfile(os.path.join(SCRIPTS, name)):
-            print("缺少模块: %s" % name, file=sys.stderr)
-            return 1
     if not os.path.isfile(TEMPLATE):
         print("缺少模板: %s" % TEMPLATE, file=sys.stderr)
         return 1
-
     html = read(TEMPLATE)
-    if PLACEHOLDER_MODULES not in html or PLACEHOLDER_PYODIDE not in html:
-        print("模板缺少占位符: %s / %s" % (PLACEHOLDER_MODULES, PLACEHOLDER_PYODIDE), file=sys.stderr)
+    if PLACEHOLDER_ENGINE not in html:
+        print("模板缺少占位符 %s（引擎 IIFE）" % PLACEHOLDER_ENGINE, file=sys.stderr)
+        return 1
+    if not any(t in html for t in VERSION_TOKENS):
+        print("模板缺少版本号占位符", file=sys.stderr)
+        return 1
+    if PLACEHOLDER_CSS not in html:
+        print("模板缺少占位符 %s（命盘样式）" % PLACEHOLDER_CSS, file=sys.stderr)
         return 1
 
-    html = html.replace(PLACEHOLDER_MODULES, build_modules())
-    html = html.replace(PLACEHOLDER_PYODIDE, json.dumps(PYODIDE_VERSION))
-    # 顺带把引擎版本写进页面，便于线上排查
-    html = html.replace("/*__ENGINE_VERSION__*/",
-                        json.dumps(read(os.path.join(ROOT, "CHANGELOG.md")).splitlines()[2].strip("[] ")))
+    engine = bundle_js()
+    ver = engine_version()
+    quoted = json.dumps(ver)          # "1.0.0"
+
+    # 引擎 IIFE 里的版本占位符先替掉，再整体塞进 HTML。
+    # 顺序敏感：必须「长 token 在前」，否则 "__ENGINE_VERSION__" 会把
+    # '"__ENGINE_VERSION__"' 里的引号留成孤儿。
+    for tok in sorted(VERSION_TOKENS, key=len, reverse=True):
+        engine = engine.replace(tok, quoted)
+
+    # 关键：占位符在 app.html 里出现两次 —— 一处在顶部说明文字里
+    #（「内联进下方 /*__MINGLI_ENGINE__*/ 处」），一处在真正该插代码的位置。
+    # str.replace 默认全替换，会把 136KB 引擎塞两遍，产物直接翻倍。
+    # 所以只认「独占一行」的那处。
+    needle = "\n" + PLACEHOLDER_ENGINE + "\n"
+    if html.count(needle) != 1:
+        raise SystemExit("模板里独占一行的 %s 出现 %d 次（应 1 次）"
+                         % (PLACEHOLDER_ENGINE, html.count(needle)))
+    html = html.replace(needle, "\n" + engine + "\n")
+    for tok in sorted(VERSION_TOKENS, key=len, reverse=True):
+        html = html.replace(tok, quoted)
+    html = html.replace(PLACEHOLDER_CSS, oracle_css())
 
     os.makedirs(a.out, exist_ok=True)
     dest = os.path.join(a.out, "index.html")
@@ -100,10 +156,9 @@ def main(argv=None):
         shutil.copyfile(shot, os.path.join(a.out, "favicon.png"))
 
     kb = os.path.getsize(dest) / 1024.0
-    print("已生成 %s (%.1f KB, 内联 %d 个模块)" % (dest, kb, len(MODULES)))
-    print("Pyodide: v%s（页面内置多镜像源回退，npmmirror 优先）" % PYODIDE_VERSION)
-    print("提示: 本地预览用  python -m http.server -d web/dist 8000"
-          "（需 http:// 而非 file://，否则浏览器不让加载 WASM）")
+    print("已生成 %s (%.1f KB)" % (dest, kb))
+    print("引擎: 纯 JS 内联 v%s，零外部依赖" % ver)
+    print("提示: 直接用浏览器打开即可（file:// 也能跑），无需起 HTTP 服务")
     return 0
 
 

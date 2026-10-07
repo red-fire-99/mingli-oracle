@@ -286,6 +286,186 @@ def cases_astro():
 LAYERS["astro"] = cases_astro
 
 
+def cases_ziwei():
+    """紫微层对拍：命身宫、五行局、安星、十二宫、大限、流年。
+
+    ziwei.py 的「流年」默认取 datetime.now().year，必须用 year= 钉死，
+    否则 Python 与 JS 跑在跨年边界时会得出不同结果。
+    """
+    import ziwei as Z
+    out = []
+    add = lambda op, label, inp, want: out.append((op, label, inp, want))
+
+    combos = [
+        dict(solar=(1990, 5, 15), hour=(12, 0), sex="男", place="北京"),
+        dict(solar=(1990, 5, 15), hour=(12, 0), sex="女", place="北京"),
+        dict(solar=(2000, 1, 1), hour=(0, 0), sex="男", place="上海"),
+        dict(solar=(2024, 2, 4), hour=(23, 0), sex="女"),
+        dict(solar=(1984, 2, 4), hour=(1, 0), sex="男"),
+        dict(solar=(1900, 1, 1), hour=(12, 0), sex="女"),
+        dict(solar=(2100, 12, 31), hour=(12, 0), sex="男"),
+        dict(solar=(1990, 5, 15), hour=None, sex="男"),
+        dict(solar=(2020, 6, 21), hour=(13, 0), sex="女"),
+        dict(lunar=(1990, 5, 15), leap=True, hour=(12, 0), sex="男"),
+    ]
+    for c in combos:
+        kw = dict(solar=c.get("solar"), lunar=c.get("lunar"),
+                  leap=c.get("leap", False), hour=c.get("hour"), shichen=None,
+                  sex=c["sex"], place=c.get("place"), year=PINNED_YEAR)
+        r = Z.pai_pan(**kw)
+        want = {
+            "输入": r["输入"], "命宫": r["命宫"], "身宫": r["身宫"],
+            "五行局": r["五行局"], "紫微星": r["紫微星"], "天府星": r["天府星"],
+            "十二宫": [[p["宫名"], p["地支"], p["天干"], p["星曜"], p["主星"],
+                        p["是否命宫"], p["是否身宫"]] for p in r["十二宫"]],
+            "四化": r["四化"],
+            "大限": {"顺逆": r["大限"]["顺逆"], "起运虚岁": r["大限"]["起运虚岁"],
+                     "列表": [[d["宫位"], d["地支"], d["天干"], d["虚岁起"],
+                                d["虚岁止"], d["星曜"]] for d in r["大限"]["列表"]]},
+            "流年": r["流年"],
+            "警告": r["警告"],
+        }
+        add("ziwei_pai_pan", "ziwei(%s %s %s)"
+            % (c.get("solar") or c.get("lunar"), c["sex"], c.get("hour")),
+            {"solar": c.get("solar"), "lunar": c.get("lunar"),
+             "leap": c.get("leap", False), "hour": c.get("hour"),
+             "sex": c["sex"], "place": c.get("place"), "year": PINNED_YEAR}, want)
+
+    # 安紫微：五行局 × 农历日 全覆盖（1..30），这是紫微最核心的查表
+    for ju in (2, 3, 4, 5, 6):
+        row = [Z.an_ziwei(ju, d) for d in range(1, 31)]
+        add("an_ziwei", "an_ziwei(ju=%d, 1..30)" % ju, {"ju": ju}, {"row": row})
+    return out
+
+
+LAYERS["ziwei"] = cases_ziwei
+
+
+def cases_plain():
+    """白话解读层对拍：6 个函数在真实排盘结果上的输出。
+
+    plain.py 的输入是 bazi/ziwei/astro 的**完整排盘结果**，所以这一层
+    同时验证「移植后的 plain.js 能吃 JS 引擎自己产出的结构」——
+    这是纯 JS 站点能否独立跑通的关键一环。
+    """
+    import bazi as B, ziwei as Z, astro as AS, plain as PL
+    from datetime import datetime
+    out = []
+    add = lambda op, label, inp, want: out.append((op, label, inp, want))
+
+    combos = [
+        dict(solar=(1990, 5, 15), hour=(12, 0), sex="男", place="北京",
+             lon=116.4, lat=39.9),
+        dict(solar=(1990, 5, 15), hour=(12, 0), sex="女", place="北京",
+             lon=116.4, lat=39.9),
+        dict(solar=(2000, 1, 1), hour=(0, 0), sex="男", place="上海",
+             lon=121.5, lat=31.2),
+        dict(solar=(2024, 2, 4), hour=(23, 0), sex="女", place="拉萨",
+             lon=91.1, lat=29.7),
+        dict(solar=(1984, 2, 4), hour=(1, 0), sex="男", place="广州",
+             lon=113.3, lat=23.1),
+        dict(solar=(2020, 6, 21), hour=(12, 0), sex="女", place="乌鲁木齐",
+             lon=87.6, lat=43.8),
+        dict(solar=(1990, 5, 15), hour=None, sex="男", place="北京",
+             lon=116.4, lat=39.9),
+    ]
+    for c in combos:
+        common = dict(solar=c["solar"], hour=c["hour"], sex=c["sex"],
+                      place=c["place"])
+        rb = B.pai_pan(longitude=c["lon"], shichen=None, lunar=None, leap=False,
+                       deceased_year=None, now=datetime(PINNED_YEAR, 1, 1), **common)
+        rz = Z.pai_pan(lunar=None, leap=False, shichen=None, year=PINNED_YEAR, **common)
+        ra = AS.pai_pan(lunar=None, leap=False, lat=c["lat"], lon=c["lon"], **common)
+
+        tag = "%s %s %s" % (c["solar"], c["sex"], c["hour"])
+        add("plain_bazi", "bazi_plain(%s)" % tag, dict(common, lon=c["lon"]),
+            PL.bazi_plain(rb))
+        add("plain_ziwei", "ziwei_plain(%s)" % tag, dict(common),
+            PL.ziwei_plain(rz))
+        add("plain_astro", "astro_plain(%s)" % tag,
+            dict(common, lat=c["lat"], lon=c["lon"]),
+            PL.astro_plain(ra))
+        add("plain_headline", "headline(%s)" % tag,
+            dict(common, lat=c["lat"], lon=c["lon"]),
+            PL.headline({"八字": rb, "紫微": rz, "占星": ra}))
+
+    # 词汇表
+    add("glossary", "glossary_html()", {}, {"g": PL.glossary_html()})
+    return out
+
+
+LAYERS["plain"] = cases_plain
+
+
+def cases_render():
+    """渲染层端到端对拍：同一生辰，Python 与 JS 必须输出逐字相同的 HTML。"""
+    import bazi as B, ziwei as Z, astro as AS, plain as PL, oracle as O
+    from datetime import datetime
+    out = []
+    add = lambda op, label, inp, want: out.append((op, label, inp, want))
+
+    combos = [
+        dict(solar=(1990, 5, 15), hour="12:00", sex="男", place="北京",
+             lon=116.4, lat=39.9),
+        dict(solar=(1990, 5, 15), hour="12:00", sex="女", place="北京",
+             lon=116.4, lat=39.9),
+        dict(solar=(2000, 1, 1), hour="00:00", sex="男", place="上海",
+             lon=121.5, lat=31.2),
+        dict(solar=(2024, 2, 4), hour="23:00", sex="女", place="拉萨",
+             lon=91.1, lat=29.7),
+        dict(solar=(1984, 2, 4), hour="01:00", sex="男", place="广州",
+             lon=113.3, lat=23.1),
+        dict(solar=(2020, 6, 21), hour="12:00", sex="女", place="乌鲁木齐",
+             lon=87.6, lat=43.8),
+        dict(solar=(1990, 5, 15), hour=None, sex="男", place=None,
+             lon=None, lat=None),
+        dict(lunar=(1990, 5, 15), leap=True, hour="12:00", sex="男",
+             place="北京", lon=116.4, lat=39.9),
+    ]
+    for c in combos:
+        # hour 统一用 "H:MM" 字符串跨语言传递（网页表单就是这个格式），
+        # 两侧各自解析成本地表示 —— 与 render.js 的 run() 保持同一约定。
+        hh = (tuple(int(x) for x in c["hour"].split(":")) if c.get("hour") else None)
+        kw = dict(solar=c.get("solar"), lunar=c.get("lunar"),
+                  leap=c.get("leap", False), hour=hh,
+                  sex=c["sex"], place=c.get("place"))
+        rb = B.pai_pan(longitude=c["lon"], shichen=None,
+                       deceased_year=None,
+                       now=datetime(PINNED_YEAR, 1, 1), **kw)
+        rz = Z.pai_pan(shichen=None, year=PINNED_YEAR, **kw)
+        ra = AS.pai_pan(lat=c["lat"], lon=c["lon"], **kw)
+        data = {"八字": rb, "紫微": rz, "占星": ra}
+
+        tag = "%s %s %s" % (c.get("solar") or c.get("lunar"), c["sex"], c.get("hour"))
+        # 逐字比对 HTML：HTML 里含有大量中文与标点，只报首个不同的字符位置
+        add("render_bazi", "render_bazi(%s)" % tag, dict(c),
+            {"html": O.render_bazi(rb)})
+        add("render_ziwei", "render_ziwei(%s)" % tag, dict(c),
+            {"html": O.render_ziwei(rz)})
+        add("render_astro", "render_astro(%s)" % tag, dict(c),
+            {"html": O.render_astro(ra)})
+        add("render_plain", "render_plain(%s)" % tag, dict(c),
+            {"html": O.render_plain(data)})
+        add("render_glossary", "render_glossary()", {}, {"html": O.render_glossary()})
+        add("run", "run(%s)" % tag, dict(c), O_run_js_equiv(c, O, PL, data))
+    return out
+
+
+def O_run_js_equiv(c, O, PL, data):
+    """Python 侧模拟 render.js 的 run()：拼出网页版真正消费的三个字段。"""
+    pro = ""
+    if "八字" in data: pro += O.render_bazi(data["八字"])
+    if "紫微" in data: pro += O.render_ziwei(data["紫微"])
+    if "占星" in data: pro += O.render_astro(data["占星"])
+    pro += O.render_glossary()
+    return {"headline": PL.headline(data),
+            "plain_html": O.render_plain(data),
+            "pro_html": pro}
+
+
+LAYERS["render"] = cases_render
+
+
 
 
 def gen_baseline(layer):
@@ -305,6 +485,22 @@ const mod  = await import(pathToFileURL(process.env.__ALMANAC).href);
 const K    = await import(pathToFileURL(process.env.__KERNEL).href);
 const B    = await import(pathToFileURL(process.env.__BAZI).href);
 const A    = await import(pathToFileURL(process.env.__ASTRO).href);
+const ZW   = await import(pathToFileURL(process.env.__ZIWEI).href);
+const P    = await import(pathToFileURL(process.env.__PLAIN).href);
+const RD   = await import(pathToFileURL(process.env.__RENDER).href);
+
+// 渲染层辅助：按 Python 侧同样的参数造盘。year 钉死，流年才可比。
+function mk(i, which) {
+  const common = { solar: i.solar || null, lunar: i.lunar || null,
+                   leap: !!i.leap,
+                   hour: i.hour ? String(i.hour).split(":").map(Number) : null,
+                   shichen: null, sex: i.sex, place: i.place || null };
+  if (which === "bazi") return B.paiPan({ ...common, longitude: i.lon,
+                                          nowYear: 2026 });
+  if (which === "ziwei") return ZW.paiPan({ ...common, year: 2026 });
+  return A.paiPan({ ...common, lat: i.lat, lon: i.lon });
+}
+
 
 const R = [];
 for (const c of CASES) {
@@ -397,6 +593,89 @@ for (const c of CASES) {
         };
         break;
       }
+      case "ziwei_pai_pan": {
+        const r = ZW.paiPan({ solar: i.solar || null, lunar: i.lunar || null,
+                              leap: !!i.leap, hour: i.hour || null, shichen: null,
+                              sex: i.sex, place: i.place || null, year: i.year });
+        got = {
+          输入: r.输入, 命宫: r.命宫, 身宫: r.身宫, 五行局: r.五行局,
+          紫微星: r.紫微星, 天府星: r.天府星,
+          十二宫: r.十二宫.map(p => [p.宫名, p.地支, p.天干, p.星曜, p.主星,
+                                     p.是否命宫, p.是否身宫]),
+          四化: r.四化,
+          大限: { 顺逆: r.大限.顺逆, 起运虚岁: r.大限.起运虚岁,
+                  列表: r.大限.列表.map(d => [d.宫位, d.地支, d.天干,
+                                              d.虚岁起, d.虚岁止, d.星曜]) },
+          流年: r.流年, 警告: r.警告,
+        };
+        break;
+      }
+      case "an_ziwei": {
+        got = { row: Array.from({length: 30}, (_, k) => ZW.anZiwei(i.ju, k + 1)) };
+        break;
+      }
+      case "plain_bazi": {
+        const r = B.paiPan({ solar: i.solar || null, hour: i.hour || null,
+                             shichen: null, sex: i.sex, place: i.place || null,
+                             longitude: i.lon, leap: false, nowYear: 2026 });
+        got = P.baziPlain(r);
+        break;
+      }
+      case "plain_ziwei": {
+        const r = ZW.paiPan({ solar: i.solar || null, hour: i.hour || null,
+                              shichen: null, sex: i.sex, place: i.place || null,
+                              leap: false, year: 2026 });
+        got = P.ziweiPlain(r);
+        break;
+      }
+      case "plain_astro": {
+        const r = A.paiPan({ solar: i.solar || null, hour: i.hour || null,
+                             shichen: null, sex: i.sex, place: i.place || null,
+                             lat: i.lat, lon: i.lon, leap: false });
+        got = P.astroPlain(r);
+        break;
+      }
+      case "plain_headline": {
+        const c = i;
+        const rb = B.paiPan({ solar: c.solar || null, hour: c.hour || null,
+                              shichen: null, sex: c.sex, place: c.place || null,
+                              longitude: c.lon, leap: false, nowYear: 2026 });
+        const rz = ZW.paiPan({ solar: c.solar || null, hour: c.hour || null,
+                               shichen: null, sex: c.sex, place: c.place || null,
+                               leap: false, year: 2026 });
+        const ra = A.paiPan({ solar: c.solar || null, hour: c.hour || null,
+                              shichen: null, sex: c.sex, place: c.place || null,
+                              lat: c.lat, lon: c.lon, leap: false });
+        got = P.headline({ 八字: rb, 紫微: rz, 占星: ra });
+        break;
+      }
+      case "glossary": got = { g: P.glossaryHtml() }; break;
+      case "render_bazi": {
+        const rb = mk(i, "bazi");
+        got = { html: RD.renderBazi(rb) };
+        break;
+      }
+      case "render_ziwei": {
+        got = { html: RD.renderZiwei(mk(i, "ziwei")) };
+        break;
+      }
+      case "render_astro": {
+        got = { html: RD.renderAstro(mk(i, "astro")) };
+        break;
+      }
+      case "render_plain": {
+        got = { html: RD.renderPlain({ 八字: mk(i, "bazi"), 紫微: mk(i, "ziwei"),
+                                       占星: mk(i, "astro") }) };
+        break;
+      }
+      case "render_glossary": got = { html: RD.renderGlossary() }; break;
+      case "run": {
+        got = RD.run({ solar: i.solar || null, lunar: i.lunar || null,
+                       leap: !!i.leap, hour: i.hour || null,
+                       sex: i.sex, place: i.place || null,
+                       lon: i.lon, lat: i.lat });
+        break;
+      }
       default: got = { __unknown_op: c.op };
     }
   } catch (e) {
@@ -424,6 +703,10 @@ def main(argv=None):
     # JSON 往返会把整数变成浮点，先把该当整数的字段钉回去，
     # 避免「类型不同」被误判成数值不一致。
     def pin_ints(o):
+        # Python 的 tuple 经 JSON 往返会变成 JS 侧的 array，比对前统一成 list，
+        # 否则「术语」这类 [(k, v), ...] 会永远报不一致。
+        if isinstance(o, tuple):
+            return [pin_ints(v) for v in o]
         if isinstance(o, dict):
             return {k: (int(v) if isinstance(v, float) and v.is_integer()
                         and k not in ("jd", "lon", "eot", "offset_min", "offsetMin")
@@ -452,6 +735,9 @@ def main(argv=None):
     env["__KERNEL"] = os.path.join(HERE, "js", "kernel.js")
     env["__BAZI"] = os.path.join(HERE, "js", "bazi.js")
     env["__ASTRO"] = os.path.join(HERE, "js", "astro.js")
+    env["__ZIWEI"] = os.path.join(HERE, "js", "ziwei.js")
+    env["__PLAIN"] = os.path.join(HERE, "js", "plain.js")
+    env["__RENDER"] = os.path.join(HERE, "js", "render.js")
     try:
         r = subprocess.run([a.js, runner], capture_output=True, env=env, timeout=600)
     finally:
@@ -489,6 +775,17 @@ def main(argv=None):
             return None
         if isinstance(got, bool) or isinstance(want, bool):
             return None if got == want else "%spy=%r js=%r" % (path, want, got)
+        if isinstance(got, str) and isinstance(want, str):
+            if got == want:
+                return None
+            # HTML 逐字比对：只报首个不同的位置，否则几万字的差异没法看
+            k = 0
+            lim = min(len(got), len(want))
+            while k < lim and got[k] == want[k]:
+                k += 1
+            ctx = lambda s: repr(s[max(0, k - 40):k + 40])
+            return ("HTML 在第 %d 字符不同\n       py: %s\n       js: %s"
+                    "（长度 py=%d js=%d）" % (k, ctx(want), ctx(got), len(want), len(got)))
         if isinstance(got, (int, float)) and isinstance(want, (int, float)):
             if abs(got - want) <= a.tol + max(abs(got), abs(want)) * 1e-15:
                 return None

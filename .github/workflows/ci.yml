@@ -39,32 +39,27 @@ jobs:
       - name: 生成单文件网页
         run: python web/build_web.py
 
-      # 自托管 Pyodide：运行时随站点一起发布，浏览器从同源取，不依赖公共 CDN。
-      # 主路径取整包 tgz（npmmirror 约 3s / 5.6MB，且四个文件齐全）；
-      # 逐文件下载作为兜底。
-      - name: 下载 Pyodide 运行时（自托管）
-        run: python web/fetch_pyodide.py --out web/dist/pyodide
-
-      # 构建产物必须自洽：占位符填完、7 个模块都在、内联的 Python 语法配平。
-      # 这些断言全部只用标准库，不给 CI 引入额外依赖。
+      # 产物必须自洽：占位符填完、8 个引擎模块都在且顺序正确、
+      # 零外链（无 CDN、无 wasm 运行时）。只用标准库，不给 CI 引入额外依赖。
       - name: 校验产物
         run: python web/verify_dist.py
 
       - name: 扫敏感信息
         run: python web/check_secrets.py
 
-      # 加载回退逻辑的 bug 静态检查抓不到（作用域绑定、递归守卫、
-      # 组合推进顺序），必须真跑一遍。历史上就因此把「进度条永远停在 3%」
-      # 发布到了线上。
+      # 静态检查抓不到「静态看着对、实际跑不起来」。历史上两次线上事故
+      # 都是这个形态（缺 pyodide.asm.js、进度条永远停在 3%）。
+      # 这里把产物里的引擎抠出来在 Node 里真跑一遍。
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
 
-      - name: 端到端验证加载状态机
+      - name: 端到端验证内联引擎
         run: python web/test_load_chain.py
 
       # JS 移植与 Python 引擎的逐案对拍。
       # 引入第二份实现后，两边必然漂移；这条门禁保证它们始终一致。
+      # 含 render 层：HTML 逐字比对，能抓出「值对了但拼错位置」的错误。
       - name: Python ↔ JS 引擎对拍
         run: python web/diff_py_js.py --layer all
 

@@ -1,227 +1,192 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""端到端跑一遍网页版的「加载运行时」状态机 —— CI 用，可选（需要 Node）。
+"""从构建产物里把引擎抠出来，在 Node 里端到端跑一遍。
 
 为什么需要它
 ------------
-加载回退逻辑里的 bug，静态检查全都抓不到：
+verify_dist.py 只做静态检查（占位符替换、括号配平、无外链）。
+但「静态看起来对、实际跑不起来」是这类内联产物的典型翻车方式 ——
+上一次的线上事故就是这个形态：文件都在、SHA 都对，
+但 pyodide.js 里那句 `import(pyodide.asm.js)` 指向一个没下载的文件，
+页面表现为「所有源都试过了」，极具误导性。
 
-1. **形参名与函数体不一致**：形参叫 ``settledFlag``，函数体 8 处写 ``settled``，
-   标识符落到全局 ``window.settled``，于是所有 ``if (settled) return`` 守卫失效，
-   脚本被反复重复挂载、Pyodide 重复初始化 —— 线上表现就是进度条永远停在 3%。
-2. **重试被自己的守卫挡掉**：``st.settled = true`` 之后立刻递归 ``trySource()``，
-   而入口第一句检查 ``settled`` —— 所有重试都在入口被挡回去。
-3. **组合推进不同步**：wasm 索引回卷、index 索引单调加，两者不同步就会
-   重复试已失败的组合，甚至取到 ``undefined`` 元素。
-
-这类问题只能真跑一遍。本测试用最小 DOM 桩 + 可编排的假 ``loadPyodide``，
-在 Node 里执行构建产物里的页面脚本，覆盖 5 种失败组合。
+所以必须**真的把产物里的引擎执行一遍**，验证：
+  1. 内联的 IIFE 语法合法、能跑完
+  2. window.MingLi 真的挂上了，且 run 是函数
+  3. 拿真实生辰能排出盘，产出的 HTML 非空、不含 undefined/NaN
+  4. HTML 是自包含的（没有外链引用）
 
 用法
 ----
-    python web/test_load_chain.py            # 需要 node 在 PATH
-    python web/test_load_chain.py --js 路径  # 指定 node 可执行文件
+    python web/test_load_chain.py [--js node] [--dist web/dist/index.html]
 """
 import argparse
-import json
+import io
 import os
 import re
-import shutil
 import subprocess
 import sys
-import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DIST = os.path.join(HERE, "dist", "index.html")
-PAGE = "https://example.github.io/mingli-oracle/"
 
-# 最小 DOM 桩 + 可编排的假 loadPyodide。
-# 注意不要替换 global.console —— 上一版把 console 换成空实现，
-# 结果连测试自己的输出都被吞掉，node 正常退出却没有输出。
-HARNESS = r"""
-function El(id) {
-  return {
-    id, value: "", textContent: "", innerHTML: "", disabled: false, removed: false,
-    dataset: {}, children: [],
-    classList: { _s: new Set(),
-      add(c){this._s.add(c);}, remove(c){this._s.delete(c);},
-      toggle(c,f){f?this._s.add(c):this._s.delete(c);}, contains(c){return this._s.has(c);} },
-    style: {}, parentNode: null,
-    appendChild(c){this.children.push(c); c.parentNode=this; return c;},
-    setAttribute(){}, getAttribute(){return null;},
-    addEventListener(){}, querySelector(){return null;}, querySelectorAll(){return [];},
-    remove(){ this.removed = true; }, requestSubmit(){},
+# 在 Node 里跑的驱动器。刻意写成 CommonJS（.cjs）：
+# 本项目要支持 Node 18~22，用 .mjs 的话 require 不可用，得全改 import，
+# 而这只是一次性测试脚本，不值得为它引入模块类型上的前提。
+DRIVER = r"""
+const fs = require("node:fs");
+const vm = require("node:vm");
+
+const html = fs.readFileSync(process.argv[2], "utf8");
+
+// 只取第一段 <script>：引擎 IIFE 就躺在那里。
+const m = html.match(/<script>([\s\S]*?)<\/script>/);
+if (!m) { console.error("FAIL: 找不到内联 script"); process.exit(1); }
+const code = m[1];
+
+// 最小 DOM stub。存在的理由：产物里引擎与 UI 写在**同一个** <script> 里，
+// 只测引擎就得先把 UI 那半边也执行一遍（否则会撞上 document is not defined）。
+//
+// 这不是为了替代真浏览器 —— 而是为了让「引擎 + UI 装配」这段代码真的跑一遍：
+// 如果引擎没挂上 window.MingLi，boot() 会走错误分支，
+// 那个分支我们自己写的断言抓不到，但真浏览器里会白屏。
+function mkEl(tag) {
+  const el = {
+    tagName: (tag || "div").toUpperCase(),
+    className: "", innerHTML: "", textContent: "", value: "",
+    style: {}, dataset: {}, hidden: false, disabled: false,
+    checked: false, classList: { add(){}, remove(){}, contains(){ return false; } },
+    children: [],
+    setAttribute(){}, getAttribute(){ return null; }, removeAttribute(){},
+    appendChild(c){ this.children.push(c); return c; },
+    addEventListener(){}, removeEventListener(){},
+    querySelector(){ return mkEl("div"); },
+    querySelectorAll(){ return []; },
+    closest(){ return null; },
+    remove(){}, scrollIntoView(){},
+    getAttribute(){ return null; },
   };
+  return el;
 }
-const els = {};
-function $(sel){ const id = sel.replace('#','');
-  if (!els[id]) { els[id] = El(id); els[id].parentNode = els[id]; } return els[id]; }
-
-global.document = { head: El('head'), body: El('body'), querySelector: $,
-  querySelectorAll: () => [], createElement: (t) => El(t + Math.random().toString(36).slice(2,7)) };
-global.window = { MINGLI_SRC: {} };
-global.location = { href: "__PAGE__" };
-
-const CFG = JSON.parse(process.env.__CFG);
-const rec = [];
-console.warn = function(){ rec.push("WARN " + Array.prototype.join.call(arguments, " ")); };
-
-let SCRIPT_MOUNTS = 0, INFLIGHT = 0, MAX_INFLIGHT = 0, PROGRESS_CALLS = 0, LAST_PCT = null;
-
-global.loadPyodide = function(opts){
-  INFLIGHT++; MAX_INFLIGHT = Math.max(MAX_INFLIGHT, INFLIGHT);
-  const c = CFG.combos.shift() || { ok: false };
-  rec.push("LOAD " + String(opts.indexURL).replace("__PAGE__", "./"));
-  if (c.progress !== false && typeof opts.progressCallback === "function") {
-    for (const [l, t] of [[1000000,5000000],[3000000,5000000],[5000000,5000000]]) {
-      opts.progressCallback({ type:"progress", loaded:l, total:t });
-      PROGRESS_CALLS++;
-      LAST_PCT = els['bootFill'] ? els['bootFill'].style.width : null;
-    }
-  }
-  return new Promise((res, rej) => setTimeout(() => {
-    INFLIGHT--;
-    if (c.ok) res({ FS:{writeFile(){}}, runPython(){} }); else rej(new Error("boom"));
-  }, c.delay || 4));
+const doc = {
+  querySelector(){ return mkEl("div"); },
+  querySelectorAll(){ return []; },
+  getElementById(){ return mkEl("div"); },
+  createElement: mkEl,
+  addEventListener(){},
 };
 
-const origAppend = global.document.head.appendChild.bind(global.document.head);
-global.document.head.appendChild = function(node){
-  const r = origAppend(node);
-  const src = String(node.src || "");
-  if (src.includes("pyodide.js")) {
-    SCRIPT_MOUNTS++;
-    rec.push("MOUNT " + src.replace("__PAGE__", "./"));
-    const fails = CFG.scriptFails.indexOf(SCRIPT_MOUNTS) >= 0;
-    setTimeout(() => { fails ? (node.onerror && node.onerror()) : (node.onload && node.onload()); }, 2);
-  }
-  return r;
-};
+const win = { document: doc, location: { href: "https://example.invalid/" } };
+const ctx = vm.createContext({
+  window: win, document: doc, console,
+  location: win.location,
+  // 引擎真正用到的全局。多给任何一个，都可能让
+  // 「浏览器里其实会报错」的代码在这里蒙混过关。
+  Date, Math, JSON, parseInt, parseFloat, isFinite, isNaN,
+  Array, Object, String, Number, Boolean, Error, Set, Map, Symbol,
+});
+ctx.globalThis = ctx;
 
-setTimeout(() => {
-  process.stdout.write("@@RESULT@@" + JSON.stringify({
-    scriptMounts: SCRIPT_MOUNTS, maxInflight: MAX_INFLIGHT,
-    progressCalls: PROGRESS_CALLS, lastPct: LAST_PCT,
-    bootRemoved: !!(els['boot'] && els['boot'].removed),
-    statusText: els['status'] ? els['status'].textContent : "",
-    bootMsgHTML: els['bootMsg'] ? els['bootMsg'].innerHTML.slice(0,240) : "",
-    record: rec,
-  }) + "\n");
-  process.exit(0);
-}, 1200);
+try {
+  vm.runInContext(code, ctx, { filename: "inline-engine.js" });
+} catch (e) {
+  console.error("FAIL: 引擎+UI 执行抛错 -> " + (e && e.stack || e));
+  process.exit(1);
+}
+
+const ML = win.MingLi;
+if (!ML) { console.error("FAIL: window.MingLi 未挂上"); process.exit(1); }
+
+const need = ["run", "build", "renderBazi", "renderZiwei", "renderAstro",
+              "renderPlain", "renderGlossary", "headline"];
+for (const k of need) {
+  if (typeof ML[k] !== "function") {
+    console.error("FAIL: 缺导出 " + k); process.exit(1);
+  }
+}
+
+// 覆盖：正常、跨立春、晚子时、闰月、无时刻无经纬（最容易崩的组合）
+const cases = [
+  { tag: "常规", solar: [1990, 5, 15], hour: "12:00", sex: "男",
+    place: "北京", lon: 116.41, lat: 39.90 },
+  { tag: "跨立春晚子时", solar: [2024, 2, 4], hour: "23:00", sex: "女",
+    place: "拉萨", lon: 91.11, lat: 29.97 },
+  { tag: "边界年", solar: [1900, 1, 1], hour: "00:30", sex: "男",
+    place: "上海", lon: 121.47, lat: 31.23 },
+  { tag: "闰五月", lunar: [1990, 5, 15], leap: true, hour: "12:00", sex: "男",
+    place: "北京", lon: 116.41, lat: 39.90 },
+  { tag: "无时刻无经纬", solar: [1990, 5, 15], sex: "男" },
+];
+
+let bad = 0;
+for (const c of cases) {
+  const inp = Object.assign({}, c); delete inp.tag;
+  let r;
+  try {
+    r = ML.run(inp);
+  } catch (e) {
+    console.error("  FAIL " + c.tag + ": 抛错 " + (e && e.message));
+    bad++; continue;
+  }
+  const htmlOut = r.plain_html + r.pro_html;
+  if (!r.headline || !r.plain_html.length || !r.pro_html.length) {
+    console.error("  FAIL " + c.tag + ": 输出为空");
+    bad++; continue;
+  }
+  // undefined / NaN 混进 HTML 是移植最常见的漏网之鱼
+  const mm = htmlOut.match(/.{0,50}(undefined|NaN|\[object Object\]).{0,50}/);
+  if (mm) {
+    console.error("  FAIL " + c.tag + ": HTML 含 " + mm[0]);
+    bad++; continue;
+  }
+  // 自包含：产物里不能出现远程引用
+  const remote = htmlOut.match(/(?:src|href)\s*=\s*["'](?!#)([^"']+)/g);
+  if (remote) {
+    console.error("  FAIL " + c.tag + ": 排盘 HTML 含外部引用 " + remote[0]);
+    bad++; continue;
+  }
+  console.log("  OK   " + c.tag + "  headline: " + r.headline);
+  console.log("       plain " + r.plain_html.length
+              + " 字符 / pro " + r.pro_html.length + " 字符");
+}
+
+if (bad) { console.error("端到端验证失败 " + bad + " 例"); process.exit(1); }
+console.log("PASS: 产物内联引擎端到端可用");
 """
-
-FAILS = []
-
-
-def ck(name, cond, extra=""):
-    if not cond:
-        FAILS.append(name)
-    print("  [%s] %s%s" % ("OK" if cond else "FAIL", name, ("  " + str(extra)) if extra else ""))
-
-
-def load_page_js():
-    if not os.path.isfile(DIST):
-        print("找不到 %s，请先运行 build_web.py" % DIST, file=sys.stderr)
-        sys.exit(1)
-    html = open(DIST, encoding="utf-8").read()
-    blocks = re.findall(r"<script>(.*?)</script>", html, re.S)
-    if not blocks:
-        print("产物里没有内联 script", file=sys.stderr)
-        sys.exit(1)
-    js = max(blocks, key=len)
-    # 摘掉引擎源码赋值（很长，与本测试无关）
-    return re.sub(r'window\.MINGLI_SRC\["[^"]+"\] = .*?;\n', "", js)
-
-
-def run(node, js, cfg):
-    d = tempfile.mkdtemp()
-    p = os.path.join(d, "t.cjs")
-    with open(p, "w", encoding="utf-8") as f:
-        f.write(HARNESS.replace("__PAGE__", PAGE) + "\n" + js)
-    env = dict(os.environ)
-    env["__CFG"] = json.dumps(cfg)
-    try:
-        out = subprocess.run([node, p], capture_output=True, env=env, timeout=40)
-    except subprocess.TimeoutExpired:
-        shutil.rmtree(d, ignore_errors=True)
-        return {"error": "超时（疑似死循环）"}
-    finally:
-        shutil.rmtree(d, ignore_errors=True)
-    if out.returncode != 0:
-        return {"error": out.stderr.decode("utf-8", "replace")[-300:]}
-    so = out.stdout.decode("utf-8", "replace")
-    if "@@RESULT@@" not in so:
-        return {"error": "无结果标记；stdout=%r" % so[:160]}
-    return json.loads(so.split("@@RESULT@@", 1)[1].strip().splitlines()[0])
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="端到端验证网页版的加载状态机")
-    ap.add_argument("--js", default="node", help="Node 可执行文件路径")
-    a = ap.parse_args(argv)
+    p = argparse.ArgumentParser(description="把产物里的引擎抠出来端到端跑")
+    p.add_argument("--js", default="node", help="Node 可执行文件")
+    p.add_argument("--dist", default=DIST, help="待验产物")
+    a = p.parse_args(argv)
 
-    node = shutil.which(a.js) or a.js
-    js = load_page_js()
-    print("加载状态机端到端测试（node: %s，页面 js %d 字符）\n" % (node, len(js)))
-
-    print("场景 1：自托管源直接成功")
-    r = run(node, js, {"combos": [{"ok": True}], "scriptFails": []})
-    if "error" in r:
-        print("  无法运行：%s" % r["error"]); return 2
-    ck("pyodide.js 只挂一次", r["scriptMounts"] == 1, r["scriptMounts"])
-    ck("并发加载数 = 1", r["maxInflight"] == 1, r["maxInflight"])
-    ck("进度来自 progressCallback", r["progressCalls"] == 3, r["progressCalls"])
-    # 97% 是刻意的：100% 留给「引擎装入完成」，避免下载刚满就显示 100% 却还在解压
-    ck("进度按实测字节推进（97% 封顶）", r["lastPct"] == "97%", r["lastPct"])
-    ck("boot 移除、页面可用", r["bootRemoved"] is True)
-    ck("状态提示就绪", "就绪" in r["statusText"])
-
-    print("\n场景 2：pyodide.js 挂载连续失败 2 次后成功")
-    r = run(node, js, {"combos": [{"ok": True}], "scriptFails": [1, 2]})
-    if "error" in r:
-        print("  无法运行：%s" % r["error"]); return 2
-    ck("确实尝试了 3 次挂载", r["scriptMounts"] == 3, r["scriptMounts"])
-    ck("最终成功", r["bootRemoved"] is True)
-
-    print("\n场景 3：loadPyodide 连续失败后换源恢复（settled 守卫回归）")
-    r = run(node, js, {"combos": [{"ok": False}, {"ok": False}, {"ok": True}], "scriptFails": []})
-    if "error" in r:
-        print("  无法运行：%s" % r["error"]); return 2
-    loads = [x for x in r["record"] if x.startswith("LOAD")]
-    ck("pyodide.js 只挂一次（不重复初始化）", r["scriptMounts"] == 1, r["scriptMounts"])
-    ck("换源后确实重试", len(loads) >= 2, "LOAD %d 次" % len(loads))
-    ck("各次 indexURL 不重复", len(set(loads)) == len(loads), loads)
-    ck("最终恢复成功", r["bootRemoved"] is True)
-    ck("全程并发 = 1", r["maxInflight"] <= 1, r["maxInflight"])
-    ck("记录换源原因便于排障", any("WARN" in x for x in r["record"]))
-
-    print("\n场景 4：组合穷尽 -> 有界失败并给出可操作提示")
-    r = run(node, js, {"combos": [], "scriptFails": []})
-    if "error" in r:
-        print("  无法运行：%s" % r["error"]); return 2
-    ck("无死循环（挂载次数有界）", r["scriptMounts"] <= 8, r["scriptMounts"])
-    ck("提示改用本地版或说明真实原因",
-       "scripts/server.py" in r["bootMsgHTML"] or "部署不完整" in r["bootMsgHTML"])
-
-    print("\n场景 5：所有脚本挂载都失败")
-    r = run(node, js, {"combos": [{"ok": True}], "scriptFails": list(range(1, 9))})
-    if "error" in r:
-        print("  无法运行：%s" % r["error"]); return 2
-    ck("有界失败", r["scriptMounts"] <= 8, r["scriptMounts"])
-    # 失败时必须列出每次的真实原因，而不是只说一句「都试过了」
-    ck("给出可操作提示",
-       "scripts/server.py" in r["bootMsgHTML"] or "加载失败" in r["bootMsgHTML"])
-    ck("列出各次失败原因", "各次失败的具体原因" in r["bootMsgHTML"],
-       r["bootMsgHTML"][:60])
-    ck("提示区分网络问题与部署不完整",
-       "pyodide.asm.js" in r["bootMsgHTML"] or "部署不完整" in r["bootMsgHTML"])
-
-    print("\n" + "=" * 56)
-    if FAILS:
-        print("失败 %d 项：%s" % (len(FAILS), FAILS))
+    if not os.path.isfile(a.dist):
+        print("找不到产物 %s，请先运行 build_web.py" % a.dist)
         return 1
-    print("加载状态机端到端验证全部通过")
+
+    html = io.open(a.dist, encoding="utf-8").read()
+    print("端到端验证 %s（%.1f KB）\n"
+          % (a.dist, len(html.encode("utf-8")) / 1024.0))
+
+    drv = os.path.join(HERE, ".load_chain_test.cjs")
+    try:
+        io.open(drv, "w", encoding="utf-8").write(DRIVER)
+        try:
+            r = subprocess.run([a.js, drv, a.dist], capture_output=True, timeout=300)
+        except FileNotFoundError:
+            print("找不到 Node：%s（用 --js 指定，或在 CI 里装 Node）" % a.js)
+            return 2
+    finally:
+        try:
+            os.remove(drv)
+        except OSError:
+            pass
+
+    sys.stdout.write(r.stdout.decode("utf-8", "replace"))
+    if r.returncode != 0:
+        sys.stdout.write(r.stderr.decode("utf-8", "replace"))
+        return 1
     return 0
 
 
