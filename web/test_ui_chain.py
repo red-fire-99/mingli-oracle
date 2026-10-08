@@ -320,6 +320,8 @@ if (!(win.MingLi && typeof win.MingLi.run === "function")) {
 }
 
 // ---- 2) 关键元素存在 ----
+// 元素清单必须排在「填表→提交」之前：后面的检查要读 panel-plain 的
+// innerHTML，元素不存在时后面会报一堆看不懂的错。
 const need = ["form", "solarYear", "solarMonth", "solarDay", "birthTime",
               "provSel", "citySel", "distSel", "cityHint", "lon", "lat",
               "city", "citySearch", "submitBtn", "headline", "panel-plain",
@@ -607,6 +609,32 @@ if (form && form.hasListener("submit")) {
   } else {
     drain();
   }
+}
+
+// 1.3.1 新增：折叠区块必须真的存在于结果里，且默认收起。
+//
+// 只断言「有 details 标签」不够 —— 半新半旧的代码也能产出配平的标签。
+// 要断言内容：标题文案、步数、逐项解读。
+// 另外检查没有 open 属性：用户明确选了「默认折叠」，
+// 带 open 就等于没折叠。
+{
+  const pp = byId.get("panel-plain");
+  const html = pp ? pp.innerHTML : "";
+  const need = ["你一生十步大运", "未来七年的年度节奏", "你身上五股的劲儿",
+                "四种元素逐项看", "十二长生", "好的一面", "要注意"];
+  const missing = need.filter(k => html.indexOf(k) < 0);
+  if (missing.length) {
+    fail("白话区缺少新内容: " + missing.join("、"));
+    process.exit(1);
+  }
+  const nFold = (html.match(/<details/g) || []).length;
+  const nClose = (html.match(/<\/details>/g) || []).length;
+  if (nFold !== nClose) fail("折叠标签不配平：" + nFold + " 开 / " + nClose + " 闭");
+  if (/<details[^>]*\sopen/.test(html)) fail("折叠区块带 open 属性，没有默认收起");
+  // 「（今年）」说明流年里确实标出了当前年份
+  if (html.indexOf("（今年）") < 0) fail("流年没有标出今年");
+  console.log("  OK   白话区新增 " + nFold + " 个折叠区块（默认收起），"
+    + "含大运逐段/流年逐年/五行意象/四元素逐项");
 }
 
 const hl = byId.get("headline");

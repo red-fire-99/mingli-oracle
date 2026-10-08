@@ -143,6 +143,68 @@ padding:13px 18px;margin:11px 0}
 .tagline .tag{background:#fff;border:1px solid var(--line);border-radius:10px;
 padding:8px 12px;font-size:13px;flex:1 1 250px;min-width:210px;line-height:1.65}
 .tagline .tag b{color:var(--red);display:block;margin-bottom:3px;font-size:14px}
+/* 折叠区块：新增内容默认收起，首屏保持原来的长度。
+   用原生 <details> 而不是 JS 展开 —— 零脚本就能开，合上时浏览器
+   不会渲染里面的内容，页面首屏成本不涨。 */
+details.fold{background:#fbf8f1;border:1px solid var(--line);border-radius:11px;
+ margin:12px 0;overflow:hidden}
+details.fold>summary{cursor:pointer;padding:11px 16px;font-size:14px;font-weight:600;
+ color:var(--red);list-style:none;display:flex;align-items:center;gap:8px}
+details.fold>summary::-webkit-details-marker{display:none}
+details.fold>summary::before{content:"▸";color:var(--gold);font-size:13px;
+ transition:transform .15s}
+details.fold[open]>summary::before{transform:rotate(90deg)}
+details.fold>summary .cnt{margin-left:auto;color:var(--sub);font-weight:400;font-size:12px}
+details.fold .fbody{padding:2px 16px 14px}
+/* 大运 / 流年逐条 */
+.dy{display:grid;grid-template-columns:repeat(auto-fill,minmax(268px,1fr));gap:9px;
+ margin-top:4px}
+.dy .it{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 13px;
+ line-height:1.7}
+.dy .it.now{border-color:var(--red);background:#fdf6f0;box-shadow:0 0 0 1px var(--red) inset}
+.dy .hd{display:flex;align-items:baseline;gap:7px;margin-bottom:4px;flex-wrap:wrap}
+.dy .no{font-size:12px;color:var(--sub)}
+.dy .gz{font-size:17px;font-weight:700;letter-spacing:1px}
+.dy .ss{font-size:12px;color:var(--blue)}
+.dy .age{margin-left:auto;font-size:12px;color:var(--sub)}
+.dy .now-tag{font-size:11px;background:var(--red);color:#fff;border-radius:8px;
+ padding:0 7px;letter-spacing:1px}
+.dy .th{font-size:13px;color:var(--red);font-weight:600;margin-bottom:2px}
+.dy .li{font-size:13px;margin:4px 0 0;color:var(--ink)}
+.dy .li .h{color:var(--sub);margin-right:5px}
+.dy .li.warn{color:#8a4a20}
+.dy .stg{display:inline-block;font-size:11px;background:#f0e9db;color:var(--sub);
+ border-radius:8px;padding:0 7px;margin-top:5px}
+/* 流年 */
+.ly{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+.ly .it{display:flex;gap:11px;align-items:flex-start;background:#fff;
+ border:1px solid var(--line);border-radius:10px;padding:9px 13px;line-height:1.7}
+.ly .it.now{border-color:var(--red);background:#fdf6f0}
+.ly .yr{font-size:16px;font-weight:700;width:56px;flex:none;font-variant-numeric:tabular-nums}
+.ly .tx{flex:1;font-size:13px}
+/* 五行意象 */
+.wx{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:9px;margin-top:4px}
+.wx .it{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 13px;
+ line-height:1.7;font-size:13px}
+.wx .it.top{border-color:var(--gold)}
+.wx .it.lo{border-style:dashed}
+.wx .hd{display:flex;align-items:baseline;gap:8px;margin-bottom:3px;flex-wrap:wrap}
+.wx .wxn{font-size:19px;font-weight:700}
+.wx .xiang{color:var(--red)}
+.wx .pc{margin-left:auto;font-size:13px;color:var(--sub);font-variant-numeric:tabular-nums}
+.wx .tag{font-size:11px;border-radius:8px;padding:0 7px;background:#f0e9db;color:var(--sub)}
+.wx .tag.ji{background:#e8f2ea;color:var(--green)}
+.wx .tag.hi{background:#f6e6e4;color:var(--red)}
+/* 四元素逐项 */
+.el{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:9px;margin-top:4px}
+.el .it{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 13px;
+ line-height:1.7;font-size:13px}
+.el .hd{display:flex;align-items:baseline;gap:8px;margin-bottom:3px}
+.el .en{font-size:18px;font-weight:700}
+.el .pc{margin-left:auto;color:var(--sub);font-variant-numeric:tabular-nums}
+/* 两套体系并置的说明条 */
+.note-sys{background:#f3f6f8;border-left:4px solid var(--blue);border-radius:0 8px 8px 0;
+ padding:9px 14px;font-size:13px;color:#3c5566;line-height:1.75;margin:9px 0}
 .gloss{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px;font-size:13px}
 .gloss div{background:#fbf8f1;border-radius:8px;padding:8px 11px;line-height:1.65}
 .gloss b{color:var(--red)}
@@ -160,9 +222,27 @@ padding:8px 11px;font-size:13px;line-height:1.65}
 
 WX_COLOR = {"木": "#5b8c5a", "火": "#c0504d", "土": "#b08d4a", "金": "#8a8f98", "水": "#4a6fa5"}
 
+# 占星四元素的颜色，与五行区分开
+EL_COLOR = {"火": "#c0504d", "土": "#b08d4a", "风": "#4a6fa5", "水": "#3f7a52"}
+
 
 def _h(s):
     return (str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+
+
+def _yr(v):
+    """虚岁 -> 整数显示。
+
+    起运岁数带小数（7.26 岁起运 -> 第一步从 7.3 虚岁开始），
+    但给人看的大运区间写「7.3–17.3 岁」既啰嗦又没信息量 ——
+    虚岁本来就是整数计的。取整与 JS 侧保持一致（都用 Math.floor），
+    否则两边 HTML 会差一位小数，对拍会逐字报出来。
+    """
+    import math
+    try:
+        return int(math.floor(float(v)))
+    except (TypeError, ValueError):
+        return "?"
 
 
 def render_bazi(r):
@@ -387,6 +467,88 @@ def render_plain(data):
                      '<p>当前走在「<span class="k">%s</span>」大运（%s），主题是<span class="k">%s</span>。</p></div>'
                      % (_h(b["当前阶段"]["干支"]), _h(b["当前阶段"]["十神"]), _h(b["当前阶段"]["主题"])))
 
+        # ---- 1.3.1 新增：大运逐段（折叠）----
+        if b.get("大运详批") and b["大运详批"]["列表"]:
+            dl = b["大运详批"]["列表"]
+            cur_i = next((i for i, x in enumerate(dl) if x["是当前"]), None)
+            P.append('<details class="fold"><summary>你一生十步大运'
+                     '<span class="cnt">共 %d 步%s</span></summary><div class="fbody">'
+                     '<p class="sub2">每十年换一段，是运势的主基调。'
+                     '折叠起来是因为十段一起铺开太长，实际用到的是当前那一步——'
+                     '所以当前那步放在最前面标出来。</p><div class="dy">'
+                     % (len(dl), ("，当前在第 %d 步" % dl[cur_i]["序"]) if cur_i is not None else ""))
+            for i, x in enumerate(dl):
+                now = x["是当前"]
+                P.append('<div class="it%s"%s>'
+                         % (" now" if now else "", " open" if False else ""))
+                P.append('<div class="hd"><span class="no">第%d步</span>'
+                         '<span class="gz"><span class="gan">%s</span>'
+                         '<span class="zhi">%s</span></span>'
+                         '<span class="ss">%s</span>'
+                         % (x["序"], _h(x["干支"][0] if x["干支"] != "未知" else "—"),
+                            _h(x["干支"][1] if len(x["干支"]) > 1 and x["干支"] != "未知" else ""),
+                            _h(x["十神"])))
+                if now:
+                    P.append('<span class="now-tag">当前</span>')
+                P.append('<span class="age">%s–%s 岁</span></div>'
+                         % (_yr(x["起始虚岁"]), _yr(x["结束虚岁"])))
+                P.append('<div class="th">%s</div>' % _h(x["主题"]))
+                if x["正面"]:
+                    P.append('<p class="li"><span class="h">好的一面</span>%s</p>' % _h(x["正面"]))
+                if x["提醒"]:
+                    P.append('<p class="li warn"><span class="h">要注意</span>%s</p>' % _h(x["提醒"]))
+                if x["长生"]:
+                    P.append('<span class="stg">十二长生 · %s —— %s</span>'
+                             % (_h(x["长生"]), _h(x["长生含义"])))
+                P.append("</div>")
+            P.append("</div></div></details>")
+
+        # ---- 1.3.1 新增：流年逐年（折叠）----
+        if b.get("流年详批") and b["流年详批"]["列表"]:
+            ll = b["流年详批"]["列表"]
+            P.append('<details class="fold"><summary>未来七年的年度节奏'
+                     '<span class="cnt">%d–%d</span></summary><div class="fbody">'
+                     '<p class="sub2">大运是十年的大背景，流年是这一年的具体调子。'
+                     '大运管方向，流年管「今年什么事儿容易发生」。</p><div class="ly">'
+                     % (ll[0]["年"], ll[-1]["年"]))
+            for x in ll:
+                gz = x["干支"]
+                gan = gz[0] if gz != "未知" else "—"
+                zhi = gz[1] if len(gz) > 1 and gz != "未知" else ""
+                cls = " now" if x["是今年"] else ""
+                head = ('<div class="it%s"><span class="yr">%d</span>'
+                        '<span class="tx"><b>%s</b> %s · 虚岁 %d'
+                        % (cls, x["年"], _h(gan), _h(zhi), x["虚岁"]))
+                if x["是今年"]:
+                    head += '<span class="yn">（今年）</span>'
+                P.append(head + "<br>" + _h(x["解读"]) + "</span></div>")
+            P.append("</div></div></details>")
+
+        # ---- 1.3.1 新增：五行意象（折叠）----
+        if b.get("五行意象") and b["五行意象"].get("明细"):
+            w = b["五行意象"]
+            P.append('<details class="fold"><summary>你身上五股的劲儿'
+                     '<span class="cnt">八字五行</span></summary><div class="fbody">')
+            P.append('<p class="sub2">「多」不等于「好」，「少」也不等于「坏」——'
+                     '命理里五行强弱本身没有优劣，只有适不适配你。'
+                     '这里讲的是描述，不是评判。</p><div class="wx">')
+            for x in w["明细"]:
+                cls = " top" if (w.get("最强") and x["五行"] == w["最强"]["五行"]) else (
+                      " lo" if (w.get("最弱") and x["五行"] == w["最弱"]["五行"]) else "")
+                P.append('<div class="it%s"><div class="hd"><span class="wxn" style="color:%s">%s</span>'
+                         % (cls, WX_COLOR.get(x["五行"], "#666"), _h(x["五行"])))
+                P.append('<span class="xiang">%s</span>' % _h(x["象"]))
+                if x["是喜用"]:
+                    P.append('<span class="tag ji">喜用</span>')
+                P.append('<span class="pc">%.1f%%</span></div>' % x["占比"])
+                P.append('<p class="li">%s</p>' % _h(x["描述"]))
+                if x["偏多时"]:
+                    P.append('<p class="li"><span class="h">偏多时</span>%s</p>' % _h(x["偏多时"]))
+                if x["偏少时"]:
+                    P.append('<p class="li"><span class="h">偏少时</span>%s</p>' % _h(x["偏少时"]))
+                P.append("</div>")
+            P.append("</div></div></details>")
+
     if "紫微" in data:
         z = M_plain.ziwei_plain(data["紫微"])
         P.append('<h2 style="font-size:15px;border-left-color:var(--gold);margin-top:22px">紫微斗数 · 看事业、财运、感情</h2>')
@@ -435,6 +597,36 @@ def render_plain(data):
                  '<p class="sub2">火 %d · 土 %d · 风 %d · 水 %d</p></div>'
                  % (_h(a["元素配比"]["标题"]), _h(a["元素配比"]["要点"]),
                     d.get("火", 0), d.get("土", 0), d.get("风", 0), d.get("水", 0)))
+        # 1.3.1 新增：四元素逐项展开（折叠）。
+        # 上面那行只有四个数字，看不出「我这个配比意味着什么」——
+        # 哪一项最旺、旺了像什么样、哪一项完全缺、缺了要补什么。
+        if a["元素配比"].get("逐项"):
+            P.append('<details class="fold"><summary>四种元素逐项看'
+                     '<span class="cnt">占星四元素</span></summary><div class="fbody">')
+            P.append('<div class="note-sys">这里的火 / 土 / 风 / 水是'
+                     '<b>西洋占星的四元素</b>，由行星与星座决定，'
+                     '和八字那套木火土金水<b>是两套独立体系</b> ——'
+                     '没有换算公式，也不该互相替代。两套都看，'
+                     '指向同一件事时结论才算被交叉印证。</div>')
+            P.append('<div class="el">')
+            for x in a["元素配比"]["逐项"]:
+                P.append('<div class="it"><div class="hd">'
+                         '<span class="en" style="color:%s">%s</span>'
+                         % (EL_COLOR.get(x["元素"], "#666"), _h(x["元素"])))
+                if x["最旺"]:
+                    P.append('<span class="tag hi">最多</span>')
+                if x["完全缺"]:
+                    P.append('<span class="tag lo">完全没有</span>')
+                P.append('<span class="pc">%d 个 · %.0f%%</span></div>'
+                         % (x["个数"], x["占比"]))
+                if x["多时"]:
+                    P.append('<p class="li"><span class="h">这一项旺时</span>%s</p>'
+                             % _h(x["多时"]))
+                if x["少时"]:
+                    P.append('<p class="li"><span class="h">这一项缺时</span>%s</p>'
+                             % _h(x["少时"]))
+                P.append("</div>")
+            P.append("</div></div></details>")
         if a["关系张力"]["列表"]:
             P.append('<div class="plain"><h3>%s</h3>' % _h(a["关系张力"]["标题"]))
             for x in a["关系张力"]["列表"]:

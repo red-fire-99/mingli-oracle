@@ -21,7 +21,68 @@ const {
   HOUSE_MEANING, HOUSE_BY_PLANET, ASPECT_TRAIT,
   SUN_KEYWORD, MOON_KEYWORD, ASC_KEYWORD, ELEMENT_MORE, ELEMENT_MISS,
   RULER, GLOSSARY,
+  DAYUN_DETAIL, LIUNIAN_DETAIL, TWELVE_STAGES, LONG_ZHI,
+  STAGE_MEAN, WUXING_IMAGERY, ELEMENT_CROSS,
 } = DATA;
+
+/* ------------------------------------------------------------------
+   十二长生：日干在某一步大运干上处于第几格。
+
+   与 plain.py 的 stage_of_dayun 同构。刻度是**地支**不是天干 ——
+   一开始误写成「按天干五行相生相克推 1 步或 2 步」，
+   结果只能落在 5 格里，自检里「必须覆盖 12 格」直接抓出来。
+
+   python 里靠 from almanac import GAN/ZHI 拿顺序；JS 侧 kernel.js
+   已有同样的 GAN / ZHI 数组，直接用。
+   ------------------------------------------------------------------ */
+const GAN = ["甲","乙","丙","丁","戊","己","庚","辛","壬","癸"];
+const ZHI = ["子","丑","寅","卯","辰","巳","午","未","申","酉","戌","亥"];
+const GAN_YINYANG = ["阳","阴","阳","阴","阳","阴","阳","阴","阳","阴"];
+
+function stageOfDayun(dayGan, dayunGan) {
+  const meY = GAN_YINYANG[GAN.indexOf(dayGan)] === "阳";
+  const dyY = GAN_YINYANG[GAN.indexOf(dayunGan)] === "阳";
+  const meStart = ZHI.indexOf(LONG_ZHI[dayGan]);
+  const dyStart = ZHI.indexOf(LONG_ZHI[dayunGan]);
+  let delta = (dyStart - meStart + 12) % 12;
+  if (meY !== dyY) delta = (12 - delta) % 12;   // 异阴阳逆行
+  return TWELVE_STAGES[delta];
+}
+
+/* 五行意象：把五行统计翻成「哪股劲儿最足 / 最缺」。 */
+function wuxingImagery(stat, xiyong) {
+  if (!stat) return { strong: null, weak: null, items: [] };
+  const keys = Object.keys(stat);
+  if (!keys.length) return { strong: null, weak: null, items: [] };
+  let total = 0;
+  for (const k of keys) if (stat[k] > 0) total += stat[k];
+  if (total <= 0) total = 1;
+  const xyd = xiyong || [];
+  const items = keys.map((k) => {
+    const info = WUXING_IMAGERY[k] || {};
+    return {
+      "五行": k, "象": info["象"] || "",
+      "占比": Math.round(stat[k] / total * 1000) / 10,
+      "力量": stat[k],
+      "描述": info["描述"] || "",
+      "偏多时": info["多"] || "", "偏少时": info["少"] || "",
+      "是喜用": xyd.indexOf(k) >= 0,
+    };
+  });
+  // Python 的 sort(key=lambda x: -x["力量"]) 是稳定排序，
+  // JS 的 sort 不保证稳定 —— 所以自己插入排序，保持与 Python 完全一致。
+  const sorted = items.slice();
+  for (let i = 1; i < sorted.length; i++) {
+    const cur = sorted[i];
+    let j = i - 1;
+    while (j >= 0 && sorted[j]["力量"] < cur["力量"]) { sorted[j + 1] = sorted[j]; j--; }
+    sorted[j + 1] = cur;
+  }
+  const strong = sorted[0] || null;
+  let weak = sorted.length > 1 ? sorted[sorted.length - 1] : null;
+  if (weak && weak["力量"] <= 0) weak = null;
+  return { strong, weak, items: sorted };
+}
 
 /** Python 的 dict.get(k, default)。 */
 function pick(d, k, dflt = null) {
@@ -118,6 +179,35 @@ export function baziPlain(r) {
     for (const k of Object.keys(buckets)) luck[k] = buckets[k].join("；");
   }
 
+  // 大运逐段解读：10 步，每步带主题/正面/提醒 + 十二长生调子
+  const dayGan = r.日主.干;
+  const dayunFull = r.大运.列表.map((x) => {
+    const ss = x.十神;
+    const det = pick(DAYUN_DETAIL, ss) || {};
+    const stage = x.干支 !== "未知" ? stageOfDayun(dayGan, x.干支[0]) : "";
+    return {
+      "序": x.序, "干支": x.干支, "十神": ss,
+      "起始虚岁": x.起始虚岁, "结束虚岁": x.结束虚岁,
+      "主题": det["主题"] || pick(DAYUN_THEME, ss) || "平稳过渡",
+      "正面": det["正面"] || "",
+      "提醒": det["提醒"] || "",
+      "长生": stage,
+      "长生含义": pick(STAGE_MEAN, stage) || "",
+      "是当前": !!(dayunNow && dayunNow.干支 === x.干支),
+    };
+  });
+
+  // 流年逐年解读
+  const liunianFull = r.流年.map((x) => ({
+    "年": x.年, "干支": x.干支, "十神": x.十神, "虚岁": x.虚岁,
+    "大运": x.大运 || "",
+    "解读": pick(LIUNIAN_DETAIL, x.十神) || "平顺的一年，按自己的节奏走。",
+    "是今年": x.年 === curYear,
+  }));
+
+  // 五行意象：哪股劲儿最足、哪股最缺
+  const wxImg = wuxingImagery(r.五行统计 || {}, (r.日主强弱 || {}).喜用神 || []);
+
   return {
     一句话: summary,
     性格底色: { 标题: "你的性格底色", 要点: oneLine, 补充: detail },
@@ -130,6 +220,10 @@ export function baziPlain(r) {
     生肖: shengxiao,
     开运指南: luck,
     当前阶段: dayunNow,
+    大运详批: { 标题: "你一生十步大运", 列表: dayunFull },
+    流年详批: { 标题: "未来七年的年度节奏", 列表: liunianFull },
+    五行意象: { 标题: "你身上五股的劲儿",
+                最强: wxImg.strong, 最弱: wxImg.weak, 明细: wxImg.items },
     术语: [["日主", GLOSSARY["日主/日干"]], ["十神", GLOSSARY["十神"]],
            ["大运", GLOSSARY["大运"]], ["神煞", GLOSSARY["神煞"]],
            ["喜用神", GLOSSARY["喜用神"]]],
@@ -259,7 +353,8 @@ export function astroPlain(r) {
 
   // 元素配比
   const elem = r.元素分布;
-  const total = Object.values(elem).reduce((a, b) => a + b, 0) || 1;
+  const elemTotal = Object.values(elem).reduce((a, b) => a + b, 0) || 1;
+  const total = elemTotal;      // 保留旧名，少改一处
   const topE = maxByKey(elem);
   const missing = Object.keys(elem).filter((k) => elem[k] === 0);
   const parts = [];
@@ -310,7 +405,19 @@ export function astroPlain(r) {
     性格拼图: { 标题: "你的性格拼图", 列表: puzzle },
     人生重心: { 标题: "你的人生重心在哪", 列表: focus },
     关键线索: keyClue,
-    元素配比: { 标题: "你的能量配比", 要点: eTxt, 明细: elem },
+    元素配比: {
+      标题: "你的能量配比", 要点: eTxt, 明细: elem,
+      // 逐元素展开。Python 侧用 list comprehension 按 elem 的插入顺序生成，
+      // 这里必须照抄这个顺序 —— 顺序不同则对拍逐字不一致。
+      逐项: Object.keys(elem).map((k) => ({
+        "元素": k, "个数": elem[k],
+        "占比": Math.round(elem[k] / elemTotal * 1000) / 10,
+        "多时": pick(ELEMENT_MORE, k, ""),
+        "少时": pick(ELEMENT_MISS, k, ""),
+        "最旺": k === topE, "完全缺": elem[k] === 0,
+      })),
+      最多: topE, 缺失: missing,
+    },
     关系张力: { 标题: "你身上的主要张力", 列表: tension },
     实用档案: { 标题: "你的星座档案", 列表: profiles },
     术语: [["太阳星座", "你的核心自我和人生主题。"],

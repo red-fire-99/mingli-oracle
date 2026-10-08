@@ -679,7 +679,12 @@ for (const c of CASES) {
       default: got = { __unknown_op: c.op };
     }
   } catch (e) {
-    got = { __error: String(e && e.message) };
+    // 把 stack 的前几行一起带上。只有 message 的话，
+    // 对拍那侧看到的是「Python 缺少字段 __error」——
+    // 像是 Python 少返回了字段，实际是 JS 抛异常了，方向完全反了。
+    const st = String((e && e.stack) || "").split("\n").slice(0, 4)
+                .map(s => s.trim()).join(" | ");
+    got = { __error: String(e && e.message) + " @ " + st };
   }
   R.push({ label: c.label, got });
 }

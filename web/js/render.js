@@ -41,7 +41,24 @@ function f1(n) { return pyRoundN(n, 1).toFixed(1); }
  */
 function d(n) { return String(Math.trunc(n)); }
 
+/**
+ * 虚岁 -> 整数显示（大运区间用）。
+ *
+ * 与 Python 侧的 _yr 对齐：都用向下取整。
+ * 虚岁本来就是整数计，写「7.3–17.3 岁」既啰嗦又没信息量。
+ * 注意**不能**用 d()：d 是「向零截断」，-0.1 会得到 -0，
+ * 而这里要的是「7.3 -> 7」这种向下取整。
+ */
+function yr(n) {
+  const v = Number(n);
+  if (!isFinite(v)) return "?";
+  return String(Math.floor(v));
+}
+
 const WX_COLOR = { 木: "#5b8c5a", 火: "#c0504d", 土: "#b08d4a", 金: "#8a8f98", 水: "#4a6fa5" };
+
+/** 占星四元素的颜色，与八字五行分开 */
+const EL_COLOR = { 火: "#c0504d", 土: "#b08d4a", 风: "#4a6fa5", 水: "#3f7a52" };
 
 /** 紫微盘 4x4 地支位置：(row, col) → 地支 */
 const PAN_LAYOUT = {
@@ -337,7 +354,103 @@ export function renderPlain(data) {
         + '<p>当前走在「<span class="k">' + h(b.当前阶段.干支) + "</span>」大运（"
         + h(b.当前阶段.十神) + '），主题是<span class="k">' + h(b.当前阶段.主题) + "</span>。</p></div>");
     }
-  }
+
+    // ---- 1.3.1 新增：大运逐段（折叠）----
+    if (b["大运详批"] && b["大运详批"]["列表"].length) {
+      const dl = b["大运详批"]["列表"];
+      let curI = -1;
+      dl.forEach((x, i) => { if (x["是当前"]) curI = i; });
+      const curTail = curI >= 0
+        ? "，当前在第 " + dl[curI]["序"] + " 步" : "";
+      P.push('<details class="fold"><summary>你一生十步大运'
+        + '<span class="cnt">共 ' + dl.length + " 步" + curTail
+        + "</span></summary><div class=\"fbody\">"
+        + '<p class="sub2">每十年换一段，是运势的主基调。'
+        + "折叠起来是因为十段一起铺开太长，实际用到的是当前那一步——"
+        + "所以当前那步放在最前面标出来。</p>"
+        + '<div class="dy">');
+      for (const x of dl) {
+        const now = x["是当前"];
+        const gz = x["干支"];
+        const gan = gz !== "未知" ? gz[0] : "—";
+        const zhi = gz !== "未知" && gz.length > 1 ? gz[1] : "";
+        P.push('<div class="it' + (now ? " now" : "") + '">'
+          + '<div class="hd"><span class="no">第' + x["序"] + "步</span>"
+          + '<span class="gz"><span class="gan">' + h(gan) + "</span>"
+          + '<span class="zhi">' + h(zhi) + "</span></span>"
+          + '<span class="ss">' + h(x["十神"]) + "</span>");
+        if (now) P.push('<span class="now-tag">当前</span>');
+        P.push('<span class="age">' + yr(x["起始虚岁"]) + "–" + yr(x["结束虚岁"])
+          + " 岁</span></div>"
+          + '<div class="th">' + h(x["主题"]) + "</div>");
+        if (x["正面"]) {
+          P.push('<p class="li"><span class="h">好的一面</span>' + h(x["正面"]) + "</p>");
+        }
+        if (x["提醒"]) {
+          P.push('<p class="li warn"><span class="h">要注意</span>' + h(x["提醒"]) + "</p>");
+        }
+        if (x["长生"]) {
+          P.push('<span class="stg">十二长生 · ' + h(x["长生"]) + " —— "
+            + h(x["长生含义"]) + "</span>");
+        }
+        P.push("</div>");
+      }
+      P.push("</div></div></details>");
+    }
+
+    // ---- 1.3.1 新增：流年逐年（折叠）----
+    if (b["流年详批"] && b["流年详批"]["列表"].length) {
+      const ll = b["流年详批"]["列表"];
+      P.push('<details class="fold"><summary>未来七年的年度节奏'
+        + '<span class="cnt">' + ll[0]["年"] + "–" + ll[ll.length - 1]["年"]
+        + "</span></summary><div class=\"fbody\">"
+        + '<p class="sub2">大运是十年的大背景，流年是这一年的具体调子。'
+        + "大运管方向，流年管「今年什么事儿容易发生」。</p>"
+        + '<div class="ly">');
+      for (const x of ll) {
+        const gz = x["干支"];
+        const gan = gz !== "未知" ? gz[0] : "—";
+        const zhi = gz !== "未知" && gz.length > 1 ? gz[1] : "";
+        P.push('<div class="it' + (x["是今年"] ? " now" : "") + '">'
+          + '<span class="yr">' + x["年"] + "</span>"
+          + '<span class="tx"><b>' + h(gan) + "</b> " + h(zhi) + " · 虚岁 "
+          + x["虚岁"]);
+        if (x["是今年"]) P.push('<span class="yn">（今年）</span>');
+        P.push("<br>" + h(x["解读"]) + "</span></div>");
+      }
+      P.push("</div></div></details>");
+    }
+
+    // ---- 1.3.1 新增：五行意象（折叠）----
+    if (b["五行意象"] && b["五行意象"]["明细"] && b["五行意象"]["明细"].length) {
+      const w = b["五行意象"];
+      P.push('<details class="fold"><summary>你身上五股的劲儿'
+        + '<span class="cnt">八字五行</span></summary><div class="fbody">'
+        + '<p class="sub2">「多」不等于「好」，「少」也不等于「坏」——'
+        + "命理里五行强弱本身没有优劣，只有适不适配你。"
+        + "这里讲的是描述，不是评判。</p>"
+        + '<div class="wx">');
+      for (const x of w["明细"]) {
+        const isTop = !!(w["最强"] && x["五行"] === w["最强"]["五行"]);
+        const isLo = !!(w["最弱"] && x["五行"] === w["最弱"]["五行"]);
+        P.push('<div class="it' + (isTop ? " top" : (isLo ? " lo" : "")) + '">'
+          + '<div class="hd"><span class="wxn" style="color:'
+          + (WX_COLOR[x["五行"]] || "#666") + '">' + h(x["五行"]) + "</span>"
+          + '<span class="xiang">' + h(x["象"]) + "</span>");
+        if (x["是喜用"]) P.push('<span class="tag ji">喜用</span>');
+        P.push('<span class="pc">' + x["占比"].toFixed(1) + "%</span></div>"
+          + '<p class="li">' + h(x["描述"]) + "</p>");
+        if (x["偏多时"]) {
+          P.push('<p class="li"><span class="h">偏多时</span>' + h(x["偏多时"]) + "</p>");
+        }
+        if (x["偏少时"]) {
+          P.push('<p class="li"><span class="h">偏少时</span>' + h(x["偏少时"]) + "</p>");
+        }
+        P.push("</div>");
+      }
+      P.push("</div></div></details>");
+    }
+  }   // <- 收尾 if (data.八字)
 
   if (data.紫微) {
     const z = ziweiPlain(data.紫微);
@@ -396,6 +509,34 @@ export function renderPlain(data) {
     P.push('<div class="plain"><h3>' + h(a.元素配比.标题) + "</h3><p>" + h(a.元素配比.要点)
       + '</p><p class="sub2">火 ' + (el.火 || 0) + " · 土 " + (el.土 || 0) + " · 风 "
       + (el.风 || 0) + " · 水 " + (el.水 || 0) + "</p></div>");
+    // 1.3.1 新增：四元素逐项展开（折叠）
+    if (a.元素配比.逐项 && a.元素配比.逐项.length) {
+      P.push('<details class="fold"><summary>四种元素逐项看'
+        + '<span class="cnt">占星四元素</span></summary><div class="fbody">'
+        + '<div class="note-sys">这里的火 / 土 / 风 / 水是'
+        + "<b>西洋占星的四元素</b>，由行星与星座决定，"
+        + "和八字那套木火土金水<b>是两套独立体系</b> ——"
+        + "没有换算公式，也不该互相替代。两套都看，"
+        + "指向同一件事时结论才算被交叉印证。</div>"
+        + '<div class="el">');
+      for (const x of a.元素配比.逐项) {
+        P.push('<div class="it"><div class="hd">'
+          + '<span class="en" style="color:' + (EL_COLOR[x.元素] || "#666")
+          + '">' + h(x.元素) + "</span>");
+        if (x.最旺) P.push('<span class="tag hi">最多</span>');
+        if (x.完全缺) P.push('<span class="tag lo">完全没有</span>');
+        P.push('<span class="pc">' + x.个数 + " 个 · " + x.占比.toFixed(0)
+          + "%</span></div>");
+        if (x.多时) {
+          P.push('<p class="li"><span class="h">这一项旺时</span>' + h(x.多时) + "</p>");
+        }
+        if (x.少时) {
+          P.push('<p class="li"><span class="h">这一项缺时</span>' + h(x.少时) + "</p>");
+        }
+        P.push("</div>");
+      }
+      P.push("</div></div></details>");
+    }
     if (a.关系张力.列表.length) {
       P.push('<div class="plain"><h3>' + h(a.关系张力.标题) + "</h3>");
       for (const x of a.关系张力.列表) P.push("<p>" + h(x.文) + "</p>");
