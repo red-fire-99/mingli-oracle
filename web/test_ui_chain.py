@@ -48,12 +48,11 @@ function mkEl(tag, id) {
     tagName: (tag || "div").toUpperCase(),
     id: id || ("el" + (idSeq++)),
     className: "",
-    _html: "", _text: "",
     value: "", checked: false, hidden: false, disabled: false,
     dataset: {}, attrs: {}, style: {}, children: [], parent: null,
+    _html: "", _text: "", _opts: [],
     _listeners: {},
     get innerHTML() { return this._html; },
-    set innerHTML(v) { this._html = String(v); },
     get textContent() { return this._text; },
     set textContent(v) { this._text = String(v); },
     get classList() {
@@ -86,8 +85,21 @@ function mkEl(tag, id) {
       return true;
     },
     hasListener(t) { return (this._listeners[t] || []).length > 0; },
-    appendChild(c) { this.children.push(c); c.parent = this; return c; },
-    removeChild(c) { this.children = this.children.filter(x => x !== c); },
+    appendChild(c) { this.children.push(c); c.parent = this;
+                     if (this.tagName === "SELECT") this._opts.push(c); return c; },
+    removeChild(c) { this.children = this.children.filter(x => x !== c);
+                     this._opts = this._opts.filter(x => x !== c); },
+    // 真 DOM 里 select.options 是 HTMLOptionsCollection，与 children 等价但独立存在。
+    // 页面里用的是 options.length，stub 不实现的话就会在这些行上炸 ——
+    // 而那正是「stub 不够真」而不是「页面有 bug」，要分清。
+    get options() {
+      const self = this;
+      if (!self._opts) self._opts = self.children.slice();
+      self._opts.length = 0;
+      for (const c of self.children) self._opts.push(c);
+      return self._opts;
+    },
+    set innerHTML(v) { this._html = String(v); this.children = []; this._opts = []; },
     remove() { if (this.parent) this.parent.removeChild(this); },
     querySelector(sel) { return doc.querySelector(sel); },
     querySelectorAll(sel) { return doc.querySelectorAll(sel); },
@@ -262,9 +274,10 @@ if (!(win.MingLi && typeof win.MingLi.run === "function")) {
 }
 
 // ---- 2) 关键元素存在 ----
-const need = ["form", "solarDate", "birthTime", "city", "submitBtn",
-              "headline", "panel-plain", "panel-pro", "result", "status",
-              "shichenGrid"];
+const need = ["form", "solarYear", "solarMonth", "solarDay", "birthTime",
+              "city", "citySearch", "submitBtn", "headline", "panel-plain",
+              "panel-pro", "result", "status", "shichenGrid",
+              "solarLunarHint", "lunarSolarHint", "calSeg", "sexSeg"];
 for (const id of need) {
   if (!byId.get(id)) fail("缺少 #" + id);
 }
@@ -296,16 +309,86 @@ else {
            : fail("data-cal 分段按钮没有 click 监听");
 }
 
-// ---- 4) 走完整流程：填表 → 点分段 → 点时辰 → 提交 → 看结果 ----
-const set = (id, v) => { const e = byId.get(id); if (e) { e.value = v; e._text = v; } };
-set("solarDate", "1990-05-15");
-set("birthTime", "12:00");
-const city = byId.get("city");
-if (city) { city.value = "北京"; }
+// 点一下「女」—— 这一步以前完全没测，
+// 于是 segBind("seg","data-sex") 静默失效（两次调用都命中第一个 .seg，
+// 也就是历法控件）都没人发现：性别选不了，性别恒为男。
+// 而性别决定大运顺逆。
+const sexBtns = doc.querySelectorAll("[data-sex]");
+if (sexBtns.length !== 2) {
+  fail("[data-sex] 按钮数 = " + sexBtns.length + "（应 2：男 / 女）");
+} else if (!sexBtns[1].hasListener("click")) {
+  fail("「女」按钮没有 click 监听 —— 性别选不了，性别恒为男");
+} else {
+  sexBtns[1].fire("click");
+  const pressed = sexBtns.filter(b => b.getAttribute("aria-pressed") === "true");
+  if (pressed.length !== 1 || pressed[0] !== sexBtns[1]) {
+    fail("点「女」之后 aria-pressed 没正确切换（当前选中 "
+       + (pressed[0] ? pressed[0].getAttribute("data-sex") : "无") + "）");
+  } else {
+    console.log("  OK   点「女」后选中态正确切换");
+  }
+}
 
-// 点一下「农历」再点回「阳历」，确认分段回调真的在跑
-const calBtns = doc.querySelectorAll("[data-cal]");
-if (calBtns.length > 1) calBtns[1].fire("click");
+// ---- 4) 走完整流程：填表 → 提交 → 看结果 ----
+// 日期现在是年/月/日三个下拉（不再是 input[type=date]），
+// 所以「填表」是设三个下拉的 value。
+const setDate = (y, m, d) => {
+  const ys = byId.get("solarYear"), ms = byId.get("solarMonth"), ds = byId.get("solarDay");
+  if (!ys || !ms || !ds) { fail("年 / 月 / 日下拉不存在 —— 日期控件没渲染出来"); return false; }
+  ys.value = String(y); ms.value = String(m);
+  ds.fire("change");                 // 触发天数联动与农历回显
+  ds.value = String(d);
+  ds.fire("change");
+  return true;
+};
+
+// 天数联动：平年 2 月 28 天、闰年 2 月 29 天、4 月 30 天。
+// 少了这个联动，用户能选到「2 月 30 日」，然后拿到一张静默错误的盘。
+const dayCount = () => byId.get("solarDay").children.length;
+let dayOk = true;
+for (const [y, m, want, label] of [[2023, 2, 28, "2023 平年 2 月"],
+                                    [2024, 2, 29, "2024 闰年 2 月"],
+                                    [1990, 4, 30, "1990 年 4 月"],
+                                    [1990, 1, 31, "1990 年 1 月"]]) {
+  // 联动监听器绑在 year / month 上（不是 day）—— 必须触发它们，
+  // 否则 syncSolarDays 根本不跑，测试会「通过」而联动其实坏了。
+  byId.get("solarYear").value = String(y);
+  byId.get("solarMonth").value = String(m);
+  byId.get("solarMonth").fire("change");
+  const got = dayCount();
+  if (got !== want) { fail(label + " 天数联动：应有 " + want + " 天，实际 " + got); dayOk = false; }
+}
+if (dayOk) console.log("  OK   日数随年月联动（平年 28 / 闰年 29 / 30 天月 / 31 天月）");
+
+// 阳历 ⇄ 农历 实时互查
+setDate(1990, 5, 15);
+const hint = byId.get("solarLunarHint");
+if (!hint || (hint.textContent || "").indexOf("农历") < 0) {
+  fail("阳历填完没显示对应农历：" + (hint ? JSON.stringify(hint.textContent) : "元素不存在"));
+} else {
+  console.log("  OK   阳历实时显示农历: " + hint.textContent);
+}
+
+// 城市搜索：拼音首字母
+const search = byId.get("citySearch");
+const city = byId.get("city");
+if (!search) fail("缺少 #citySearch");
+else if (!city) fail("缺少 #city");
+else {
+  search.value = "bj";
+  search.fire("input");
+  const hit = (city.children || []).filter(o => o.value === "北京");
+  if (!hit.length) fail("拼音首字母搜「bj」找不到北京");
+  else console.log("  OK   拼音首字母搜索可用（bj -> 北京）");
+  search.value = "";
+  search.fire("input");
+}
+
+// 回到标准示例再提交
+setDate(1990, 5, 15);
+const bt = byId.get("birthTime");
+if (bt) bt.value = "12:00";
+if (city) city.value = "北京";
 
 if (form && form.hasListener("submit")) {
   // 页面在 setTimeout 里才算盘，这里把队列里排队的定时器都跑掉。

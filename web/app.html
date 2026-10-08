@@ -203,8 +203,13 @@ align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index
 
     <!-- 阳历 -->
     <div class="field" id="solarBox">
-      <label class="lb" for="solarDate">出生日期 <span style="color:var(--red)">*</span></label>
-      <input type="date" id="solarDate" min="1900-01-01" max="2100-12-31">
+      <label class="lb">出生日期 <span style="color:var(--red)">*</span></label>
+      <div class="dategrid">
+        <select id="solarYear" aria-label="出生年"></select>
+        <select id="solarMonth" aria-label="出生月"></select>
+        <select id="solarDay" aria-label="出生日"></select>
+      </div>
+      <div class="note" id="solarLunarHint" style="margin-top:8px"></div>
     </div>
 
     <!-- 农历 -->
@@ -215,10 +220,12 @@ align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index
         <select id="lMonth" aria-label="农历月"></select>
         <select id="lDay" aria-label="农历日"></select>
       </div>
-      <label style="display:flex;align-items:center;gap:7px;margin-top:10px;font-size:14px;color:var(--sub)">
+      <label id="lLeapWrap"
+        style="display:flex;align-items:center;gap:7px;margin-top:10px;font-size:14px;color:var(--sub)">
         <input type="checkbox" id="lLeap" style="width:18px;height:18px;accent-color:var(--red)">
-        这年有闰月，我生在闰月里
+        <span id="lLeapText">这年有闰月，我生在闰月里</span>
       </label>
+      <div class="note" id="lunarSolarHint" style="margin-top:8px"></div>
     </div>
 
     <!-- 时间 -->
@@ -245,7 +252,10 @@ align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index
     <!-- 出生地 -->
     <div class="field">
       <label class="lb" for="city">出生地 <span class="note">可选，填了能算得更准</span></label>
-      <select id="city"></select>
+      <input type="search" id="citySearch" autocomplete="off"
+        placeholder="搜城市名或拼音首字母，如「北京」或「bj」" aria-label="搜索出生地">
+      <select id="city" size="6" style="margin-top:8px" aria-label="出生地列表"></select>
+      <div class="note" id="cityHint" style="margin-top:6px"></div>
       <details>
         <summary>找不到城市？手动填经纬度</summary>
         <div class="dategrid" style="grid-template-columns:1fr 1fr;margin-top:8px">
@@ -320,21 +330,30 @@ var ENGINE_VERSION = /*__ENGINE_VERSION__*/;
   "use strict";
   var $ = function(s){ return document.querySelector(s); };
 
-  /* ---------- 城市经纬度（与本地版同一张表）---------- */
+  /* ---------- 城市经纬度（与本地版同一张表）----------
+     每项 [名称, 经纬度, 拼音首字母]。拼音首字母是为了让人能打「bj」找到北京 ——
+     出生地这个字段用的人多半不打算逐字翻 41 个下拉项。 */
   var CITIES = [
-    ["", null], ["北京",[116.41,39.90]], ["上海",[121.47,31.23]], ["广州",[113.26,23.13]],
-    ["深圳",[114.06,22.55]], ["成都",[104.07,30.57]], ["杭州",[120.15,30.28]],
-    ["武汉",[114.30,30.59]], ["西安",[108.94,34.34]], ["南京",[118.78,32.06]],
-    ["重庆",[106.55,29.56]], ["天津",[117.20,39.13]], ["苏州",[120.62,31.30]],
-    ["长沙",[112.94,28.23]], ["郑州",[113.62,34.75]], ["青岛",[120.38,36.07]],
-    ["沈阳",[123.43,41.80]], ["哈尔滨",[126.53,45.80]], ["昆明",[102.83,24.88]],
-    ["福州",[119.30,26.08]], ["厦门",[118.09,24.48]], ["济南",[117.12,36.65]],
-    ["合肥",[117.28,31.86]], ["南昌",[115.89,28.68]], ["贵阳",[106.63,26.65]],
-    ["南宁",[108.32,22.82]], ["兰州",[103.83,36.06]], ["太原",[112.55,37.87]],
-    ["石家庄",[114.51,38.04]], ["乌鲁木齐",[87.62,43.83]], ["拉萨",[91.11,29.97]],
-    ["呼和浩特",[111.75,40.84]], ["银川",[106.23,38.49]], ["西宁",[101.78,36.62]],
-    ["海口",[110.20,20.04]], ["长春",[125.32,43.82]], ["大连",[121.62,38.92]],
-    ["香港",[114.17,22.32]], ["澳门",[113.55,22.20]], ["台北",[121.52,25.03]]
+    ["", null, ""], ["北京",[116.41,39.90],"bj"], ["上海",[121.47,31.23],"sh"],
+    ["广州",[113.26,23.13],"gz"], ["深圳",[114.06,22.55],"sz"],
+    ["成都",[104.07,30.57],"cd"], ["杭州",[120.15,30.28],"hz"],
+    ["武汉",[114.30,30.59],"wh"], ["西安",[108.94,34.34],"xa"],
+    ["南京",[118.78,32.06],"nj"], ["重庆",[106.55,29.56],"cq"],
+    ["天津",[117.20,39.13],"tj"], ["苏州",[120.62,31.30],"sz"],
+    ["长沙",[112.94,28.23],"cs"], ["郑州",[113.62,34.75],"zz"],
+    ["青岛",[120.38,36.07],"qd"], ["沈阳",[123.43,41.80],"sy"],
+    ["哈尔滨",[126.53,45.80],"hebei"], ["昆明",[102.83,24.88],"km"],
+    ["福州",[119.30,26.08],"fz"], ["厦门",[118.09,24.48],"xm"],
+    ["济南",[117.12,36.65],"jn"], ["合肥",[117.28,31.86],"hf"],
+    ["南昌",[115.89,28.68],"nc"], ["贵阳",[106.63,26.65],"gy"],
+    ["南宁",[108.32,22.82],"nn"], ["兰州",[103.83,36.06],"lz"],
+    ["太原",[112.55,37.87],"ty"], ["石家庄",[114.51,38.04],"sjz"],
+    ["乌鲁木齐",[87.62,43.83],"wlmq"], ["拉萨",[91.11,29.97],"ls"],
+    ["呼和浩特",[111.75,40.84],"hhht"], ["银川",[106.23,38.49],"yc"],
+    ["西宁",[101.78,36.62],"xn"], ["海口",[110.20,20.04],"hk"],
+    ["长春",[125.32,43.82],"cc"], ["大连",[121.62,38.92],"dl"],
+    ["香港",[114.17,22.32],"xg"], ["澳门",[113.55,22.20],"am"],
+    ["台北",[121.52,25.03],"tp"]
   ];
   var SHICHEN = ["子","丑","寅","卯","辰","巳","午","未","申","酉","戌","亥"];
 
@@ -356,7 +375,9 @@ var ENGINE_VERSION = /*__ENGINE_VERSION__*/;
 
   function summarize(v){
     var parts = [];
-    parts.push(v.solar ? v.solar.join("-") : ("农历 " + v.lunar.join("/") + (v.leap ? "（闰月）" : "")));
+    parts.push(v.solar ? (v.solar[0] + "-" + v.solar[1] + "-" + v.solar[2])
+                    : ("农历 " + v.lunar[0] + "/" + v.lunar[1] + "/" + v.lunar[2]
+                       + (v.leap ? "（闰月）" : "")));
     parts.push(v.shichen ? (v.shichen + "时") : v.hour);
     parts.push(v.sex);
     if (v.place) parts.push(v.place);
@@ -378,8 +399,9 @@ var ENGINE_VERSION = /*__ENGINE_VERSION__*/;
       out.lunar = [Number(ly), Number(lm), Number(ld)];
       out.leap = $("#lLeap").checked;
     } else {
-      if (!$("#solarDate").value) throw "请先选择阳历生日。";
-      out.solar = $("#solarDate").value.split("-").map(Number);
+      var sy = $("#solarYear").value, sm = $("#solarMonth").value, sd = $("#solarDay").value;
+      if (!sy || !sm || !sd) throw "请把阳历的年、月、日都选上。";
+      out.solar = [Number(sy), Number(sm), Number(sd)];
     }
     if (!out.shichen){
       if (!$("#birthTime").value) throw "请选择出生时间，或直接点一个时辰。";
@@ -432,10 +454,14 @@ var ENGINE_VERSION = /*__ENGINE_VERSION__*/;
   }
   /* ---------- 表单与结果交互 ---------- */
   function bind(){
-    // 单选分段控件。原模板标记是 class="seg" + data-cal / data-sex（没有 id，
-    // 也没有预置 .on），所以按 class 定位，并自行维护 on 类与 aria-pressed。
-    function segBind(cls, attr, cb){
-      var box = document.querySelector("." + cls);
+    /* 单选分段控件。
+       必须按 **id** 定位，不能按 class —— 页面上有两组 .seg（历法 / 性别），
+       而 querySelector(".seg") 只返回**第一个**。原来两次调用都传 "seg"，
+       于是「性别」那次实际又去历法控件里找 [data-sex]，找不到就静默 return ——
+       性别按钮从来没被绑上监听，点「女」毫无反应，性别恒为男。
+       性别决定大运顺逆，所以这不是小毛病。 */
+    function segBind(id, attr, cb){
+      var box = document.getElementById(id);
       if (!box) return;
       var btns = Array.prototype.slice.call(box.querySelectorAll("[" + attr + "]"));
       if (!btns.length) return;
@@ -447,11 +473,11 @@ var ENGINE_VERSION = /*__ENGINE_VERSION__*/;
       btns.forEach(function(b){ b.addEventListener("click", function(){ pick(b); }); });
       pick(btns[0]);   // 默认选第一个，并触发一次回调以同步初始显隐
     }
-    segBind("seg", "data-cal", function(v){
+    segBind("calSeg", "data-cal", function(v){
       $("#solarBox").style.display = (v === "solar") ? "" : "none";
       $("#lunarBox").style.display = (v === "lunar") ? "" : "none";
     });
-    segBind("seg", "data-sex");
+    segBind("sexSeg", "data-sex");
 
     var grid = $("#shichenGrid");
     SHICHEN.forEach(function(s){
@@ -465,23 +491,53 @@ var ENGINE_VERSION = /*__ENGINE_VERSION__*/;
       grid.appendChild(b);
     });
 
-    // 注意：原模板里经纬度手填区没有 id="manualLon"，只有 city 父节点内有 details，
-    // 所以下面用 querySelector 定位，而不是查一个不存在的 id。
-    var sel = $("#city");
-    CITIES.forEach(function(c){
-      var o = document.createElement("option");
-      o.value = c[0];
-      o.textContent = c[0] || "（不填，占星无法定上升点）";
-      sel.appendChild(o);
-    });
+    /* ---------- 城市：搜索框 + 过滤后的列表 ----------
+       41 个选项用一个下拉翻起来太费劲，而出生地这个字段用的人
+       多半不想逐项浏览。加搜索框，支持城市名与拼音首字母（「北京」/「bj」）。 */
+    var sel = $("#city"), box2 = $("#citySearch"), hint = $("#cityHint");
+    function renderCities(){
+      var q = (box2.value || "").trim().toLowerCase();
+      sel.innerHTML = "";
+      var hit = 0;
+      CITIES.forEach(function(c){
+        var name = c[0], py = (c[2] || "");
+        if (q && name.toLowerCase().indexOf(q) < 0 && py.indexOf(q) < 0) return;
+        var o = document.createElement("option");
+        o.value = name;
+        o.textContent = name ? name + "（" + c[1][0].toFixed(2) + ", " + c[1][1].toFixed(2) + "）"
+                             : "（不填，占星无法定上升点）";
+        sel.appendChild(o);
+        if (name) hit++;
+      });
+      if (!sel.options.length){
+        var o = document.createElement("option");
+        o.value = ""; o.textContent = "没有匹配的城市 —— 展开下方「手动填经纬度」";
+        o.disabled = true;
+        sel.appendChild(o);
+      }
+      hint.textContent = q ? ("匹配 " + hit + " 个城市" + (hit === 0 ? "，请展开下方手填经纬度" : ""))
+                           : "共 " + hit + " 个城市，可搜城市名或拼音首字母";
+    }
+    box2.addEventListener("input", renderCities);
+    renderCities();
     sel.addEventListener("change", function(){
       var has = !!sel.value;
       var details = sel.parentNode.querySelector("details");
       // 选了城市就把「手填经纬度」收起来，避免两处填了不知道听谁的
       if (details) details.style.display = has ? "none" : "";
+      hint.textContent = has ? ("已选 " + sel.value) : "";
     });
 
+    fillSolar();
     fillLunar();
+    syncLunar();
+
+    ["#solarYear", "#solarMonth"].forEach(function(sel2){
+      $(sel2).addEventListener("change", syncSolarDays);
+    });
+    ["#lYear", "#lMonth", "#lDay", "#lLeap"].forEach(function(sel2){
+      $(sel2).addEventListener("change", syncLunar);
+    });
 
     $("#form").addEventListener("submit", function(e){
       e.preventDefault();
@@ -516,8 +572,16 @@ var ENGINE_VERSION = /*__ENGINE_VERSION__*/;
       $("#form").classList.remove("collapsed");
     });
     $("#demoBtn").addEventListener("click", function(){
-      $("#solarDate").value = "1990-05-15";
+      // 示例值走新的三段下拉；年份下拉是倒序的，用「选中项」而不是设 value 后再滚动
+      $("#solarYear").value = "1990";
+      $("#solarMonth").value = "5";
+      syncSolarDays();
+      $("#solarDay").value = "15";
+      solarHint();
       $("#birthTime").value = "12:00";
+      // 先确保列表没被搜索框过滤掉，否则「北京」这一项可能不在下拉里
+      box2.value = "";
+      renderCities();
       sel.value = "北京";
       $("#form").requestSubmit();
     });
@@ -575,6 +639,90 @@ var ENGINE_VERSION = /*__ENGINE_VERSION__*/;
       var o = document.createElement("option"); o.value = i + 1; o.textContent = v; d.appendChild(o);
     });
     y.value = 1990; m.value = 4; d.value = 21;
+  }
+
+  /* ---------- 阳历下拉：年 / 月 / 日，日数随年月联动 ---------- */
+  var YEAR_MIN = 1900, YEAR_MAX = 2100;
+  var LMONTH_NAME = ["","正月","二月","三月","四月","五月","六月",
+                     "七月","八月","九月","十月","冬月","腊月"];
+  function isLeapYear(y){
+    return (y % 4 === 0 && y % 100 !== 0) || (y % 400 === 0);
+  }
+  function daysInMonth(y, m){
+    return [31, isLeapYear(y) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][m - 1];
+  }
+  function fillSolar(){
+    var ys = $("#solarYear"), ms = $("#solarMonth"), ds = $("#solarDay");
+    for (var y = YEAR_MAX; y >= YEAR_MIN; y--){       // 倒序：出生年越靠前越常用
+      var o = document.createElement("option"); o.value = y; o.textContent = y + " 年"; ys.appendChild(o);
+    }
+    for (var m = 1; m <= 12; m++){
+      var o2 = document.createElement("option"); o2.value = m; o2.textContent = m + " 月"; ms.appendChild(o2);
+    }
+    ys.value = 1990; ms.value = 5;
+    syncSolarDays();
+  }
+  /** 日下拉按当前年月重建：2 月平年 28 天 / 闰年 29 天，31 天的月切到 4 月要跟着收。
+      不做联动的话用户能选到「2 月 30 日」，然后拿到一张静默错误的盘。 */
+  function syncSolarDays(){
+    var y = Number($("#solarYear").value), m = Number($("#solarMonth").value);
+    var ds = $("#solarDay"), keep = Number(ds.value) || 1;
+    ds.innerHTML = "";
+    var n = daysInMonth(y, m);
+    for (var d = 1; d <= n; d++){
+      var o = document.createElement("option"); o.value = d; o.textContent = d + " 日"; ds.appendChild(o);
+    }
+    ds.value = String(Math.min(keep, n));
+    solarHint();
+  }
+
+  /** 阳历 ⇄ 农历 实时互查。以前只能切页签来回试。 */
+  function solarHint(){
+    var el = $("#solarLunarHint");
+    if (!el) return;
+    if (!window.MingLi || !window.MingLi.solarToLunar){ el.textContent = ""; return; }
+    var y = Number($("#solarYear").value), m = Number($("#solarMonth").value),
+        d = Number($("#solarDay").value);
+    if (!y || !m || !d){ el.textContent = ""; return; }
+    try {
+      var lu = window.MingLi.solarToLunar(y, m, d);      // [ly, lm, ld, leap]
+      el.textContent = "农历 " + window.MingLi.formatLunar(lu[0], lu[1], lu[2], lu[3]);
+    } catch (e) { el.textContent = ""; }
+  }
+
+  /** 某个农历年的闰月在第几个月？没有则返回 0。 */
+  function leapMonthOf(ly){
+    if (!window.MingLi || !window.MingLi.lunarToSolar) return 0;
+    for (var m = 1; m <= 12; m++){
+      try {
+        var s = window.MingLi.lunarToSolar(ly, m, 15, true);
+        var back = window.MingLi.solarToLunar(s.y, s.m, s.d);
+        if (back[3] && back[1] === m) return m;          // 这个闰月确实存在
+      } catch (e) { /* 该年月没有这个闰月，接着试 */ }
+    }
+    return 0;
+  }
+
+  function syncLunar(){
+    var cb = $("#lLeap"), txt = $("#lLeapText");
+    var ly = Number($("#lYear").value), lm = leapMonthOf(ly);
+    if (lm){
+      cb.disabled = false;
+      txt.textContent = "这一年闰" + LMONTH_NAME[lm] + "，我生在闰月里";
+    } else {
+      // 没有闰月还挂着勾，等于告诉引擎「生在闰月」——而引擎会当普通月处理
+      cb.checked = false;
+      cb.disabled = true;
+      txt.textContent = "这一年没有闰月";
+    }
+    var hint = $("#lunarSolarHint");
+    if (hint && window.MingLi && window.MingLi.lunarToSolar){
+      try {
+        var s2 = window.MingLi.lunarToSolar(ly, Number($("#lMonth").value),
+                                           Number($("#lDay").value), cb.checked);
+        hint.textContent = "对应公历 " + s2.y + " 年 " + s2.m + " 月 " + s2.d + " 日";
+      } catch (e) { hint.textContent = ""; }
+    }
   }
 
   boot();

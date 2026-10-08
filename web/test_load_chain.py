@@ -64,7 +64,10 @@ function mkEl(tag) {
     querySelectorAll(){ return []; },
     closest(){ return null; },
     remove(){}, scrollIntoView(){},
-    getAttribute(){ return null; },
+    // 真 DOM 里 select.options 存在，页面代码按它判空。
+    // stub 不给就会在这些行上炸 —— 那是 stub 不够真，不是页面有 bug，
+    // 两者的区别正是这套测试能不能当依据的关键。
+    get options(){ return this.children; },
   };
   return el;
 }

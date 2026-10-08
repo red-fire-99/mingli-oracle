@@ -13,6 +13,7 @@
 
 import { build, renderBazi, renderZiwei, renderAstro, renderPlain,
          renderGlossary, headline, run } from "./render.js";
+import { solarToLunarTuple, lunarToSolar, formatLunar } from "./almanac.js";
 
 const API = {
   run,
@@ -23,7 +24,15 @@ const API = {
   renderPlain,
   renderGlossary,
   headline,
-  /** 版本号，由构建时注入 */
+
+  // —— 供 UI 做「阳历 ⇄ 农历」实时互查 ——
+  // 用户在阳历模式填完日期就能看到对应农历，不必切页签去猜；
+  // 农历模式填完也能看到对应公历。这两件事以前只能靠用户自己在
+  // 脑子里换算，或者来回切历法试。
+  solarToLunar: solarToLunarTuple,
+  lunarToSolar: lunarToSolar,
+  formatLunar,
+
   // 版本号由构建时注入（见 web/build_web.py）。
   // 占位符**不含引号**：注入的是 json.dumps 的结果（自带引号），
   // 写成 "..." 会被替换成 ""1.0.0"" 这种双引号套双引号的坏代码。
