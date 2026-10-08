@@ -166,9 +166,13 @@ def main():
     used = set(re.findall(r'\$\("#([A-Za-z0-9_-]+)"\)', html))
     missing = sorted(used - ids)
     ck("JS 引用的 id 全部存在", not missing, "缺失=%s" % (missing or "无"))
-    for want in ("form", "city", "lon", "lat", "solarDate", "birthTime", "status",
-                 "submitBtn", "resetBtn", "demoBtn", "saveBtn", "editBtn",
-                 "panel-plain", "panel-pro", "headline", "result"):
+    for want in ("form", "city", "citySearch", "lon", "lat",
+              "solarYear", "solarMonth", "solarDay",
+              "solarLunarHint", "lunarSolarHint",
+              "lYear", "lMonth", "lDay", "lLeap",
+              "calSeg", "sexSeg", "birthTime", "status",
+              "submitBtn", "resetBtn", "demoBtn", "saveBtn", "editBtn",
+              "panel-plain", "panel-pro", "headline", "result"):
         ck("含 #" + want, want in ids)
     ck("切页按钮按 .tabs [data-tab] 定位",
        'querySelectorAll(".tabs [data-tab]")' in html and "dataset.tab" in html)
