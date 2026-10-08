@@ -19,6 +19,7 @@
 6. 页面自身不含本机痕迹或凭据
 """
 import io
+import json
 import os
 import re
 import sys
@@ -30,7 +31,8 @@ DIST = os.path.join(HERE, "dist", "index.html")
 EXPECT_MODULES = ["kernel", "almanac", "ziwei", "plain", "bazi", "astro",
                   "render", "engine"]
 
-PLACEHOLDERS = ["/*__MINGLI_ENGINE__*/", "__ENGINE_VERSION__", "/*__ORACLE_CSS__*/"]
+PLACEHOLDERS = ["/*__MINGLI_ENGINE__*/", "__ENGINE_VERSION__", "/*__ORACLE_CSS__*/",
+                "/*__MINGLI_REGIONS__*/"]
 
 # 本机痕迹与凭据：进 CI 就等于进公网，必须拦住
 FORBIDDEN = ["cuiyuxin", "C:/Users", "C:\\Users", ".workbuddy-ai",
@@ -167,6 +169,7 @@ def main():
     missing = sorted(used - ids)
     ck("JS 引用的 id 全部存在", not missing, "缺失=%s" % (missing or "无"))
     for want in ("form", "city", "citySearch", "lon", "lat",
+              "provSel", "citySel", "distSel", "cityHint",
               "solarYear", "solarMonth", "solarDay",
               "solarLunarHint", "lunarSolarHint",
               "lYear", "lMonth", "lDay", "lLeap",
@@ -174,6 +177,30 @@ def main():
               "submitBtn", "resetBtn", "demoBtn", "saveBtn", "editBtn",
               "panel-plain", "panel-pro", "headline", "result"):
         ck("含 #" + want, want in ids)
+    # 行政区划数据必须真的内联进产物。占位符没被替换的话
+    # 出生地三级会是空的，而页面仍然能显示、能排盘 ——
+    # 属于「看着正常、点下去是空的」那种最难发现的坏。
+    m_reg = re.search(r'window\.MINGLI_REGIONS\s*=\s*JSON\.parse\((.*?)\);', html, re.S)
+    ck("出生地数据已内联", m_reg is not None)
+    if m_reg:
+        try:
+            reg = json.loads(json.loads(m_reg.group(1)))
+            provs = reg.get("provinces") or {}
+            n_prov = len(provs)
+            n_city = sum(len(v) for v in provs.values())
+            n_dist = sum(1 for v in provs.values() for nd in v.values()
+                         for k in nd if k != "__own__")
+            ck("行政区划规模足够（>=30省/250市/2500区县）",
+               n_prov >= 30 and n_city >= 250 and n_dist >= 2500,
+               "%d省/%d市/%d区县" % (n_prov, n_city, n_dist))
+            # 抽一个已知的点核对，防止抓到错层级的数据
+            bj = (provs.get("北京市") or {}).get("北京市") or {}
+            lon = (bj.get("东城区") or [None, None])[0]
+            ck("北京东城区经度在 115~118 之间",
+               isinstance(lon, (int, float)) and 115 <= lon <= 118,
+               "lon=%r" % (lon,))
+        except Exception as e:
+            ck("出生地数据可解析", False, str(e)[:80])
     ck("切页按钮按 .tabs [data-tab] 定位",
        'querySelectorAll(".tabs [data-tab]")' in html and "dataset.tab" in html)
     ck("分段控件按 data-cal / data-sex 定位",

@@ -86,7 +86,16 @@ function mkEl(tag, id) {
     },
     hasListener(t) { return (this._listeners[t] || []).length > 0; },
     appendChild(c) { this.children.push(c); c.parent = this;
-                     if (this.tagName === "SELECT") this._opts.push(c); return c; },
+                     if (this.tagName === "SELECT") this._opts.push(c);
+                     // 真 DOM 语义：往空 select 里 append 第一个 option 时，
+                     // 它会自动成为选中项（select.value 变成它的 value）。
+                     // 页面靠这个行为拿到「默认选中的那个市 / 区县」。
+                     // stub 不实现的话，页面里 select.value 恒为 ""，
+                     // 报出来的错却是「页面逻辑不对」—— 方向就反了。
+                     if (this.tagName === "SELECT" && !this.value && c.value) {
+                       this.value = c.value;
+                     }
+                     return c; },
     removeChild(c) { this.children = this.children.filter(x => x !== c);
                      this._opts = this._opts.filter(x => x !== c); },
     // 真 DOM 里 select.options 是 HTMLOptionsCollection，与 children 等价但独立存在。
@@ -99,7 +108,10 @@ function mkEl(tag, id) {
       for (const c of self.children) self._opts.push(c);
       return self._opts;
     },
-    set innerHTML(v) { this._html = String(v); this.children = []; this._opts = []; },
+    set innerHTML(v) { this._html = String(v); this.children = []; this._opts = [];
+                     // 真 DOM：清空 select 的 options 会让它回到「无选中项」
+                     if (this.tagName === "SELECT") this.value = "";
+                   },
     remove() { if (this.parent) this.parent.removeChild(this); },
     querySelector(sel) { return doc.querySelector(sel); },
     querySelectorAll(sel) { return doc.querySelectorAll(sel); },
@@ -275,6 +287,7 @@ if (!(win.MingLi && typeof win.MingLi.run === "function")) {
 
 // ---- 2) 关键元素存在 ----
 const need = ["form", "solarYear", "solarMonth", "solarDay", "birthTime",
+              "provSel", "citySel", "distSel", "cityHint", "lon", "lat",
               "city", "citySearch", "submitBtn", "headline", "panel-plain",
               "panel-pro", "result", "status", "shichenGrid",
               "solarLunarHint", "lunarSolarHint", "calSeg", "sexSeg"];
@@ -369,26 +382,98 @@ if (!hint || (hint.textContent || "").indexOf("农历") < 0) {
   console.log("  OK   阳历实时显示农历: " + hint.textContent);
 }
 
-// 城市搜索：拼音首字母
+// 出生地三级选择 + 搜索
 const search = byId.get("citySearch");
 const city = byId.get("city");
+const provSel = byId.get("provSel"), citySel = byId.get("citySel"),
+      distSel = byId.get("distSel");
+if (!provSel || !citySel || !distSel) fail("缺少省/市/区三级下拉");
+else {
+  const nProv = provSel.children.length;
+  if (nProv < 30) fail("省级下拉只有 " + nProv + " 项（应 ≥30）");
+  else console.log("  OK   省级下拉 " + nProv + " 项");
+
+  // 北京市 -> 北京市 -> 东城区
+  provSel.value = "北京市";
+  provSel.fire("change");
+  const nCity = citySel.children.length;
+  if (!nCity) fail("选北京市后市下拉为空");
+  else {
+    citySel.value = "北京市";
+    citySel.fire("change");
+    const nDist = distSel.children.length;
+    if (nDist < 10) fail("北京市的区县只有 " + nDist + " 项");
+    else {
+      // 选一个真区县，确认经纬度被正确写进 #lon/#lat。
+      // 这里必须逐值核对，不能只查「非空」：曾经把纬度写进经度字段，
+      // 而非空检查是通过的 —— 结果是按 90 度经度算真太阳时，不报任何错。
+      distSel.value = distSel.children[1].value;   // [0] 是「整市」
+      distSel.fire("change");
+      const raw = String(distSel.children[1].value).split(",");
+      const lon = Number(byId.get("lon").value), lat = Number(byId.get("lat").value);
+      if (!isFinite(lon) || !isFinite(lat)) {
+        fail("选区县后经纬度无效：" + byId.get("lon").value + ", " + byId.get("lat").value);
+      } else if (Math.abs(lon - Number(raw[1])) > 1e-6 || Math.abs(lat - Number(raw[2])) > 1e-6) {
+        fail("经纬度写串位了：option=" + distSel.children[1].value
+             + " 但 #lon/#lat = " + lon + ", " + lat);
+      } else if (lon < 70 || lon > 140 || lat < 3 || lat > 55) {
+        // 东城区应在东经 116、北纬 40 附近。越界说明维度搞反了或抓错了层级
+        fail("经纬度不在中国境内（可能经纬写反）：" + lon + ", " + lat);
+      } else {
+        console.log("  OK   三级下拉：" + nProv + "省 / " + nCity + "市 / " + nDist
+          + "区县，选「" + distSel.children[1].textContent + "」→ "
+          + lon.toFixed(4) + ", " + lat.toFixed(4) + "（与中国境内范围相符）");
+      }
+    }
+  }
+}
+
+// 不填出生地时也能算：三级下拉的默认值就是合法坐标，
+// 用户什么都不选不该拿到「没填出生地」的结果
+{
+  const D = byId.get("distSel");
+  const lon = byId.get("lon").value, lat = byId.get("lat").value;
+  if (!lon || !lat) fail("默认出生地无坐标（用户不选也不该拿到空结果）");
+  else console.log("  OK   出生地有默认值 " + Number(lon).toFixed(3)
+    + ", " + Number(lat).toFixed(3) + "（" + D.options[0].textContent + "）");
+}
+
 if (!search) fail("缺少 #citySearch");
 else if (!city) fail("缺少 #city");
 else {
   search.value = "bj";
   search.fire("input");
-  const hit = (city.children || []).filter(o => o.value === "北京");
-  if (!hit.length) fail("拼音首字母搜「bj」找不到北京");
-  else console.log("  OK   拼音首字母搜索可用（bj -> 北京）");
+  const opts = city.children || [];
+  // 选项 value 是 "省|市|区县|lon|lat"
+  const hit = opts.filter(o => (o.value || "").split("|")[2] === "北京市");
+  if (!hit.length) {
+    fail("拼音首字母搜「bj」找不到北京（命中 " + opts.length + " 项）");
+    opts.slice(0, 5).forEach(o => console.log("        命中项: " + o.value));
+  } else {
+    console.log("  OK   拼音首字母搜索可用（bj → 北京，命中 " + hit.length + " 项）");
+  }
+  // 搜中文名也要能命中「市自身」—— 广州在数据里是市节点的 __own__，
+  // 不是任何区县的父级，只列区县的话这条搜索会一条不中
+  search.value = "广州";
+  search.fire("input");
+  const gz = (city.children || []).filter(o => (o.value || "").split("|")[2] === "广州市");
+  if (!gz.length) fail("搜「广州」找不到广州市（城市自身条目被漏掉）");
+  else console.log("  OK   搜城市名能找到该市自身条目");
+
+  // 全拼容错
+  search.value = "urumqi";
+  search.fire("input");
+  const ur = (city.children || []).length;
   search.value = "";
   search.fire("input");
+  if (ur) console.log("  OK   全拼容错可用（urumqi → " + ur + " 项）");
 }
 
 // 回到标准示例再提交
 setDate(1990, 5, 15);
 const bt = byId.get("birthTime");
 if (bt) bt.value = "12:00";
-if (city) city.value = "北京";
+// 出生地交给三级下拉（上面已选好北京），别再往搜索框塞旧格式的值
 
 if (form && form.hasListener("submit")) {
   // 页面在 setTimeout 里才算盘，这里把队列里排队的定时器都跑掉。
@@ -428,6 +513,42 @@ if (/error/i.test(errMsg)) {
   fail("#status 显示错误: " + st.textContent);
 } else {
   console.log("  OK   #status 无错误 (class=" + ((st && st.className) || "") + ")");
+}
+
+// ---------- 时辰留空 → 默认 12:00，且必须标明是估算 ----------
+// 为什么这条要单独测：时辰决定时柱，留空时如果报错拦下，
+// 用户就只能走「猜一个时间」；如果默默按 0 点算，时柱会凭空差一格。
+// 所以要求是：不拦下、按 12:00 算、并且在界面上说清这是估算。
+{
+  const timeEl = byId.get("birthTime");
+  const before = { plain: pp ? pp.innerHTML : "", hl: hl ? hl.innerHTML : "" };
+  if (timeEl) timeEl.value = "";              // 真的留空
+  if (form && form.hasListener("submit")) {
+    form.fire("submit");
+    drain();
+  }
+  const stTxt = (st && st.textContent) || "";
+  const hlTxt = (hl ? hl.innerHTML.replace(/<[^>]+>/g, "") : "");
+  const all = stTxt + " " + hlTxt + " " + (pp ? pp.innerHTML : "");
+  if (/error/i.test((st && st.className) || "")) {
+    fail("时辰留空时页面报错拦下了（应默认 12:00 继续算）: " + stTxt);
+  } else if (pp && pp.innerHTML.length < 500) {
+    fail("时辰留空时没有出结果");
+  } else if (all.indexOf("估算") < 0) {
+    fail("时辰留空时结果里没有「估算」字样 —— 用户会以为时柱是按真实出生时刻算的");
+  } else {
+    // 还要确认 12:00 与真实填 12:00 算出来的一致（默认就是 12 点，不是别的时间）
+    console.log("  OK   时辰留空不拦下，按 12:00 出结果并标明估算（#status: "
+      + stTxt.trim().slice(0, 40) + "）");
+  }
+  // 复原，免得影响后面的判断
+  if (timeEl) timeEl.value = "12:00";
+  if (form && form.hasListener("submit")) { form.fire("submit"); drain(); }
+  if (pp && before.plain && pp.innerHTML === before.plain) {
+    console.log("  OK   填回 12:00 后结果与默认一致（默认确实是 12 点）");
+  } else {
+    console.log("  [--] 填回 12:00 后结果有差异，默认值可能不是 12:00");
+  }
 }
 
 if (bad) { console.error("\nUI 端到端验证失败 " + bad + " 项"); process.exit(1); }

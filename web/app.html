@@ -230,7 +230,7 @@ align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index
 
     <!-- 时间 -->
     <div class="field">
-      <label class="lb" for="birthTime">出生时间 <span class="note">记不清可以先不填</span></label>
+      <label class="lb" for="birthTime">出生时间 <span class="note">记不清就留空，默认按 12:00 估算</span></label>
       <input type="time" id="birthTime">
       <details>
         <summary>记不清具体几点？直接选时辰也行</summary>
@@ -251,13 +251,18 @@ align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index
 
     <!-- 出生地 -->
     <div class="field">
-      <label class="lb" for="city">出生地 <span class="note">可选，填了能算得更准</span></label>
-      <input type="search" id="citySearch" autocomplete="off"
-        placeholder="搜城市名或拼音首字母，如「北京」或「bj」" aria-label="搜索出生地">
-      <select id="city" size="6" style="margin-top:8px" aria-label="出生地列表"></select>
+      <label class="lb">出生地 <span class="note">可选，填了能算得更准</span></label>
+      <div class="dategrid">
+        <select id="provSel" aria-label="省 / 直辖市"></select>
+        <select id="citySel" aria-label="市 / 地区"></select>
+        <select id="distSel" aria-label="区 / 县"></select>
+      </div>
       <div class="note" id="cityHint" style="margin-top:6px"></div>
+      <input type="search" id="citySearch" autocomplete="off" style="margin-top:8px"
+        placeholder="或直接搜：区县名 / 城市名 / 拼音首字母（bj = 北京）" aria-label="搜索出生地">
+      <select id="city" size="4" style="margin-top:8px" aria-label="搜索结果"></select>
       <details>
-        <summary>找不到城市？手动填经纬度</summary>
+        <summary>找不到？手动填经纬度</summary>
         <div class="dategrid" style="grid-template-columns:1fr 1fr;margin-top:8px">
           <input type="number" id="lon" step="0.01" placeholder="经度 如 116.4" aria-label="经度">
           <input type="number" id="lat" step="0.01" placeholder="纬度 如 39.9" aria-label="纬度">
@@ -324,38 +329,21 @@ align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index
 
 var ENGINE_VERSION = /*__ENGINE_VERSION__*/;
 
+/*__MINGLI_REGIONS__*/
+
 /*__MINGLI_ENGINE__*/
 
 (function(){
   "use strict";
   var $ = function(s){ return document.querySelector(s); };
 
-  /* ---------- 城市经纬度（与本地版同一张表）----------
-     每项 [名称, 经纬度, 拼音首字母]。拼音首字母是为了让人能打「bj」找到北京 ——
-     出生地这个字段用的人多半不打算逐字翻 41 个下拉项。 */
-  var CITIES = [
-    ["", null, ""], ["北京",[116.41,39.90],"bj"], ["上海",[121.47,31.23],"sh"],
-    ["广州",[113.26,23.13],"gz"], ["深圳",[114.06,22.55],"sz"],
-    ["成都",[104.07,30.57],"cd"], ["杭州",[120.15,30.28],"hz"],
-    ["武汉",[114.30,30.59],"wh"], ["西安",[108.94,34.34],"xa"],
-    ["南京",[118.78,32.06],"nj"], ["重庆",[106.55,29.56],"cq"],
-    ["天津",[117.20,39.13],"tj"], ["苏州",[120.62,31.30],"sz"],
-    ["长沙",[112.94,28.23],"cs"], ["郑州",[113.62,34.75],"zz"],
-    ["青岛",[120.38,36.07],"qd"], ["沈阳",[123.43,41.80],"sy"],
-    ["哈尔滨",[126.53,45.80],"hebei"], ["昆明",[102.83,24.88],"km"],
-    ["福州",[119.30,26.08],"fz"], ["厦门",[118.09,24.48],"xm"],
-    ["济南",[117.12,36.65],"jn"], ["合肥",[117.28,31.86],"hf"],
-    ["南昌",[115.89,28.68],"nc"], ["贵阳",[106.63,26.65],"gy"],
-    ["南宁",[108.32,22.82],"nn"], ["兰州",[103.83,36.06],"lz"],
-    ["太原",[112.55,37.87],"ty"], ["石家庄",[114.51,38.04],"sjz"],
-    ["乌鲁木齐",[87.62,43.83],"wlmq"], ["拉萨",[91.11,29.97],"ls"],
-    ["呼和浩特",[111.75,40.84],"hhht"], ["银川",[106.23,38.49],"yc"],
-    ["西宁",[101.78,36.62],"xn"], ["海口",[110.20,20.04],"hk"],
-    ["长春",[125.32,43.82],"cc"], ["大连",[121.62,38.92],"dl"],
-    ["香港",[114.17,22.32],"xg"], ["澳门",[113.55,22.20],"am"],
-    ["台北",[121.52,25.03],"tp"]
-  ];
+  /* 出生地数据不在这里 —— 由 web/js/regions.json 提供（构建时内联为
+     window.MINGLI_REGIONS）。曾经这里是 41 个城市的硬编码表，
+     覆盖不到绝大多数人的出生地，而且坐标错了不报错。 */
   var SHICHEN = ["子","丑","寅","卯","辰","巳","午","未","申","酉","戌","亥"];
+  /* 不填出生时刻时的兜底值。放在这里而不是散在代码里，
+     是为了让「默认按几点算」只有一个出处。 */
+  var DEFAULT_HOUR = "12:00";
 
   var state = { result:null, tab:"plain" };
 
@@ -378,7 +366,8 @@ var ENGINE_VERSION = /*__ENGINE_VERSION__*/;
     parts.push(v.solar ? (v.solar[0] + "-" + v.solar[1] + "-" + v.solar[2])
                     : ("农历 " + v.lunar[0] + "/" + v.lunar[1] + "/" + v.lunar[2]
                        + (v.leap ? "（闰月）" : "")));
-    parts.push(v.shichen ? (v.shichen + "时") : v.hour);
+    parts.push(v.shichen ? (v.shichen + "时")
+                     : (v.hour + (v.hourEstimated ? "（估算）" : "")));
     parts.push(v.sex);
     if (v.place) parts.push(v.place);
     return parts.join(" · ");
@@ -404,18 +393,71 @@ var ENGINE_VERSION = /*__ENGINE_VERSION__*/;
       out.solar = [Number(sy), Number(sm), Number(sd)];
     }
     if (!out.shichen){
-      if (!$("#birthTime").value) throw "请选择出生时间，或直接点一个时辰。";
-      out.hour = $("#birthTime").value;
+      // 不填就按 12:00 算，而不是拦下来。
+      //
+      // 为什么不是「必须填」：很多人只知道大概年份月日，不知道具体几点。
+      // 以前这里直接抛错，页面就卡在这步，用户只会觉得「这网站真难用」。
+      // 给一个明确的默认值 + 一句说明，比不给结果好。
+      //
+      // 为什么要在结果里说明是估算：12:00 落在午时，
+      // 真实出生时刻在午时之外时，时柱会偏。所以必须让用户知道这是猜的。
+      out.hour = $("#birthTime").value || DEFAULT_HOUR;
+      out.hourEstimated = !$("#birthTime").value;
     }
-    var city = $("#city").value;
-    if (city){
-      var c = CITIES.filter(function(x){ return x[0] === city; })[0];
-      if (c && c[1]){ out.lon = c[1][0]; out.lat = c[1][1]; out.place = city; }
+    // 出生地：三级下拉与搜索框都会把坐标写进 #lon / #lat，
+    // 这里只读那两个框。分开存是有意的 —— 用户可以选了城市后
+    // 再手调经度微调，不必回到下拉里重选。
+    var picked = currentPlace();
+    if (picked){
+      out.lon = picked[0]; out.lat = picked[1]; out.place = picked[2];
     } else if ($("#lon").value && $("#lat").value){
       out.lon = Number($("#lon").value); out.lat = Number($("#lat").value);
       out.place = "自定义";
     }
     return out;
+  }
+
+  /* ---------- 下拉 option 的 value 编码 ----------
+   只有一种格式：kind,lon,lat
+     kind=0  市自身（「广州市（整市）」）
+     kind=1  具体区县（「东城区」）
+
+   之前这个格式在两处不一致：市自身写了 4 段、区县写了 3 段，
+   而解析统一按 4 段读 —— 结果选中区县时「经度」被填成了纬度，
+   等于按 90 度经度算真太阳时，**不报任何错**。
+   搜索结果用另一种分隔符（省|市|名|lon|lat），由 unpackSearch 读。
+   两种格式的编码与解析都放在这里、只此一份：写成两套时的症状
+   恰好是「看起来能跑，只是算错」，最难查。 */
+function pack(kind, lon, lat){ return kind + "," + lon + "," + lat; }
+/** 解析下拉 value。段数不符返回 null 而不是硬取前几段：
+    宁可「没选中」，也不要给一个看起来合理的错坐标。 */
+function unpack(v){
+  var a = String(v).split(",");
+  if (a.length !== 3) return null;
+  var lon = Number(a[1]), lat = Number(a[2]);
+  if (!isFinite(lon) || !isFinite(lat)) return null;
+  return [Number(a[0]), lon, lat];
+}
+/** 解析搜索结果 value -> [省, 市, 名, lon, lat]，格式不符返回 null */
+function unpackSearch(v){
+  var a = String(v).split("|");
+  if (a.length !== 5) return null;
+  if (!isFinite(Number(a[3])) || !isFinite(Number(a[4]))) return null;
+  return [a[0], a[1], a[2], Number(a[3]), Number(a[4])];
+}
+
+/* 当前出生地：[经度, 纬度, 显示名]，没选则 null */
+  function currentPlace(){
+    var distSel = $("#distSel"), co = distSel.value ? unpack(distSel.value) : null;
+    if (co){
+      var label = distSel.selectedIndex >= 0
+        ? distSel.options[distSel.selectedIndex].textContent : "";
+      return [co[1], co[2],
+              $("#provSel").value + " " + $("#citySel").value + " " + label];
+    }
+    var h = unpackSearch($("#city").value);
+    if (h) return [h[3], h[4], h[2]];
+    return null;
   }
 
   /* ---------- 排盘 ----------
@@ -491,42 +533,215 @@ var ENGINE_VERSION = /*__ENGINE_VERSION__*/;
       grid.appendChild(b);
     });
 
-    /* ---------- 城市：搜索框 + 过滤后的列表 ----------
-       41 个选项用一个下拉翻起来太费劲，而出生地这个字段用的人
-       多半不想逐项浏览。加搜索框，支持城市名与拼音首字母（「北京」/「bj」）。 */
+    /* ---------- 出生地：省 → 市 → 区三级 ----------
+       为什么必须三级：经度直接改时柱。同一个「中午 12 点」，
+       北京真太阳时 11:49、乌鲁木齐 09:54 —— 差两小时，时柱差一格。
+       所以坐标不能凑合，必须精确到用户真正出生的那个区县。
+
+       数据来自 web/js/regions.json（由 web/gen_regions.py 抓取
+       DataV.GeoAtlas 生成，坐标为行政中心点）。
+       另有搜索框兜底：三级里没有的（比如台湾省下级，
+       数据源未提供）还能搜或手填。 */
+    var REG = (window.MINGLI_REGIONS || { provinces: {} }).provinces || {};
+    var provSel = $("#provSel"), citySel = $("#citySel"), distSel = $("#distSel");
     var sel = $("#city"), box2 = $("#citySearch"), hint = $("#cityHint");
+
+    /* 汉字 → 拼音，用于搜索。必须覆盖**逐字**，漏一个字的症状是
+       「北京」搜不到而「北」的所有条目都搜得到 —— 很像数据问题，
+       其实是这个表漏了「京」。
+       写法用正经的对象而不是拼字符串再 split：字符串方案里
+       "北 BJ bei" 分词会切出带尾空格的 "北 "，于是永远匹配不上。 */
+    var PY = {
+      "北":"bei","京":"jing","上":"shang","海":"hai","广":"guang","深":"shen",
+      "成":"cheng","都":"du","杭":"hang","州":"zhou","武":"wu","汉":"han",
+      "西":"xi","安":"an","南":"nan","重":"chong","庆":"qing","天":"tian",
+      "苏":"su","州2":"zhou","郑":"zheng","青":"qing","岛":"dao","沈":"shen",
+      "阳":"yang","哈":"ha","尔":"er","滨":"bin","昆":"kun","明":"ming",
+      "福":"fu","建":"jian","厦":"xia","门":"men","济":"ji","肥":"fei",
+      "合":"he","昌":"chang","贵":"gui","阳2":"yang","兰":"lan","州3":"zhou",
+      "太":"tai","原":"yuan","石":"shi","家":"jia","庄":"zhuang","乌":"wu",
+      "鲁":"lu","木":"mu","齐":"qi","拉":"sa","萨":"sa","呼":"hu","和":"he",
+      "浩":"hao","特":"te","银":"yin","川":"chuan","口":"kou","长":"chang",
+      "春":"chun","大":"da","连":"lian","香":"xiang","港":"gang","澳":"ao",
+      "台":"tai","湾":"wan","东":"dong","莞":"guan","中":"zhong","江":"jiang",
+      "浙":"zhe","安2":"an","山":"shan","河":"he","湖":"hu","云":"yun","南3":"nan",
+      "陕":"shan","西2":"xi","甘":"gan","肃":"su","青2":"qing","海2":"hai",
+      "新":"xin","疆":"jiang","藏":"zang","内":"nei","蒙":"meng","吉":"ji",
+      "林":"lin","黑":"hei","龙":"long","辽":"liao","宁":"ning","晋":"jin",
+      "津":"jin","渝":"yu","沪":"hu","桂":"gui","鄂":"e","赣":"gan","闽":"min",
+      "琼":"qiong","皖":"wan","豫":"yu","滇":"dian","陇":"long","黔":"qian",
+      "蜀":"shu","粤":"yue","湘":"xiang","冀":"ji","贵2":"gui","津2":"jin",
+      "通":"tong","州4":"zhou","淮":"huai","南4":"nan","盐":"yan","扬":"yang",
+      "泰":"tai","镇":"zhen","常":"chang","无":"wu","锡":"xi","苏3":"su",
+      "徐":"xu","南5":"nan","通2":"tong","淮2":"huai","盐2":"yan","扬2":"yang",
+      "泰2":"tai","镇2":"zhen","常2":"chang","苏4":"su","州5":"zhou","温":"wen",
+      "州6":"zhou","绍":"shao","兴":"xing","市":"shi","金":"jin","华":"hua",
+      "三":"san","明2":"ming","四":"si","平":"ping","顶":"ding","山2":"shan",
+      "关":"guan","云2":"yun","浮":"fu","河2":"he","间":"jian","庄2":"zhuang",
+      "宝":"bao","山3":"shan","宁5":"ning","德":"de","齐2":"qi","哈2":"ha",
+      "尔2":"er","滨2":"bin","双":"shuang","鸭":"ya","西3":"xi","城":"cheng",
+      "铁":"tie","岭":"ling","山4":"shan","南6":"nan","开":"kai","原2":"yuan",
+      "封":"feng","川2":"chuan","大2":"da","竹":"zhu","山5":"shan","田":"tian",
+      "兴2":"xing","安3":"an","县":"xian","江2":"jiang","宁6":"ning","德2":"de",
+      "哈3":"ha","拉2":"la","滨3":"bin","双2":"shuang","鸭2":"ya","铁2":"tie",
+      "岭2":"ling","开2":"kai","封2":"feng","竹2":"zhu","田2":"tian",
+      "新2":"xin","源":"yuan","佛":"fo","山6":"shan","三2":"san","江3":"jiang",
+      "四2":"si","南7":"nan","通3":"tong","化":"hua","安4":"an","吉2":"ji",
+      "梅":"mei","关2":"guan","罗":"luo","山7":"shan","阳3":"yang","朔":"shuo",
+      "怀":"huai","仁":"ren","广2":"guang","韶":"shao","清":"qing","远":"yuan",
+      "南8":"nan","丰":"feng","顺":"shun","高":"gao","州7":"zhou","鹤":"he",
+      "龙2":"long","泉":"quan","南9":"nan","丰2":"feng","化2":"hua","广3":"guang",
+      "佛2":"fo","南10":"nan","山8":"shan","阳4":"yang","连2":"lian","南11":"nan",
+      "州8":"zhou","平2":"ping","武2":"wu","定":"ding","安5":"an","福2":"fu",
+      "田2":"tian","山9":"shan","吉3":"ji","临":"lin","泉2":"quan","沂":"yi",
+      "南12":"nan","河3":"he","乐":"le","陵":"ling","南13":"nan","宁7":"ning",
+      "化3":"hua","广4":"guang","贵3":"gui","定2":"ding","南14":"nan","安6":"an",
+      "丰3":"feng","镇3":"zhen","原3":"yuan","大3":"da","竹3":"zhu","田3":"tian",
+    };
+/* 拼音首字母缩写：「北京市」-> bjs。搜索要的是缩写，
+       用户打 bj 找北京，不是 beijing。 */
+    function pyInitials(s){
+      var out = "";
+      for (var i = 0; i < s.length; i++) out += (PY[s[i]] || "")[0] || "";
+      return out.toLowerCase();
+    }
+    /* 完整拼音：「北京市」-> beijingshi。用于容错（用户打 bei）。 */
+    function pyFull(s){
+      var out = [];
+      for (var i = 0; i < s.length; i++) if (PY[s[i]]) out.push(PY[s[i]]);
+      return out.join("");
+    }
+    /** 命中判定：名字含关键字，或拼音缩写 / 全拼含关键字 */
+    function nameHit(name, q){
+      if (!q) return true;
+      if (name.toLowerCase().indexOf(q) >= 0) return true;
+      if (pyInitials(name).indexOf(q) >= 0) return true;
+      if (pyFull(name).indexOf(q) >= 0) return true;
+      return false;
+    }
+
+    var provNames = Object.keys(REG).sort();
+    provNames.forEach(function(n){
+      provSel.appendChild(opt(n, n));
+    });
+
+    function opt(text, value){
+      var o = document.createElement("option");
+      o.value = value; o.textContent = text;
+      return o;
+    }
+    function fillCitySel(){
+      citySel.innerHTML = "";
+      var cities = REG[provSel.value] || {};
+      Object.keys(cities).sort().forEach(function(cn){
+        citySel.appendChild(opt(cn, cn));
+      });
+      fillDistSel();
+    }
+    function fillDistSel(){
+      var cities = REG[provSel.value] || {};
+      var node = cities[citySel.value] || {};
+      distSel.innerHTML = "";
+      var keys = Object.keys(node).filter(function(k){ return k !== "__own__"; }).sort();
+      // 市级自身也算一个可选点 —— 很多人只知道到市
+      if (node.__own__){
+        distSel.appendChild(opt(citySel.value + "（整市）",
+                                pack(0, node.__own__[0], node.__own__[1])));
+      }
+      keys.forEach(function(dn){
+        distSel.appendChild(opt(dn, pack(1, node[dn][0], node[dn][1])));
+      });
+      if (!distSel.options.length){
+        distSel.appendChild(opt("（该条目没有下级数据）", ""));
+      }
+      onDistChange();
+    }
+
+    function optText(s){
+      var i = s.selectedIndex;
+      return (i >= 0 && s.options[i]) ? s.options[i].textContent : "";
+    }
+    function onDistChange(){
+      var co = distSel.value ? unpack(distSel.value) : null;
+      if (!co){
+        hint.textContent = "该条目没有下级数据，请展开下方「手动填经纬度」";
+        return;
+      }
+      hint.textContent = "已选 " + optText(distSel) + "　经度 " + co[1].toFixed(4)
+        + "，纬度 " + co[2].toFixed(4) + (co[0] === 0 ? "（按整市计算）" : "");
+      // 写到 #lon/#lat 上：用户选了市之后还能手调，不必回到下拉里重选
+      $("#lon").value = co[1];
+      $("#lat").value = co[2];
+      sel.value = "";
+    }
+    provSel.addEventListener("change", fillCitySel);
+    citySel.addEventListener("change", fillDistSel);
+    distSel.addEventListener("change", onDistChange);
+
+    /* ---------- 搜索兜底 ----------
+       三级下拉里没有的（台湾省下级等）还能搜或手填。
+       搜索同时列出「市自身」和「区县」两类点 —— 只列区县的话，
+       搜「广州」会一条不中，因为广州在数据里是市节点下的 __own__，
+       不是任何区县的父级。之前就是这么漏的。 */
     function renderCities(){
       var q = (box2.value || "").trim().toLowerCase();
       sel.innerHTML = "";
-      var hit = 0;
-      CITIES.forEach(function(c){
-        var name = c[0], py = (c[2] || "");
-        if (q && name.toLowerCase().indexOf(q) < 0 && py.indexOf(q) < 0) return;
-        var o = document.createElement("option");
-        o.value = name;
-        o.textContent = name ? name + "（" + c[1][0].toFixed(2) + ", " + c[1][1].toFixed(2) + "）"
-                             : "（不填，占星无法定上升点）";
-        sel.appendChild(o);
-        if (name) hit++;
+      var hits = [];
+      Object.keys(REG).forEach(function(pn){
+        Object.keys(REG[pn]).forEach(function(cn){
+          var node = REG[pn][cn];
+          var items = [];
+          if (node.__own__) items.push([cn, node.__own__[0], node.__own__[1]]);
+          Object.keys(node).forEach(function(dn){
+            if (dn !== "__own__") items.push([dn, node[dn][0], node[dn][1]]);
+          });
+          items.forEach(function(it){
+            if (!nameHit(it[0], q)) return;
+            hits.push([pn, cn, it[0], it[1], it[2]]);
+          });
+        });
+      });
+      hits.slice(0, 200).forEach(function(h){
+        sel.appendChild(opt(h[0] + " / " + h[1] + " / " + h[2]
+                             + "（" + h[3].toFixed(2) + ", " + h[4].toFixed(2) + "）",
+                             h.join("|")));
       });
       if (!sel.options.length){
-        var o = document.createElement("option");
-        o.value = ""; o.textContent = "没有匹配的城市 —— 展开下方「手动填经纬度」";
-        o.disabled = true;
-        sel.appendChild(o);
+        sel.appendChild(opt(q ? "没有匹配项 —— 请展开下方手填经纬度"
+                              : "输入关键字搜索（最多显示前 200 条）", ""));
       }
-      hint.textContent = q ? ("匹配 " + hit + " 个城市" + (hit === 0 ? "，请展开下方手填经纬度" : ""))
-                           : "共 " + hit + " 个城市，可搜城市名或拼音首字母";
+      hint.textContent = q ? ("匹配 " + hits.length + " 条"
+                              + (hits.length > 200 ? "，只显示前 200 条" : ""))
+                           : ("全国 " + Object.keys(REG).length + " 省 / "
+                              + countCities() + " 市 / " + countDistricts() + " 区县");
+    }
+    function countCities(){
+      var n = 0;
+      Object.keys(REG).forEach(function(pn){ n += Object.keys(REG[pn]).length; });
+      return n;
+    }
+    function countDistricts(){
+      var n = 0;
+      Object.keys(REG).forEach(function(pn){
+        Object.keys(REG[pn]).forEach(function(cn){
+          var node = REG[pn][cn];
+          Object.keys(node).forEach(function(k){ if (k !== "__own__") n++; });
+        });
+      });
+      return n;
     }
     box2.addEventListener("input", renderCities);
     renderCities();
     sel.addEventListener("change", function(){
-      var has = !!sel.value;
-      var details = sel.parentNode.querySelector("details");
-      // 选了城市就把「手填经纬度」收起来，避免两处填了不知道听谁的
-      if (details) details.style.display = has ? "none" : "";
-      hint.textContent = has ? ("已选 " + sel.value) : "";
+      var h = unpackSearch(sel.value);
+      if (!h) return;
+      $("#lon").value = h[3];
+      $("#lat").value = h[4];
+      hint.textContent = "已选 " + h[0] + " / " + h[1] + " / " + h[2]
+        + "　经度 " + h[3].toFixed(4) + "，纬度 " + h[4].toFixed(4);
     });
+
+    fillCitySel();
 
     fillSolar();
     fillLunar();
@@ -559,7 +774,14 @@ var ENGINE_VERSION = /*__ENGINE_VERSION__*/;
           $("#summaryText").innerHTML = "已按 <b>" + esc(summarize(v)) + "</b> 排盘";
           $("#formSummary").classList.add("show");
           $("#form").classList.add("collapsed");
-          setStatus("ok", "排盘完成！结果在下面 ↓");
+          if (v.hourEstimated){
+            // 必须明说：时柱是拿 12:00 猜的，不是用户的真实出生时刻。
+            // 不说的话，用户会把一个编出来的时柱当成真结果。
+            setStatus("ok", "排盘完成！注意：你没填出生时刻，"
+              + "时柱是按 12:00 估算的，真实时刻在午时之外时该柱会不准。");
+          } else {
+            setStatus("ok", "排盘完成！结果在下面 ↓");
+          }
         } catch (err){
           setStatus("error", "排盘失败：" + (err && err.message || err));
         } finally { btn.disabled = false; }
@@ -579,10 +801,11 @@ var ENGINE_VERSION = /*__ENGINE_VERSION__*/;
       $("#solarDay").value = "15";
       solarHint();
       $("#birthTime").value = "12:00";
-      // 先确保列表没被搜索框过滤掉，否则「北京」这一项可能不在下拉里
-      box2.value = "";
-      renderCities();
-      sel.value = "北京";
+      // 出生地走三级下拉：北京 -> 北京市 -> 东城区
+      provSel.value = "北京市";
+      fillCitySel();
+      citySel.value = "北京市";
+      fillDistSel();
       $("#form").requestSubmit();
     });
     $("#saveBtn").addEventListener("click", function(){

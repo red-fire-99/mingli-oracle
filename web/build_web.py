@@ -37,6 +37,7 @@ TEMPLATE = os.path.join(HERE, "app.html")
 
 PLACEHOLDER_ENGINE = "/*__MINGLI_ENGINE__*/"
 PLACEHOLDER_CSS = "/*__ORACLE_CSS__*/"
+PLACEHOLDER_REGIONS = "/*__MINGLI_REGIONS__*/"
 
 # 引擎版本号的占位符。刻意**不带引号**：注入的是 json.dumps(ver) 的结果，
 # 自带引号；模板里若写成 "/*__...__*/" 就会变成 ""1.0.0"" 这种坏代码。
@@ -121,6 +122,10 @@ def main(argv=None):
     if PLACEHOLDER_CSS not in html:
         print("模板缺少占位符 %s（命盘样式）" % PLACEHOLDER_CSS, file=sys.stderr)
         return 1
+    if PLACEHOLDER_REGIONS not in html:
+        print("模板缺少占位符 %s（行政区划经纬度）" % PLACEHOLDER_REGIONS,
+              file=sys.stderr)
+        return 1
 
     engine = bundle_js()
     ver = engine_version()
@@ -144,6 +149,18 @@ def main(argv=None):
     for tok in sorted(VERSION_TOKENS, key=len, reverse=True):
         html = html.replace(tok, quoted)
     html = html.replace(PLACEHOLDER_CSS, oracle_css())
+
+    # 行政区划数据：整体内联成 window.MINGLI_REGIONS。
+    # 用 JSON.parse 而不是直接贴字面量 —— 40 万字符的对象字面量
+    # 在浏览器里逐个 token 解析明显比一次性 parse 慢。
+    regions = read(os.path.join(HERE, "js", "regions.json"))
+    if len(regions) < 10000:
+        print("regions.json 异常小（%d 字节），出生地三级选择会是空的" % len(regions),
+              file=sys.stderr)
+        return 1
+    html = html.replace(PLACEHOLDER_REGIONS,
+                        "window.MINGLI_REGIONS = JSON.parse(%s);"
+                        % json.dumps(regions, ensure_ascii=False))
 
     os.makedirs(a.out, exist_ok=True)
     dest = os.path.join(a.out, "index.html")
