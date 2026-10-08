@@ -36,7 +36,10 @@ NAMES = ["DAY_MASTER", "STRENGTH", "SHISHEN", "ZIWEI_STAR", "SHENSHA",
          "ELEMENT_MISS", "RULER", "GLOSSARY",
          # 1.3.1 新增：大运/流年逐项解读、十二长生、五行意象
          "DAYUN_DETAIL", "LIUNIAN_DETAIL", "TWELVE_STAGES", "LONG_ZHI",
-         "STAGE_MEAN", "WUXING_IMAGERY", "ELEMENT_CROSS"]
+         "STAGE_MEAN", "WUXING_IMAGERY", "ELEMENT_CROSS",
+         # 1.4.0 新增：紫微十二宫 / 大限 / 四化
+         "PALACE_MEANING", "PALACE_STAR_NOTE", "ZW_MALEFIC",
+         "DAXIAN_THEME", "SIHUA_ROLE", "LIUNIAN_NOTE"]
 
 
 def sanitize(o):

@@ -637,6 +637,41 @@ if (form && form.hasListener("submit")) {
     + "含大运逐段/流年逐年/五行意象/四元素逐项");
 }
 
+// 1.5.0 新增：紫微四块（十二宫 / 大限 12 步 / 流年命宫 / 四化落宫）
+//
+// 只断言「有 details 标签」不够 —— 半新半旧的代码也能产出配平的标签，
+// 而这次紫微块插错位置时（跑到 if(data.紫微) 外面）产出的是
+// 「z is not defined」这种运行时错，静态标签检查照样通过。
+// 所以断言具体内容：宫名、步数、星曜、四化落宫。
+{
+  const html0 = byId.get("panel-plain").innerHTML;
+  const need0 = ["你的十二宫", "你一生十二步大限", "今年的落点", "四化落在哪",
+                 "借对宫", "该宫管的是", "当前大限", "十二宫代表人生十二个领域"];
+  const miss0 = need0.filter((k) => html0.indexOf(k) < 0);
+  if (miss0.length) { fail("白话区缺少紫微新内容: " + miss0.join("、")); process.exit(1); }
+
+  // 十二宫逐宫：12 个宫名都要出现（命宫/兄弟/夫妻/子女/财帛/疾厄/
+  // 迁移/交友/官禄/田宅/福德/父母）
+  const PAL = ["命宫", "兄弟", "夫妻", "子女", "财帛", "疾厄",
+               "迁移", "交友", "官禄", "田宅", "福德", "父母"];
+  const missPal = PAL.filter((k) => html0.indexOf(">" + k + "<") < 0
+                                 && html0.indexOf(k + "宫") < 0
+                                 && html0.indexOf(k) < 0);
+  if (missPal.length) { fail("十二宫缺: " + missPal.join("、")); process.exit(1); }
+
+  // 大限 12 步：数「岁」区间，至少要有 12 个
+  const nDx = (html0.match(/\d+–\d+ 岁/g) || []).length;
+  if (nDx < 12) { fail("紫微大限只渲染了 " + nDx + " 步（应 12）"); process.exit(1); }
+
+  // 四化 4 项：禄权科忌都要出现
+  const missHua = ["化禄", "化权", "化科", "化忌"].filter((k) => html0.indexOf(k) < 0);
+  if (missHua.length) { fail("四化缺: " + missHua.join("、")); process.exit(1); }
+
+  const nFold0 = (html0.match(/<details/g) || []).length;
+  console.log("  OK   紫微四块齐全：十二宫 12 宫 / 大限 " + nDx + " 步 / "
+    + "流年命宫 / 四化 4 项（白话区共 " + nFold0 + " 个折叠区块）");
+}
+
 const hl = byId.get("headline");
 const pp = byId.get("panel-plain");
 const pr = byId.get("panel-pro");

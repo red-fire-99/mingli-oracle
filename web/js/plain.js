@@ -23,6 +23,8 @@ const {
   RULER, GLOSSARY,
   DAYUN_DETAIL, LIUNIAN_DETAIL, TWELVE_STAGES, LONG_ZHI,
   STAGE_MEAN, WUXING_IMAGERY, ELEMENT_CROSS,
+  PALACE_MEANING, PALACE_STAR_NOTE, ZW_MALEFIC,
+  DAXIAN_THEME, SIHUA_ROLE, LIUNIAN_NOTE,
 } = DATA;
 
 /* ------------------------------------------------------------------
@@ -284,6 +286,118 @@ export function ziweiPlain(r) {
     juLuck = Object.assign({ 五行: juWx, 局: r.五行局 }, WUXING_LUCK[juWx]);
   }
 
+/* ---------------- 紫微：十二宫 / 大限 / 四化 ---------------- */
+
+/** 对宫映射：空宫要借对宫的星来看 */
+const ZW_OPPOSITE = { "子": "午", "丑": "未", "寅": "申", "卯": "酉", "辰": "戌", "巳": "亥",
+                      "午": "子", "未": "丑", "申": "寅", "酉": "卯", "戌": "辰", "亥": "巳" };
+
+/** 星曜字符串 -> 星名。引擎把四化拼在星名里（「太阳·化禄」）。 */
+function starName(s) { return String(s).split("·")[0]; }
+
+function palaceList(r) {
+  const out = [];
+  for (const p of r["十二宫"]) {
+    const mains = [];
+    for (const s of p["星曜"]) {
+      const nm = starName(s);
+      if (PALACE_STAR_NOTE[nm] || ZIWEI_STAR[nm]) mains.push(nm);
+    }
+    // Python 侧用「在 ZIWEI_STAR 里」筛主星，这里保持一致
+    const realMains = mains.filter((nm) => !!ZIWEI_STAR[nm]);
+
+    const tags = [];
+    const cautions = [];
+    for (const s of p["星曜"]) {
+      const nm = starName(s);
+      if (PALACE_STAR_NOTE[nm]) tags.push({ 星: nm, 说明: PALACE_STAR_NOTE[nm] });
+      const m = ZW_MALEFIC[nm];
+      if (m && m[1]) cautions.push({ 星: nm, 说明: m[1] });
+    }
+
+    let borrowedFrom = "";
+    let borrowed = [];
+    if (!realMains.length) {
+      const oz = ZW_OPPOSITE[p["地支"]] || "";
+      const op = r["十二宫"].find((x) => x["地支"] === oz);
+      if (op) {
+        borrowedFrom = op["宫名"];
+        borrowed = op["星曜"].map(starName).filter((nm) => !!ZIWEI_STAR[nm]);
+      }
+    }
+
+    out.push({
+      "宫名": p["宫名"], "干支": p["天干"] + p["地支"],
+      "主星": realMains, "借宫": borrowedFrom, "借宫主星": borrowed,
+      "含义": PALACE_MEANING[p["宫名"]] || "",
+      "标签": tags, "留意": cautions,
+      "是命宫": !!p["是否命宫"], "是身宫": !!p["是否身宫"],
+    });
+  }
+  return out;
+}
+
+function daxianList(r) {
+  const dx = r["大限"] || {};
+  const out = [];
+  for (const x of (dx["列表"] || [])) {
+    const pal = r["十二宫"].find((p) => p["宫名"] === x["宫位"]);
+    const mains = pal
+      ? pal["星曜"].map(starName).filter((nm) => !!ZIWEI_STAR[nm])
+      : [];
+    out.push({
+      "宫位": x["宫位"], "干支": x["天干"] + x["地支"],
+      "虚岁起": x["虚岁起"], "虚岁止": x["虚岁止"],
+      "主星": mains, "星曜": x["星曜"].map(starName),
+      "主题": DAXIAN_THEME[x["宫位"]] || "这十年按大限走，重点在自己的调整。",
+      "宫位含义": PALACE_MEANING[x["宫位"]] || "",
+    });
+  }
+  return out;
+}
+
+function liunianNote(r) {
+  const ln = r["流年"];
+  if (!ln) return null;
+  const cur = ln["当前大限"] || "";
+  // 流年命宫是「午宫」，而 PALACE_MEANING 的键是宫名（「疾厄」…），
+  // 直接去掉「宫」去查必然查不到 —— 用地支反查宫名。
+  const lnz = ln["流年命宫"] || "";
+  const lnZhi = lnz.endsWith("宫") ? lnz.slice(0, -1) : lnz;
+  const pal = r["十二宫"].find((p) => p["地支"] === lnZhi);
+  const palName = pal ? pal["宫名"] : "";
+  const dxPal = cur ? cur.split("·")[0] : "";
+  return {
+    "年": ln["年"], "干支": ln["干支"], "虚岁": ln["虚岁"],
+    "流年命宫": lnz, "流年命宫名": palName,
+    "当前大限": cur, "当前大限宫": dxPal,
+    "说明": LIUNIAN_NOTE,
+    "命宫含义": PALACE_MEANING[palName] || "",
+    "大限含义": PALACE_MEANING[dxPal] || "",
+    "大限主题": DAXIAN_THEME[dxPal] || "",
+  };
+}
+
+function sihuaList(r) {
+  const h = r["四化"] || {};
+  const out = [];
+  for (const key of ["化禄", "化权", "化科", "化忌"]) {
+    const star = h[key];
+    if (!star) continue;
+    const nm = starName(star);
+    const pal = r["十二宫"].find(
+      (p) => p["星曜"].some((s) => starName(s) === nm));
+    const role = SIHUA_ROLE[key] || ["", ""];
+    out.push({
+      "化": key, "星": star,
+      "宫位": pal ? pal["宫名"] : "",
+      "宫位含义": pal ? (PALACE_MEANING[pal["宫名"]] || "") : "",
+      "角色": role[0], "要点": role[1],
+    });
+  }
+  return out;
+}
+
   return {
     一句话: summary,
     主星: mains.length ? mains[0] : null,
@@ -295,6 +409,10 @@ export function ziweiPlain(r) {
                要点: brief(love, "感情", "夫妻宫无主星，感情模式偏自由，随缘而遇。") },
     四化提醒: { 标题: "人生课题与福气", 要点: huaNote },
     开运指南: juLuck,
+    十二宫详批: { 标题: "你的十二宫", 列表: palaceList(r) },
+    大限详批: { 标题: "你一生十二步大限", 列表: daxianList(r) },
+    流年详情: liunianNote(r),
+    四化详批: sihuaList(r),
     术语: [["命宫", GLOSSARY["命宫"]], ["主星", GLOSSARY["主星"]],
            ["四化", GLOSSARY["四化"]], ["大限", GLOSSARY["大限"]]],
   };

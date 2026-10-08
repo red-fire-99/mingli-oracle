@@ -202,6 +202,21 @@ details.fold .fbody{padding:2px 16px 14px}
 .el .hd{display:flex;align-items:baseline;gap:8px;margin-bottom:3px}
 .el .en{font-size:18px;font-weight:700}
 .el .pc{margin-left:auto;color:var(--sub);font-variant-numeric:tabular-nums}
+/* 紫微：十二宫 / 大限 / 四化 */
+.pl,.dx,.sh{display:grid;grid-template-columns:repeat(auto-fill,minmax(272px,1fr));gap:9px;margin-top:4px}
+.pl .it,.dx .it,.sh .it{background:#fff;border:1px solid var(--line);border-radius:10px;
+ padding:10px 13px;line-height:1.7}
+.pl .it.ming{border-color:var(--red)}
+.pl .it.shen{border-style:dashed}
+.dx .it.now,.sh .it.ji{border-color:var(--gold)}
+.pl .hd,.dx .hd,.sh .hd{display:flex;align-items:baseline;gap:7px;margin-bottom:4px;flex-wrap:wrap}
+.pl .pn,.dx .pn,.sh .pn{font-size:15px;font-weight:700;color:var(--red)}
+.pl .gz2,.dx .gz2,.sh .gz2{font-size:15px;font-weight:700;letter-spacing:1px}
+.pl .pc,.dx .pc,.sh .pc{margin-left:auto;font-size:12px;color:var(--sub)}
+.pl .tag,.dx .tag,.sh .tag{font-size:11px;background:#f0e9db;color:var(--sub);
+ border-radius:8px;padding:0 7px}
+.pl .tag.hi,.dx .tag.hi{background:var(--red);color:#fff}
+.sh .it.ji .pn{color:#8a6a1f}
 /* 两套体系并置的说明条 */
 .note-sys{background:#f3f6f8;border-left:4px solid var(--blue);border-radius:0 8px 8px 0;
  padding:9px 14px;font-size:13px;color:#3c5566;line-height:1.75;margin:9px 0}
@@ -571,6 +586,113 @@ def render_plain(data):
                      '</div></div>'
                      % (_h(lk["局"]), _h(lk["五行"]), _h(lk["颜色"]), _h(lk["方位"]),
                         _h(lk["数字"]), _h(lk["行业"]), _h(lk["饰品"]), _h(lk["日常"])))
+
+        # ---- 1.5.0 新增：紫微四块（十二宫 / 大限 / 流年 / 四化）----
+        # 之前紫微这边只有「命宫主星 + 事业/财运/感情」三段，
+        # 十二宫、大限 12 步、流年命宫、四化落宫全都没展开 ——
+        # 而同一张盘里八字那边已经逐项展开了，两边详略不该差这么多。
+        if z.get("十二宫详批") and z["十二宫详批"]["列表"]:
+            pl = z["十二宫详批"]["列表"]
+            P.append('<details class="fold"><summary>你的十二宫'
+                     '<span class="cnt">逐宫看</span></summary><div class="fbody">'
+                     '<p class="sub2">十二宫代表人生十二个领域。'
+                     '「主星」决定这个领域的底色；宫里没有主星很常见，'
+                     '要借对宫的星来看，那不是缺陷。</p><div class="pl">')
+            for p2 in pl:
+                cls = ""
+                marks = []
+                if p2["是命宫"]:
+                    cls += " ming"
+                    marks.append("命宫")
+                if p2["是身宫"]:
+                    cls += " shen"
+                    marks.append("身宫")
+                P.append('<div class="it%s"><div class="hd">'
+                         '<span class="pn">%s</span><span class="gz2">%s</span>'
+                         % (cls, _h(p2["宫名"]), _h(p2["干支"])))
+                if marks:
+                    P.append('<span class="tag hi">%s</span>' % _h("、".join(marks)))
+                P.append('<span class="pc">主星 %s</span></div>'
+                         % _h("、".join(p2["主星"]) if p2["主星"] else "（空宫）"))
+                P.append('<p class="li">%s</p>' % _h(p2["含义"]))
+                if p2["借宫"]:
+                    P.append('<p class="li"><span class="h">借对宫</span>'
+                             '本宫无主星，借「%s」的 %s 来论。</p>'
+                             % (_h(p2["借宫"]),
+                                _h("、".join(p2["借宫主星"]) if p2["借宫主星"] else "（对宫也空宫）")))
+                if p2["标签"]:
+                    P.append('<p class="li"><span class="h">星曜</span>%s</p>'
+                             % _h("；".join("%s=%s" % (t["星"], t["说明"]) for t in p2["标签"])))
+                if p2["留意"]:
+                    P.append('<p class="li warn"><span class="h">要留意</span>%s</p>'
+                             % _h("；".join("%s=%s" % (c["星"], c["说明"]) for c in p2["留意"])))
+                P.append("</div>")
+            P.append("</div></div></details>")
+
+        if z.get("大限详批") and z["大限详批"]["列表"]:
+            dl = z["大限详批"]["列表"]
+            cur = z.get("流年详情") or {}
+            cur_dx = cur.get("当前大限宫", "")
+            P.append('<details class="fold"><summary>你一生十二步大限'
+                     '<span class="cnt">紫微的十年分段</span></summary><div class="fbody">'
+                     '<p class="sub2">大限走的是<b>宫位</b>而不是十神 —— '
+                     '每十年重心落在哪个宫，那十年的主语就是那个宫代表的事。'
+                     '和大运是两套不同的分段方式，别混着看。</p><div class="dx">')
+            for x in dl:
+                now = bool(cur_dx) and x["宫位"] == cur_dx
+                P.append('<div class="it%s"><div class="hd">'
+                         '<span class="age">%d–%d 岁</span>'
+                         '<span class="pn">%s</span><span class="gz2">%s</span>'
+                         % (" now" if now else "", x["虚岁起"], x["虚岁止"],
+                            _h(x["宫位"]), _h(x["干支"])))
+                if now:
+                    P.append('<span class="tag hi">当前大限</span>')
+                P.append('<span class="pc">%s</span></div>'
+                         % _h("、".join(x["主星"]) if x["主星"] else "空宫"))
+                P.append('<p class="li">%s</p>' % _h(x["主题"]))
+                P.append('<p class="sub2">%s</p>' % _h(x["宫位含义"]))
+                P.append("</div>")
+            P.append("</div></div></details>")
+
+        if z.get("流年详情"):
+            ln = z["流年详情"]
+            P.append('<details class="fold"><summary>今年的落点'
+                     '<span class="cnt">%s年 %s</span></summary><div class="fbody">'
+                     % (_h(str(ln.get("年", ""))), _h(str(ln.get("干支", "")))))
+            P.append('<div class="info" style="margin:0 0 10px">'
+                     '<span>虚岁 <b>%s</b></span>'
+                     '<span>流年命宫 <b>%s%s</b></span>'
+                     '<span>当前大限 <b>%s</b></span></div>'
+                     % (ln.get("虚岁", "—"), _h(ln.get("流年命宫名", "")),
+                        _h(ln.get("流年命宫", "")), _h(ln.get("当前大限", ""))))
+            if ln.get("命宫含义"):
+                P.append('<p class="li"><span class="h">今年重心</span>%s —— %s</p>'
+                         % (_h(ln.get("流年命宫名", "")), _h(ln["命宫含义"])))
+            if ln.get("大限主题"):
+                P.append('<p class="li"><span class="h">大限主线</span>%s</p>'
+                         % _h(ln["大限主题"]))
+            P.append('<p class="sub2">%s</p>' % _h(ln.get("说明", "")))
+            P.append("</div></details>")
+
+        if z.get("四化详批"):
+            P.append('<details class="fold"><summary>四化落在哪'
+                     '<span class="cnt">禄权科忌</span></summary><div class="fbody">'
+                     '<p class="sub2">生年四化是「哪颗星被强化」，'
+                     '它落在哪个宫，那一块就跟着强化。化忌不是坏事，'
+                     '是这辈子要学的课题。</p><div class="sh">')
+            for h2 in z["四化详批"]:
+                cls = " ji" if h2["化"] == "化忌" else ""
+                P.append('<div class="it%s"><div class="hd">'
+                         '<span class="pn">%s</span><span class="gz2">%s</span>'
+                         % (cls, _h(h2["化"]), _h(h2["星"])))
+                if h2["宫位"]:
+                    P.append('<span class="tag">落%s宫</span>' % _h(h2["宫位"]))
+                P.append('<span class="pc">%s</span></div>' % _h(h2["角色"]))
+                P.append('<p class="li">%s</p>' % _h(h2["要点"]))
+                if h2["宫位含义"]:
+                    P.append('<p class="sub2">该宫管的是：%s</p>' % _h(h2["宫位含义"]))
+                P.append("</div>")
+            P.append("</div></div></details>")
 
     if "占星" in data:
         a = M_plain.astro_plain(data["占星"])

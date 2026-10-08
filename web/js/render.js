@@ -18,7 +18,7 @@ import { paiPan as baziPaiPan } from "./bazi.js";
 import { paiPan as ziweiPaiPan } from "./ziwei.js";
 import { paiPan as astroPaiPan } from "./astro.js";
 
-/** Python 的 str.replace 三连（只转这三个，顺序同 Python）。 */
+/ Python 的 str.replace 三连（只转这三个，顺序同 Python）。 */
 function h(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
@@ -35,7 +35,7 @@ function f1(n) { return pyRoundN(n, 1).toFixed(1); }
 /**
  * Python 的 "%d"。
  *
- * 关键坑：Python 的 "%d" % 5.3 是 **5**（向零截断），
+ * 关键坑：Python 的 "%d" % 5.3 是 5（向零截断），
  * 而 JS 的 String(5.3) 是 "5.3"。起运虚岁本来就是小数
  * （"5.3-15.3岁"），直接拼接会多出 ".3"，整段 HTML 就对不上了。
  */
@@ -46,7 +46,7 @@ function d(n) { return String(Math.trunc(n)); }
  *
  * 与 Python 侧的 _yr 对齐：都用向下取整。
  * 虚岁本来就是整数计，写「7.3–17.3 岁」既啰嗦又没信息量。
- * 注意**不能**用 d()：d 是「向零截断」，-0.1 会得到 -0，
+ * 注意不能用 d()：d 是「向零截断」，-0.1 会得到 -0，
  * 而这里要的是「7.3 -> 7」这种向下取整。
  */
 function yr(n) {
@@ -57,10 +57,10 @@ function yr(n) {
 
 const WX_COLOR = { 木: "#5b8c5a", 火: "#c0504d", 土: "#b08d4a", 金: "#8a8f98", 水: "#4a6fa5" };
 
-/** 占星四元素的颜色，与八字五行分开 */
+/ 占星四元素的颜色，与八字五行分开 */
 const EL_COLOR = { 火: "#c0504d", 土: "#b08d4a", 风: "#4a6fa5", 水: "#3f7a52" };
 
-/** 紫微盘 4x4 地支位置：(row, col) → 地支 */
+/ 紫微盘 4x4 地支位置：(row, col) → 地支 */
 const PAN_LAYOUT = {
   "0,0": "巳", "0,1": "午", "0,2": "未", "0,3": "申",
   "1,0": "辰", "1,3": "酉",
@@ -476,6 +476,125 @@ export function renderPlain(data) {
         + "<div><b>日常做法</b>" + h(lk.日常) + "</div>"
         + "</div></div>");
     }
+    // 1.5.0 新增：紫微四块（十二宫 / 大限 / 流年 / 四化）
+    // 手写而非从 Python 转换 —— 转换后 %s、.get()、列表推导式
+    // 都会残留，46 处，改起来比重写更容易漏。
+    if (z["十二宫详批"] && z["十二宫详批"]["列表"].length) {
+      const pl = z["十二宫详批"]["列表"];
+      P.push('<details class="fold"><summary>你的十二宫'
+        + '<span class="cnt">逐宫看</span></summary><div class="fbody">'
+        + '<p class="sub2">十二宫代表人生十二个领域。'
+        + "「主星」决定这个领域的底色；宫里没有主星很常见，"
+        + "要借对宫的星来看，那不是缺陷。</p>"
+        + '<div class="pl">');
+      for (const p2 of pl) {
+        let cls = "";
+        const marks = [];
+        if (p2["是命宫"]) { cls += " ming"; marks.push("命宫"); }
+        if (p2["是身宫"]) { cls += " shen"; marks.push("身宫"); }
+        P.push('<div class="it' + cls + '"><div class="hd">'
+          + '<span class="pn">' + h(p2["宫名"]) + "</span>"
+          + '<span class="gz2">' + h(p2["干支"]) + "</span>");
+        if (marks.length) {
+          P.push('<span class="tag hi">' + h(marks.join("、")) + "</span>");
+        }
+        P.push('<span class="pc">主星 '
+          + h(p2["主星"].length ? p2["主星"].join("、") : "（空宫）")
+          + "</span></div>"
+          + '<p class="li">' + h(p2["含义"]) + "</p>");
+        if (p2["借宫"]) {
+          P.push('<p class="li"><span class="h">借对宫</span>'
+            + "本宫无主星，借「" + h(p2["借宫"]) + "」的 "
+            + h(p2["借宫主星"].length ? p2["借宫主星"].join("、") : "（对宫也空宫）")
+            + " 来论。</p>");
+        }
+        if (p2["标签"].length) {
+          const t2 = p2["标签"].map((t) => t["星"] + "=" + t["说明"]).join("；");
+          P.push('<p class="li"><span class="h">星曜</span>' + h(t2) + "</p>");
+        }
+        if (p2["留意"].length) {
+          const c2 = p2["留意"].map((c) => c["星"] + "=" + c["说明"]).join("；");
+          P.push('<p class="li warn"><span class="h">要留意</span>' + h(c2) + "</p>");
+        }
+        P.push("</div>");
+      }
+      P.push("</div></div></details>");
+    }
+
+    if (z["大限详批"] && z["大限详批"]["列表"].length) {
+      const dl = z["大限详批"]["列表"];
+      const cur = z["流年详情"] || {};
+      const curDx = cur["当前大限宫"] || "";
+      P.push('<details class="fold"><summary>你一生十二步大限'
+        + '<span class="cnt">紫微的十年分段</span></summary><div class="fbody">'
+        + '<p class="sub2">大限走的是<b>宫位</b>而不是十神 —— '
+        + "每十年重心落在哪个宫，那十年的主语就是那个宫代表的事。"
+        + "和大运是两套不同的分段方式，别混着看。</p>"
+        + '<div class="dx">');
+      for (const x of dl) {
+        const now = !!curDx && x["宫位"] === curDx;
+        P.push('<div class="it' + (now ? " now" : "") + '"><div class="hd">'
+          + '<span class="age">' + yr(x["虚岁起"]) + "–" + yr(x["虚岁止"])
+          + " 岁</span>"
+          + '<span class="pn">' + h(x["宫位"]) + "</span>"
+          + '<span class="gz2">' + h(x["干支"]) + "</span>");
+        if (now) P.push('<span class="tag hi">当前大限</span>');
+        P.push('<span class="pc">'
+          + h(x["主星"].length ? x["主星"].join("、") : "空宫")
+          + "</span></div>"
+          + '<p class="li">' + h(x["主题"]) + "</p>"
+          + '<p class="sub2">' + h(x["宫位含义"]) + "</p></div>");
+      }
+      P.push("</div></div></details>");
+    }
+
+    if (z["流年详情"]) {
+      const ln = z["流年详情"];
+      P.push('<details class="fold"><summary>今年的落点'
+        + '<span class="cnt">' + h(String(ln["年"])) + "年 " + h(String(ln["干支"]))
+        + '</span></summary><div class="fbody">'
+        + '<div class="info" style="margin:0 0 10px">'
+        + "<span>虚岁 <b>" + h(String(ln["虚岁"])) + "</b></span>"
+        + "<span>流年命宫 <b>" + h(ln["流年命宫名"]) + h(ln["流年命宫"])
+        + "</b></span>"
+        + "<span>当前大限 <b>" + h(ln["当前大限"]) + "</b></span></div>");
+      if (ln["命宫含义"]) {
+        P.push('<p class="li"><span class="h">今年重心</span>'
+          + h(ln["流年命宫名"]) + " —— " + h(ln["命宫含义"]) + "</p>");
+      }
+      if (ln["大限主题"]) {
+        P.push('<p class="li"><span class="h">大限主线</span>'
+          + h(ln["大限主题"]) + "</p>");
+      }
+      P.push('<p class="sub2">' + h(ln["说明"]) + "</p>");
+      P.push("</div></details>");
+    }
+
+    if (z["四化详批"] && z["四化详批"].length) {
+      P.push('<details class="fold"><summary>四化落在哪'
+        + '<span class="cnt">禄权科忌</span></summary><div class="fbody">'
+        + '<p class="sub2">生年四化是「哪颗星被强化」，'
+        + "它落在哪个宫，那一块就跟着强化。化忌不是坏事，"
+        + "是这辈子要学的课题。</p>"
+        + '<div class="sh">');
+      for (const h2 of z["四化详批"]) {
+        const cls = h2["化"] === "化忌" ? " ji" : "";
+        P.push('<div class="it' + cls + '"><div class="hd">'
+          + '<span class="pn">' + h(h2["化"]) + "</span>"
+          + '<span class="gz2">' + h(h2["星"]) + "</span>");
+        if (h2["宫位"]) {
+          P.push('<span class="tag">落' + h(h2["宫位"]) + "宫</span>");
+        }
+        P.push('<span class="pc">' + h(h2["角色"]) + "</span></div>"
+          + '<p class="li">' + h(h2["要点"]) + "</p>");
+        if (h2["宫位含义"]) {
+          P.push('<p class="sub2">该宫管的是：' + h(h2["宫位含义"]) + "</p>");
+        }
+        P.push("</div>");
+      }
+      P.push("</div></div></details>");
+    }
+
   }
 
   if (data.占星) {
@@ -575,7 +694,7 @@ export function renderGlossary() {
 
 export { headline };
 
-/** 网页版唯一入口：与 app.html 里 runPython 的返回值结构保持一致。 */
+/ 网页版唯一入口：与 app.html 里 runPython 的返回值结构保持一致。 */
 export function run(v) {
   const data = build({
     sex: v.sex || "男",
