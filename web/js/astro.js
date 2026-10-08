@@ -6,7 +6,7 @@
 
 import {
   PLANETS, planetGeocentricLongitude,
-  solarToLunarTuple, lunarToSolar, formatLunar,
+  solarToLunarTuple, lunarToSolar, formatLunar, ZHI,
 } from "./almanac.js";
 import { pyMod, pyRound, J2000, bjUnix, jdFromBjUnix, pyRoundN } from "./kernel.js";
 
@@ -93,10 +93,15 @@ export function paiPan(opt) {
     throw new Error("必须提供 solar 或 lunar");
   }
 
+  // 出生时刻：hour 优先；只给 shichen 时按时辰起始钟点（子=0、丑=2……）。
+  // 原先这里没有 shichen，render.js 一律传 hour || [12,0]，
+  // 于是「只点时辰」的用户，占星按中午算，跟八字/紫微对不上。
   let hh = 12, mm = 0;
   if (opt.hour != null) {
     if (typeof opt.hour === "number") { hh = opt.hour; mm = 0; }
     else { hh = opt.hour[0]; mm = opt.hour[1]; }
+  } else if (opt.shichen) {
+    hh = pyMod(2 * ZHI.indexOf(opt.shichen), 24); mm = 0;
   }
   const jdUt = jdFromBjUnix(bjUnix(y, m, d, hh, mm, 0));
 

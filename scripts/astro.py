@@ -18,7 +18,7 @@ import math
 import sys
 
 from almanac import (PLANETS, planet_geocentric_longitude, jd_from_datetime, J2000,
-                     beijing, solar_to_lunar, format_lunar, setup_console)
+                     beijing, solar_to_lunar, format_lunar, setup_console, ZHI)
 
 SIGNS = ("白羊", "金牛", "双子", "巨蟹", "狮子", "处女",
          "天秤", "天蝎", "射手", "摩羯", "水瓶", "双鱼")
@@ -80,8 +80,8 @@ def aspects_between(lon1, lon2):
     return None
 
 
-def pai_pan(solar=None, lunar=None, leap=False, hour=None, sex="男", lat=None, lon=None,
-            place=None):
+def pai_pan(solar=None, lunar=None, leap=False, hour=None, shichen=None, sex="男",
+            lat=None, lon=None, place=None):
     if solar:
         y, m, d = solar
         lunar_info = solar_to_lunar(y, m, d)
@@ -94,10 +94,16 @@ def pai_pan(solar=None, lunar=None, leap=False, hour=None, sex="男", lat=None, 
     else:
         raise ValueError("必须提供 --solar 或 --lunar")
 
+    # 出生时刻：hour 优先；只给 shichen 时按时辰的起始钟点（子=0、丑=2……）。
+    # 原先这里没有 shichen 参数，oracle.build() 传的是 hour or (12, 0) ——
+    # 于是「只点时辰、不填时间」的用户，占星盘一律按中午 12 点算，
+    # 与八字/紫微拿到的出生时刻对不上。同一个盘里三套时间，结论自然矛盾。
     hh = 12
     mm = 0
     if hour is not None:
         hh, mm = (hour, 0) if isinstance(hour, int) else hour
+    elif shichen is not None:
+        hh, mm = 2 * ZHI.index(shichen) % 24, 0
     dt = beijing(y, m, d, hh, mm)
     jd_ut = jd_from_datetime(dt)
 

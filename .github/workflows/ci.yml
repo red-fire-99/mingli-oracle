@@ -47,6 +47,11 @@ jobs:
       - name: 扫敏感信息
         run: python web/check_secrets.py
 
+      # 扫描器自己也可能是坏的 —— 一个把所有规则写坏的扫描器
+      # 同样会输出「未发现敏感信息」。这条确认它真的会拦。
+      - name: 敏感信息扫描器自检
+        run: python web/test_secret_scanner.py
+
       # 静态检查抓不到「静态看着对、实际跑不起来」。历史上两次线上事故
       # 都是这个形态（缺 pyodide.asm.js、进度条永远停在 3%）。
       # 这里把产物里的引擎抠出来在 Node 里真跑一遍。
@@ -76,6 +81,22 @@ jobs:
       # 含 render 层：HTML 逐字比对，能抓出「值对了但拼错位置」的错误。
       - name: Python ↔ JS 引擎对拍
         run: python web/diff_py_js.py --layer all
+
+      # 上面那 512 个用例**全部走 birthTime**，一个都没走 shichen
+      #（页面上点十二时辰格子那条路）。曾因此漏掉一个时辰映射 off-by-one，
+      # 而「只知道大概时辰」是最常见的用法。这条专门覆盖它。
+      - name: 时辰路径对拍
+        run: python web/check_shichen_map.py && python web/check_shichen_js.py
+
+      # pyRoundN 的平局分支只在「值恰好落在十进制平局点」时触发，
+      # 真实数据里极罕见 —— 512 个排盘用例全都可能绕过去。
+      - name: 舍入语义对拍
+        run: python web/check_round.py
+
+      # 命理以北京时间为准，但浏览器跑在用户本机时区。
+      # 一处 new Date() 就会让非 UTC+8 的用户静默算错。
+      - name: 时区无关性
+        run: python web/check_timezone.py
 
       - uses: actions/upload-pages-artifact@v3
         with:

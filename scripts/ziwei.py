@@ -115,9 +115,10 @@ def pai_pan(solar=None, lunar=None, leap=False, hour=None, shichen=None, sex="�
     if hour is not None:
         hh = hour if isinstance(hour, int) else hour[0]
     elif shichen is not None:
-        hh = (2 * (ZHI.index(shichen) - 1)) % 24
-        if shichen == "子":
-            hh = 0
+        # 时辰 → 该时辰的起始钟点（子=0、丑=2、寅=4……）
+        # 原先写成 2 * (index - 1) % 24，子时算出 22 点又被单独兜回 0，
+        # 其余时辰一律偏前一格。详见 bazi.py 同一处的说明。
+        hh = 2 * ZHI.index(shichen) % 24
     else:
         hh = None
         warnings.append("未提供出生时刻，按子时（0点）排盘，结果可能偏差，请补全时辰。")

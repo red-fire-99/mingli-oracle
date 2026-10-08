@@ -60,8 +60,12 @@ def build(solar=None, lunar=None, leap=False, hour=None, shichen=None, sex="男"
         out["紫微"] = M_ziwei.pai_pan(solar=solar, lunar=lunar, leap=leap, hour=hour,
                                       shichen=shichen, sex=sex, place=place, year=year)
     if only in (None, "astro"):
+        # 传 hour 与 shichen 两者，由 astro.pai_pan 决定优先级。
+        # 原先写死 hour or (12, 0)：用户只点时辰不填时间时，
+        # 八字/紫微按真实时辰算、占星却按中午 12 点算 —— 同一张盘里三个时间。
         out["占星"] = M_astro.pai_pan(solar=solar, lunar=lunar, leap=leap,
-                                      hour=hour or (12, 0), sex=sex, lat=lat, lon=lon, place=place)
+                                      hour=hour, shichen=shichen, sex=sex,
+                                      lat=lat, lon=lon, place=place)
     return out
 
 

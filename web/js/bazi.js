@@ -16,7 +16,8 @@ import {
   hourGz, shichenOf, solarToLunarTuple, lunarToSolar, formatLunar,
   trueSolarTime, jdFromBj, jieEventsAround, ganzhiHourLabel, nayinOf,
 } from "./almanac.js";
-import { pyMod, pyRound, bjUnix, bjCivilFromUnix, jdn, civilFromJdn, pyRoundN } from "./kernel.js";
+import { pyMod, pyRound, bjUnix, bjCivilFromUnix, jdn, civilFromJdn,
+         pyRoundN, fsum } from "./kernel.js";
 
 const WUXING = "木火土金水";
 
@@ -113,8 +114,11 @@ export function paiPan(opt) {
   if (opt.hour) {
     hh = opt.hour[0]; mm = opt.hour[1];
   } else if (opt.shichen) {
-    hh = pyMod(2 * (ZHI.indexOf(opt.shichen) - 1), 24); mm = 0;
-    if (opt.shichen === "子") hh = 0;
+    // 时辰 → 该时辰的起始钟点：子=0、丑=2、寅=4……
+    // 原先写的是 2 * (index - 1) % 24，子时算出 22 点又被单独兜回 0，
+    // 其余时辰一律偏前一格（丑时报子时、午时报巳时）。
+    // 详见 scripts/bazi.py 同一处的说明。
+    hh = pyMod(2 * ZHI.indexOf(opt.shichen), 24); mm = 0;
   }
 
   // 3. 真太阳时校正
@@ -204,9 +208,11 @@ export function paiPan(opt) {
       score[wuxingOfGan(c)] += CANG_WEIGHT[i] * ZHI_POS_WEIGHT[pos];
     });
   }
-  let total = 0;
-  for (const w of WUXING) total += score[w];
-  if (!total) total = 1.0;
+  // 补偿求和，不是朴素循环。Python 3.12 的 sum() 用了 Neumaier 算法，
+  // 朴素循环会差 1 ulp，进而把五行百分比从 31.2 推到 31.3。
+  // 注意 WUXING 是**字符串**（"木火土金水"），没有 .map ——
+  // 先用 Array.from 摊成数组。
+  const total = fsum(Array.from(WUXING, (w) => score[w])) || 1.0;
   const wuxingPct = {};
   for (const w of WUXING) wuxingPct[w] = pyRoundN(score[w] / total * 100, 1);
 

@@ -38,6 +38,37 @@ from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 
 
+def fsum(values):
+    """浮点补偿求和（Neumaier 算法）。
+
+    为什么不能直接用内置 ``sum()``
+    ------------------------------
+    CPython 3.12 给 ``sum()`` 对 float 加了 Neumaier 补偿，3.8/3.11 仍是朴素循环。
+    两者结果会差 1 ulp，而下游会把它放大：
+
+        五行力量 = score / total * 100
+        朴素循环 total = 10.239999999999998  ->  水 = 31.250000000000007  ->  显示 31.3%
+        补偿求和 total = 10.24               ->  水 = 31.25              ->  显示 31.2%
+
+    两个后果：
+      1. 同一份代码在 3.8 与 3.12 上算出不同的五行百分比
+      2. JS 移植无法对上 —— JS 只有朴素循环，除非也实现补偿
+
+    所以这里显式实现，把行为固定下来、与 Python 版本无关。
+    JS 侧 kernel.js 有一份逐行对应的实现，对拍保证两者一致。
+    """
+    s = 0.0
+    c = 0.0
+    for x in values:
+        t = s + x
+        if abs(s) >= abs(x):
+            c += (s - t) + x
+        else:
+            c += (x - t) + s
+        s = t
+    return s + c
+
+
 def setup_console():
     """把 stdout/stderr 统一成 UTF-8，避免中文输出乱码。
 

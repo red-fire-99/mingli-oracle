@@ -21,7 +21,7 @@ from almanac import (
     GAN, ZHI, GAN_WUXING, ZHI_WUXING, GAN_YINYANG, ZHI_CANGGAN,
     beijing, day_gz_index, month_gz, year_gz, year_gz_index, hour_gz, shichen_of,
     gz_from_index, ganzhi_hour_label, jie_events_around, solar_to_lunar,
-    lunar_to_solar, format_lunar, true_solar_time, nayin_of, setup_console,
+    lunar_to_solar, format_lunar, true_solar_time, nayin_of, setup_console, fsum,
 )
 
 WUXING = "木火土金水"
@@ -160,9 +160,14 @@ def pai_pan(solar=None, lunar=None, leap=False, hour=None, shichen=None, sex="�
     if hour is not None:
         hh, mm = hour
     elif shichen is not None:
-        hh, mm = 2 * (ZHI.index(shichen) - 1) % 24, 0
-        if shichen == "子":
-            hh = 0
+        # 时辰 → 该时辰的**起始钟点**：子=0点、丑=2点、寅=4点……
+        #
+        # 这里原先写的是 2 * (ZHI.index(shichen) - 1) % 24，那是错的：
+        # 子时 index=0，算出 (0-1)*2 % 24 = 22 点，于是除被单独兜回 0 的子时外，
+        # **每个时辰都被算成了前一个时辰**（丑时报子时、午时报巳时……）。
+        # 结果是「知道大概时辰、不确定几点」这种最常见的用法整体偏一格，
+        # 时柱、命宫、主星全错，而页面上完全看不出来。
+        hh, mm = 2 * ZHI.index(shichen) % 24, 0
     else:
         hh = mm = None
 
@@ -239,7 +244,7 @@ def pai_pan(solar=None, lunar=None, leap=False, hour=None, shichen=None, sex="�
         for i, c in enumerate(ZHI_CANGGAN[z]):
             w = CANG_WEIGHT[i] * ZHI_POS_WEIGHT[pos]
             score[wuxing_of_gan(c)] += w
-    total = sum(score.values()) or 1.0
+    total = fsum(score.values()) or 1.0
     wuxing_pct = {w: round(v / total * 100, 1) for w, v in score.items()}
 
     # 7. 日主强弱（同党=印+比劫；异党=食伤+财+官杀）

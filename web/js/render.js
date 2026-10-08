@@ -11,6 +11,7 @@
      本文件用到的都是 int，故无影响；真出现 float 请用 pyFloatStr
    =================================================================== */
 
+import { pyRoundN } from "./kernel.js";
 import { STAR_BRIEF } from "./ziwei.js";
 import { baziPlain, ziweiPlain, astroPlain, headline, GLOSSARY } from "./plain.js";
 import { paiPan as baziPaiPan } from "./bazi.js";
@@ -22,8 +23,14 @@ function h(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-/** Python "%.1f" —— 用 toFixed，注意 Python 对负零给 '-0.0'，JS 也一样。 */
-function f1(n) { return n.toFixed(1); }
+/**
+ * Python 的 "%.1f"。
+ *
+ * 必须走 pyRoundN：toFixed 是「平局远离零」（31.25 -> "31.3"），
+ * Python 的 % 格式化是「平局取偶」（round(31.25, 1) -> 31.2）。
+ * 五行百分比条上真实撞到过：HTML 逐字比对报 31.2% vs 31.3%。
+ */
+function f1(n) { return pyRoundN(n, 1).toFixed(1); }
 
 /**
  * Python 的 "%d"。
@@ -65,8 +72,10 @@ export function build(o) {
                             year: o.year });
   }
   if (only === null || only === "astro") {
-    // Python: hour or (12, 0) —— 缺时刻时占星用中午
-    out.占星 = astroPaiPan({ solar, lunar, leap, hour: hour || [12, 0], shichen: null,
+    // hour 与 shichen 都传下去，由 astro 决定优先级。
+    // 原先写死 hour || [12, 0]：只点时辰不填时间时，占星按中午算，
+    // 而八字/紫微按真实时辰 —— 同一张盘里三个时间，结论自然互相矛盾。
+    out.占星 = astroPaiPan({ solar, lunar, leap, hour, shichen,
                               sex, lat: o.lat, lon: o.lon, place });
   }
   return out;

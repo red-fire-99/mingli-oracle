@@ -101,8 +101,9 @@ export function paiPan(opt) {
   if (opt.hour != null) {
     hh = typeof opt.hour === "number" ? opt.hour : opt.hour[0];
   } else if (opt.shichen) {
-    hh = pyMod(2 * (ZHI.indexOf(opt.shichen) - 1), 24);
-    if (opt.shichen === "子") hh = 0;
+    // 时辰 → 起始钟点（子=0、丑=2、寅=4……）。原写法偏前一格，
+    // 详见 scripts/ziwei.py 同一处的说明。
+    hh = pyMod(2 * ZHI.indexOf(opt.shichen), 24);
   } else {
     warnings.push("未提供出生时刻，按子时（0点）排盘，结果可能偏差，请补全时辰。");
   }

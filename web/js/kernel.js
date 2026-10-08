@@ -1,3 +1,23 @@
+/**
+ * 浮点补偿求和（Neumaier 算法）—— Python fsum() 的逐行对应。
+ *
+ * 为什么不能用朴素循环：CPython 3.12 给内置 sum() 加了这个算法，
+ * 3.8/3.11 没有。差 1 ulp 会被下游放大成可见差异：
+ *   朴素循环 total=10.239999999999998 -> 水 31.250000000000007 -> 显示 31.3%
+ *   补偿求和 total=10.24              -> 水 31.25             -> 显示 31.2%
+ * 也就是说：不实现补偿，同一份代码在 3.8 与 3.12 上会给出不同的五行百分比。
+ */
+export function fsum(values) {
+  let s = 0.0, c = 0.0;
+  for (const x of values) {
+    const t = s + x;
+    if (Math.abs(s) >= Math.abs(x)) c += (s - t) + x;
+    else c += (x - t) + s;
+    s = t;
+  }
+  return s + c;
+}
+
 /* ===================================================================
    kernel.js —— Python 语义在 JS 上的精确复刻
    ===================================================================
@@ -62,23 +82,54 @@ export function norm360(x) {
 }
 
 /**
- * Python 的 round(x, ndigits)：对**精确二进制值**做十进制舍入。
+ * Python 的 round(x, ndigits)：对**精确二进制值**做十进制舍入，且**平局取偶**。
  *
- * 不要用 pyRound(x * 10^n) / 10^n 代替 —— 乘法本身会丢精度：
- *   0.975 的真实 double 是 0.974999999999999977795...
- *   x*100 会被舍入成恰好 97.5，于是走进「平局」分支得 98；
- *   而 Python 看精确值知道它略低于 0.975，得 97。差 0.01。
- * 这个坑在对拍里真实出现过（占星相位「强度」字段 0.97 vs 0.98）。
+ * 两个坑，都要处理：
  *
- * toFixed 按规范是对精确值做正确舍入（ties 远离零），
- * 与 Python 的 ties-to-even 仅在「恰好 .5」时不同 —— 而由角度算出的浮点数
- * 恰好落在 .5 上的概率极低，差异可以接受；真要严格可在 toFixed 之后
- * 再检测平局并改成偶数。
+ * 1) 不要用 pyRound(x * 10^n) / 10^n —— 乘法本身会丢精度：
+ *    0.975 的真实 double 是 0.974999999999999977795...
+ *    x*100 会被舍入成恰好 97.5，于是走进「平局」分支得 98；
+ *    而 Python 看精确值知道它略低于 0.975，得 97。差 0.01。
+ *    （占星相位「强度」字段真实出现过这个 bug：0.97 被算成 0.98）
+ *
+ * 2) toFixed 是「平局远离零」，Python 是「平局取偶」：
+ *    toFixed(31.25, 1) = "31.3"，但 Python round(31.25, 1) = 31.2。
+ *    （五行百分比条真实出现过：31.2% vs 31.3%）
+ *
+ * 判断「是否恰好落在平局点」不能靠 x*10^n —— 乘法会把
+ * 0.9749999… 舍成恰好 97.5，掩盖真实情况。用 toPrecision(21) 取
+ * double 的精确十进制展开，看第 nd+1 位是不是 5 且其后全 0。
  */
 export function pyRoundN(x, nd) {
   if (!isFinite(x)) return x;
   if (nd === undefined || nd === null) return pyRound(x);
-  return Number(x.toFixed(nd));
+
+  const r = Number(x.toFixed(nd));
+
+  // 精确十进制展开：31.25 -> "31.250000000000000000000"
+  const ex = x.toPrecision(21);
+  const neg = ex.charCodeAt(0) === 0x2d;            // '-'
+  const dot = ex.indexOf(".");
+  const intDigits = neg ? ex.slice(1, dot) : ex.slice(0, dot);
+  const frac = dot < 0 ? "" : ex.slice(dot + 1);
+
+  if (nd >= frac.length) return r;                  // 保留位已覆盖全部小数位
+  if (frac[nd] !== "5") return r;                   // 不是平局点
+  for (let i = nd + 1; i < frac.length; i++) {
+    if (frac[i] !== "0") return r;                  // 后面还有非零位 -> 不是恰好平局
+  }
+
+  // 恰好平局：按 round-half-even 取偶。
+  // toFixed 已经「远离零」地舍过一遍了，所以当保留位为**偶数**时
+  // 需要往回收一格（正数减、负数加）—— 负数也要「往内」，
+  // 因为远离零对负数就是变得��负。
+  const keep = nd === 0 ? intDigits : frac.slice(0, nd);
+  const lastDigit = Number(keep[keep.length - 1] || 0);
+  if (lastDigit % 2 === 0) {
+    const step = Math.pow(10, -nd);
+    return Number((r + (neg ? step : -step)).toFixed(nd));
+  }
+  return r;
 }
 
 /* ---------------- 日期：公历 ↔ 儒略日（整数 JDN） ---------------- */
