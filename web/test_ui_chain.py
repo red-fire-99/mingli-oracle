@@ -84,6 +84,14 @@ function mkEl(tag, id) {
       for (const fn of evs.slice()) fn(ev || { type: t, preventDefault(){}, target: this });
       return true;
     },
+    // 页面里用 dispatchEvent(new Event("change")) 把 change 转发给
+    // 另一个元素（搜索结果 -> 三级下拉同步）。stub 必须支持，
+    // 否则这段同步代码一次都跑不到 —— 而它是「界面上显示 A、
+    // 经纬度却是 B」这类自相矛盾的来源。
+    dispatchEvent(ev) {
+      const t = (ev && ev.type) || "change";
+      return this.fire(t, ev && ev.type ? ev : { type: t, preventDefault(){}, target: this });
+    },
     hasListener(t) { return (this._listeners[t] || []).length > 0; },
     appendChild(c) { this.children.push(c); c.parent = this;
                      if (this.tagName === "SELECT") this._opts.push(c);
@@ -107,6 +115,18 @@ function mkEl(tag, id) {
       self._opts.length = 0;
       for (const c of self.children) self._opts.push(c);
       return self._opts;
+    },
+    // 真 DOM 语义：selectedIndex 跟着 value 走。
+    // 页面用它取「当前选中项的标签」（optText()），stub 不实现的话
+    // 那里恒为 -1，报出来的错却是「页面逻辑不对」——方向就反了。
+    get selectedIndex() {
+      const opts = this.options;
+      for (let i = 0; i < opts.length; i++) if (opts[i].value === this.value) return i;
+      return -1;
+    },
+    set selectedIndex(i) {
+      const opts = this.options;
+      if (opts[i]) this.value = opts[i].value;
     },
     set innerHTML(v) { this._html = String(v); this.children = []; this._opts = [];
                      // 真 DOM：清空 select 的 options 会让它回到「无选中项」
@@ -260,10 +280,24 @@ function drain() {
 }
 
 const win = { document: doc, location: { href: "https://example.invalid/", pathname: "/" } };
+// 页面里用了 new Event("change") + dispatchEvent 来做「搜索结果 ->
+// 三级下拉」的同步。Node 有全局 Event，但浏览器里构造出来的事件
+// 带 target 等字段；这里显式给一份最小实现，让 dispatchEvent 能被测到。
+class EventShim {
+  constructor(type, init) {
+    this.type = type;
+    this.defaultPrevented = false;
+    this.key = (init && init.key) || "";
+    Object.assign(this, init || {});
+  }
+  preventDefault() { this.defaultPrevented = true; }
+  stopPropagation() {}
+}
 const ctx = vm.createContext({
   window: win, document: doc, location: win.location, console,
   Date, Math, JSON, parseInt, parseFloat, isFinite, isNaN,
   Array, Object, String, Number, Boolean, Error, Set, Map, Symbol, RegExp,
+  Event: EventShim,
   setTimeout: setTimeoutShim, clearTimeout() {}, requestAnimationFrame(fn) { fn(); },
 });
 ctx.globalThis = ctx;
@@ -441,32 +475,118 @@ else {
 if (!search) fail("缺少 #citySearch");
 else if (!city) fail("缺少 #city");
 else {
-  search.value = "bj";
-  search.fire("input");
-  const opts = city.children || [];
-  // 选项 value 是 "省|市|区县|lon|lat"
-  const hit = opts.filter(o => (o.value || "").split("|")[2] === "北京市");
-  if (!hit.length) {
+  const val = o => (o.value || "").split("|");
+  const names = () => (city.children || []).map(o => (o.value || "").split("|")[2]);
+
+  // 1) 拼音首字母：bj 必须能命中北京
+  //
+  //    这一条曾经反复栽：先是拼音表没覆盖「京」字，后来是音节没分隔
+  //    导致 pyInitials 退化成单字「b」。两次症状完全一样
+  //    （界面毫无异常、搜索静默失效），只有直接断言命中才能拦住。
+  search.value = "bj"; search.fire("input");
+  let opts = city.children || [];
+  if (!opts.filter(o => val(o)[2] === "北京市").length) {
     fail("拼音首字母搜「bj」找不到北京（命中 " + opts.length + " 项）");
-    opts.slice(0, 5).forEach(o => console.log("        命中项: " + o.value));
+    opts.slice(0, 5).forEach(o => console.log("        " + o.textContent));
   } else {
-    console.log("  OK   拼音首字母搜索可用（bj → 北京，命中 " + hit.length + " 项）");
+    console.log("  OK   拼音首字母搜索（bj → 北京，命中 " + opts.length + " 项）");
   }
-  // 搜中文名也要能命中「市自身」—— 广州在数据里是市节点的 __own__，
-  // 不是任何区县的父级，只列区县的话这条搜索会一条不中
-  search.value = "广州";
-  search.fire("input");
-  const gz = (city.children || []).filter(o => (o.value || "").split("|")[2] === "广州市");
-  if (!gz.length) fail("搜「广州」找不到广州市（城市自身条目被漏掉）");
+
+  // 1b) 多音字拼音：这三个逐字查全是错的，必须走词组表
+  //     重庆 chongqing（逐字查会得到 zhongqing）
+  //     厦门 xiamen（逐字查会得到 shamen）
+  //     蚌埠 bengbu（逐字查会得到 bangbu）
+  if (win.MingLiPyTest) {
+    for (const [nm, want] of [["重庆市", "chongqingshi"], ["厦门市", "xiamenshi"],
+                              ["蚌埠市", "bengbushi"], ["漯河市", "luoheshi"]]) {
+      const got = win.MingLiPyTest(nm);
+      if (got !== want) fail("「" + nm + "」拼音应为 " + want + "，实际 " + got);
+    }
+    if (win.MingLiIniTest("北京市") !== "bjs")
+      fail("「北京市」首字母应为 bjs，实际 " + win.MingLiIniTest("北京市"));
+    console.log("  OK   多音字拼音正确（重庆/厦门/蚌埠/漯河），首字母 bjs");
+  } else {
+    fail("页面没暴露 MingLiPyTest，无法验证拼音");
+  }
+
+  // 2) 层级感知：打「北京」必须能列出北京的区。
+  //    这是这次重做的核心 —— 旧实现打「北京」只出 1 条「北京市」，
+  //    底下的区一条都不出，用户得再打一次区名才找得到。
+  search.value = "北京"; search.fire("input");
+  opts = city.children || [];
+  const bjDist = opts.filter(o => val(o)[0] === "北京市" && val(o)[2] !== "北京市");
+  if (bjDist.length < 10)
+    fail("搜「北京」只列出 " + opts.length + " 条，其中北京的区县 " + bjDist.length
+         + " 条 —— 应当展开北京的区");
+  else console.log("  OK   层级感知：搜「北京」列出 " + opts.length
+    + " 条，含北京的区县 " + bjDist.length + " 个");
+
+  // 3) 相关度排序：搜区名时，精确同名必须排第一
+  search.value = "东城区"; search.fire("input");
+  opts = city.children || [];
+  if (!opts.length) fail("搜「东城区」无结果");
+  else if (val(opts[0])[2] !== "东城区")
+    fail("搜「东城区」第一条不是精确同名，是「" + val(opts[0])[2] + "」");
+  else console.log("  OK   精确同名排第一（搜「东城区」→ "
+    + opts[0].textContent.replace(/（.*/, "") + "）");
+
+  // 4) 重名条目要能按省市分辨，且排序不该是省份顺序
+  search.value = "鼓楼"; search.fire("input");
+  opts = city.children || [];
+  if (opts.length < 2) fail("搜「鼓楼」应命中多个（南京/徐州/福州/开封），只出了 " + opts.length + " 条");
+  else {
+    const labels = opts.slice(0, 4).map(o => o.textContent.replace(/（.*/, ""));
+    const distinct = new Set(labels).size;
+    if (distinct < 2) fail("重名条目没有用省市区分开：" + labels.join(" / "));
+    else console.log("  OK   重名条目按省市区分：" + labels.slice(0, 3).join(" / "));
+  }
+
+  // 5) 搜市名要能命中市自身（广州在数据里是市节点的 __own__）
+  search.value = "广州"; search.fire("input");
+  if (!(city.children || []).filter(o => val(o)[2] === "广州市").length)
+    fail("搜「广州」找不到广州市（市自身条目被漏掉）");
   else console.log("  OK   搜城市名能找到该市自身条目");
 
-  // 全拼容错
-  search.value = "urumqi";
-  search.fire("input");
+  // 6) 全拼容错
+  search.value = "urumqi"; search.fire("input");
   const ur = (city.children || []).length;
+  if (!ur) fail("全拼搜索 urumqi 无结果");
+  else console.log("  OK   全拼容错（urumqi → " + ur + " 项）");
+
+  // 7) 搜索结果必须同步回三级下拉 ——
+  //    否则界面上会出现「下拉显示 A、经纬度却是 B 的值」
+  search.value = "东城区"; search.fire("input");
+  opts = city.children || [];
+  if (opts.length) {
+    city.value = opts[0].value;
+    city.fire("change");
+    const ps = byId.get("provSel"), cs = byId.get("citySel"), ds = byId.get("distSel");
+    const dTxt = ds.options[ds.selectedIndex] ? ds.options[ds.selectedIndex].textContent : "";
+    if (ps.value !== "北京市" || cs.value !== "北京市" || dTxt.indexOf("东城区") < 0)
+      fail("选搜索结果后三级下拉没同步：省=" + ps.value + " 市=" + cs.value + " 区=" + dTxt);
+    else if (!byId.get("lon").value)
+      fail("选搜索结果后经纬度是空的");
+    else console.log("  OK   选搜索结果后三级下拉同步到 " + ps.value + " / " + cs.value
+      + " / " + dTxt.replace(/（.*/, "") + "，经度 " + Number(byId.get("lon").value).toFixed(4));
+  }
+
+  // 8) 回车选第一条
+  search.value = "朝阳区"; search.fire("input");
+  opts = city.children || [];
+  if (opts.length && search.hasListener("keydown")) {
+    const want = val(opts[0])[2];
+    search.fire("keydown", { type: "keydown", key: "Enter", preventDefault() {} });
+    const dTxt = byId.get("distSel").options[
+      byId.get("distSel").selectedIndex].textContent;
+    if (dTxt.indexOf(want) < 0)
+      fail("回车没有选中第一条：期望含「" + want + "」，实际区=" + dTxt);
+    else console.log("  OK   回车选中第一条（" + want + "）");
+  } else if (opts.length) {
+    fail("搜索框没有绑 keydown，回车选不了");
+  }
+
   search.value = "";
   search.fire("input");
-  if (ur) console.log("  OK   全拼容错可用（urumqi → " + ur + " 项）");
 }
 
 // 回到标准示例再提交

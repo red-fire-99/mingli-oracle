@@ -129,10 +129,77 @@ def walk(adcode, level, province, city, out, stats):
             stats[lvl] = stats.get(lvl, 0) + 1
 
 
+def all_names(provs):
+    """遍历树里所有会被搜索到的名字（省 / 市 / 区县）。"""
+    names = set(provs.keys())
+    for pn, cities in provs.items():
+        names.add(pn)
+        for cn, node in cities.items():
+            names.add(cn)
+            for k in node:
+                if k != "__own__":
+                    names.add(k)
+    return sorted(names)
+
+
+# pypinyin 自己的一处已知错误：词组词典把「漯河」记成了 ta he，
+# 而单字「漯」查出来是 luo（正确）。全国只有 1 条地名受影响。
+# 硬编码在这里而不是悄悄让它错 —— 拼音搜索错一次就少一个人找得到自己的出生地。
+PINYIN_FIX = {"漯河市": "luo he shi"}
+
+
+def build_pinyin(provs):
+    """生成拼音表：逐字一张 + 多音字词组覆盖一张。
+
+    为什么要生成而不是手写
+    -------------------
+    手写过一版272 字的表，实测只覆盖 16% 的地名 ——
+    剩下 84% 的名字里含未收录的字，拼音搜索等于对它们无效。
+    而且逐字读音对多音字是错的：
+
+        重庆市   逐字查 -> zhongqingshi（错）  词组查 -> chongqingshi
+        厦门市   逐字查 -> shamenshi（错）      词组查 -> xiamenshi
+        六安市   逐字查 -> liuanshi（错）      词组查 -> luanshi
+
+    所以：每个**完整地名**查一次词组拼音，和逐字拼接不一致的
+    记成覆盖项。这样既省空间（64 条覆盖 vs 3200 条全存），
+    又让多音字正确。
+    """
+    try:
+        from pypinyin import lazy_pinyin, Style
+    except ImportError:
+        print("需要 pypinyin：py -m pip install pypinyin", file=sys.stderr)
+        return None, None
+
+    names = all_names(provs)
+    chars = sorted(set("".join(names)))
+
+    char_py = {}
+    for c in chars:
+        p = lazy_pinyin(c, style=Style.NORMAL)
+        char_py[c] = (p[0] if p else "") or ""
+
+    # 音节之间用空格隔开，页面据此切音节算首字母缩写。
+    # 连写（beijingshi）里找不到音节边界，首字母会退化成单��� "b"，
+    # 症状是搜「bj」「xa」「cq」全部 0 条而界面毫无异常。
+    poly = {}
+    for n in names:
+        phrase = " ".join(lazy_pinyin(n, style=Style.NORMAL))
+        concat = " ".join(char_py.get(c, "") for c in n).strip()
+        if phrase.strip() != concat:
+            poly[n] = phrase.strip()
+    for n, fixed in PINYIN_FIX.items():
+        poly[n] = fixed
+
+    return char_py, poly
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description="抓取全国行政区划经纬度")
     p.add_argument("--out", default=OUT)
     p.add_argument("--no-cache", action="store_true")
+    p.add_argument("--no-pinyin", action="store_true",
+                   help="不生成拼音表（不推荐：搜索会退化）")
     a = p.parse_args(argv)
 
     print("抓取行政区划经纬度（DataV.GeoAtlas）\n")
@@ -172,8 +239,19 @@ def main(argv=None):
                "coord": "center = 行政中心，非几何质心",
                "provinces": out}
 
-    io.open(a.out, "w", encoding="utf-8").write(
+    if not a.no_pinyin:
+        char_py, poly = build_pinyin(out)
+        if char_py is None:
+            return 2
+        payload["py"] = char_py
+        payload["poly"] = poly
+
+    io.open(a.out, "w", encoding="utf-8", newline="\n").write(
         json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
+
+    if not a.no_pinyin:
+        print("  拼音：逐字表 %d 字，多音字覆盖 %d 条"
+              % (len(payload["py"]), len(payload["poly"])))
 
     n_prov = len(out)
     n_city = sum(len(v) for v in out.values())

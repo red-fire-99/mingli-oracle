@@ -32,7 +32,7 @@ EXPECT_MODULES = ["kernel", "almanac", "ziwei", "plain", "bazi", "astro",
                   "render", "engine"]
 
 PLACEHOLDERS = ["/*__MINGLI_ENGINE__*/", "__ENGINE_VERSION__", "/*__ORACLE_CSS__*/",
-                "/*__MINGLI_REGIONS__*/"]
+                "/*__MINGLI_REGIONS__*/", "/*__MINGLI_PY__*/"]
 
 # 本机痕迹与凭据：进 CI 就等于进公网，必须拦住
 FORBIDDEN = ["cuiyuxin", "C:/Users", "C:\\Users", ".workbuddy-ai",
@@ -201,6 +201,59 @@ def main():
                "lon=%r" % (lon,))
         except Exception as e:
             ck("出生地数据可解析", False, str(e)[:80])
+
+    # 拼音表必须真的进产物，且覆盖住所有地名用到的字。
+    # 之前手写过一张 272 字的表，实测只覆盖 16% 的地名 ——
+    # 剩下 84% 的名字拼音搜索完全无效，而界面上看不出任何异常。
+    m_py = re.search(r'window\.MINGLI_PY\s*=\s*(\{.*?\});\s*\n'
+                     r'window\.MINGLI_POLY\s*=\s*(\{.*?\});', html, re.S)
+    ck("拼音表已内联", m_py is not None)
+    if m_py:
+        try:
+            py_map = json.loads(m_py.group(1))
+            poly_map = json.loads(m_py.group(2))
+            ck("逐字拼音表规模足够（>=1000 字）", len(py_map) >= 1000,
+               "%d 字 / %d 条多音字覆盖" % (len(py_map), len(poly_map)))
+            # 覆盖率：所有地名里的每个字都得有读音
+            miss = set()
+            names = set(reg["provinces"].keys())
+            for pn, cities in reg["provinces"].items():
+                names.add(pn)
+                for cn, node in cities.items():
+                    names.add(cn)
+                    names.update(k for k in node if k != "__own__")
+            for n in names:
+                if n in poly_map:
+                    continue
+                for c in n:
+                    if c not in py_map:
+                        miss.add(c)
+            ck("地名用到的字全部有拼音", not miss,
+               "缺 %d 个字: %s" % (len(miss), "".join(sorted(miss)[:20])))
+            # 抽查多音字：重庆/厦门/六安 逐字查都是错的
+            for name, right in [("重庆市", "chongqing"), ("厦门市", "xiamen"),
+                                ("六安市", "luan"), ("蚌埠市", "bengbu"),
+                                ("漯河市", "luohe")]:
+                if name in names:
+                    got = (poly_map.get(name) or "").replace(" ", "")
+                    concat = "".join(py_map.get(c, "?") for c in name)
+                    # 只比读音部分：「六安市」的六安读 luan，「市」是 shi
+                    if got.startswith(right):
+                        ck("多音字「%s」读音正确" % name, True,
+                           "%s（逐字拼会是 %s）" % (got, concat))
+                    else:
+                        ck("多音字「%s」读音正确" % name, False,
+                           "词组=%r 期望前缀=%r（逐字拼会是 %r）"
+                           % (got, right, concat))
+
+            # 音节必须用空格隔开：页面靠它切音节算首字母缩写。
+            # 连写（beijingshi）里没有音节边界，首字母会退化成单字 "b"，
+            # 症状是搜「bj」「xa」全部 0 条而界面上毫无异常。
+            no_space = [n for n, v in poly_map.items() if " " not in v and len(v) > 4]
+            ck("多音字表音节以空格分隔", not no_space,
+               "有 %d 条没分隔: %s" % (len(no_space), no_space[:3]))
+        except Exception as e:
+            ck("拼音表可解析", False, str(e)[:80])
     ck("切页按钮按 .tabs [data-tab] 定位",
        'querySelectorAll(".tabs [data-tab]")' in html and "dataset.tab" in html)
     ck("分段控件按 data-cal / data-sex 定位",

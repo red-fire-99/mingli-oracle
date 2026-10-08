@@ -546,79 +546,59 @@ function unpackSearch(v){
     var provSel = $("#provSel"), citySel = $("#citySel"), distSel = $("#distSel");
     var sel = $("#city"), box2 = $("#citySearch"), hint = $("#cityHint");
 
-    /* 汉字 → 拼音，用于搜索。必须覆盖**逐字**，漏一个字的症状是
-       「北京」搜不到而「北」的所有条目都搜得到 —— 很像数据问题，
-       其实是这个表漏了「京」。
-       写法用正经的对象而不是拼字符串再 split：字符串方案里
-       "北 BJ bei" 分词会切出带尾空格的 "北 "，于是永远匹配不上。 */
-    var PY = {
-      "北":"bei","京":"jing","上":"shang","海":"hai","广":"guang","深":"shen",
-      "成":"cheng","都":"du","杭":"hang","州":"zhou","武":"wu","汉":"han",
-      "西":"xi","安":"an","南":"nan","重":"chong","庆":"qing","天":"tian",
-      "苏":"su","州2":"zhou","郑":"zheng","青":"qing","岛":"dao","沈":"shen",
-      "阳":"yang","哈":"ha","尔":"er","滨":"bin","昆":"kun","明":"ming",
-      "福":"fu","建":"jian","厦":"xia","门":"men","济":"ji","肥":"fei",
-      "合":"he","昌":"chang","贵":"gui","阳2":"yang","兰":"lan","州3":"zhou",
-      "太":"tai","原":"yuan","石":"shi","家":"jia","庄":"zhuang","乌":"wu",
-      "鲁":"lu","木":"mu","齐":"qi","拉":"sa","萨":"sa","呼":"hu","和":"he",
-      "浩":"hao","特":"te","银":"yin","川":"chuan","口":"kou","长":"chang",
-      "春":"chun","大":"da","连":"lian","香":"xiang","港":"gang","澳":"ao",
-      "台":"tai","湾":"wan","东":"dong","莞":"guan","中":"zhong","江":"jiang",
-      "浙":"zhe","安2":"an","山":"shan","河":"he","湖":"hu","云":"yun","南3":"nan",
-      "陕":"shan","西2":"xi","甘":"gan","肃":"su","青2":"qing","海2":"hai",
-      "新":"xin","疆":"jiang","藏":"zang","内":"nei","蒙":"meng","吉":"ji",
-      "林":"lin","黑":"hei","龙":"long","辽":"liao","宁":"ning","晋":"jin",
-      "津":"jin","渝":"yu","沪":"hu","桂":"gui","鄂":"e","赣":"gan","闽":"min",
-      "琼":"qiong","皖":"wan","豫":"yu","滇":"dian","陇":"long","黔":"qian",
-      "蜀":"shu","粤":"yue","湘":"xiang","冀":"ji","贵2":"gui","津2":"jin",
-      "通":"tong","州4":"zhou","淮":"huai","南4":"nan","盐":"yan","扬":"yang",
-      "泰":"tai","镇":"zhen","常":"chang","无":"wu","锡":"xi","苏3":"su",
-      "徐":"xu","南5":"nan","通2":"tong","淮2":"huai","盐2":"yan","扬2":"yang",
-      "泰2":"tai","镇2":"zhen","常2":"chang","苏4":"su","州5":"zhou","温":"wen",
-      "州6":"zhou","绍":"shao","兴":"xing","市":"shi","金":"jin","华":"hua",
-      "三":"san","明2":"ming","四":"si","平":"ping","顶":"ding","山2":"shan",
-      "关":"guan","云2":"yun","浮":"fu","河2":"he","间":"jian","庄2":"zhuang",
-      "宝":"bao","山3":"shan","宁5":"ning","德":"de","齐2":"qi","哈2":"ha",
-      "尔2":"er","滨2":"bin","双":"shuang","鸭":"ya","西3":"xi","城":"cheng",
-      "铁":"tie","岭":"ling","山4":"shan","南6":"nan","开":"kai","原2":"yuan",
-      "封":"feng","川2":"chuan","大2":"da","竹":"zhu","山5":"shan","田":"tian",
-      "兴2":"xing","安3":"an","县":"xian","江2":"jiang","宁6":"ning","德2":"de",
-      "哈3":"ha","拉2":"la","滨3":"bin","双2":"shuang","鸭2":"ya","铁2":"tie",
-      "岭2":"ling","开2":"kai","封2":"feng","竹2":"zhu","田2":"tian",
-      "新2":"xin","源":"yuan","佛":"fo","山6":"shan","三2":"san","江3":"jiang",
-      "四2":"si","南7":"nan","通3":"tong","化":"hua","安4":"an","吉2":"ji",
-      "梅":"mei","关2":"guan","罗":"luo","山7":"shan","阳3":"yang","朔":"shuo",
-      "怀":"huai","仁":"ren","广2":"guang","韶":"shao","清":"qing","远":"yuan",
-      "南8":"nan","丰":"feng","顺":"shun","高":"gao","州7":"zhou","鹤":"he",
-      "龙2":"long","泉":"quan","南9":"nan","丰2":"feng","化2":"hua","广3":"guang",
-      "佛2":"fo","南10":"nan","山8":"shan","阳4":"yang","连2":"lian","南11":"nan",
-      "州8":"zhou","平2":"ping","武2":"wu","定":"ding","安5":"an","福2":"fu",
-      "田2":"tian","山9":"shan","吉3":"ji","临":"lin","泉2":"quan","沂":"yi",
-      "南12":"nan","河3":"he","乐":"le","陵":"ling","南13":"nan","宁7":"ning",
-      "化3":"hua","广4":"guang","贵3":"gui","定2":"ding","南14":"nan","安6":"an",
-      "丰3":"feng","镇3":"zhen","原3":"yuan","大3":"da","竹3":"zhu","田3":"tian",
-    };
-/* 拼音首字母缩写：「北京市」-> bjs。搜索要的是缩写，
-       用户打 bj 找北京，不是 beijing。 */
-    function pyInitials(s){
-      var out = "";
-      for (var i = 0; i < s.length; i++) out += (PY[s[i]] || "")[0] || "";
-      return out.toLowerCase();
-    }
-    /* 完整拼音：「北京市」-> beijingshi。用于容错（用户打 bei）。 */
-    function pyFull(s){
+/* 拼音：从 regions.json 读生成好的表，不再手写。
+       手写过一版 272 字的表，实测只覆盖 16% 的地名 ——
+       剩下 84% 的名字里含未收录的字，拼音搜索对它们完全无效。
+       而且逐字读音对多音字是错的：
+           重庆市  逐字查 -> zhongqingshi（错）  词组查 -> chongqingshi
+           厦门市  逐字查 -> shamenshi（错）      词组查 -> xiamenshi
+       表由 web/gen_regions.py 用 pypinyin 生成：
+       逐字表 + 多音字词组覆盖（64 条），省空间又正确。 */
+    /*__MINGLI_PY__*/
+
+    var PY = window.MINGLI_PY || {};      // 汉字 -> 拼音（无调）
+    var POLY = window.MINGLI_POLY || {};  // 地名 -> 拼音（有调已去），多音字用
+
+    /* 一个地名的音节序列：先查词组覆盖，否则逐字拼。
+       返回**带分隔符**的形式（"bei jing shi"）而不是 "beijingshi"。
+
+       为什么要带分隔符
+       ----------------
+       首字母缩写需要知道音节边界。而拼音串是连写的，
+       "beijingshi" 里找不到任何分隔符 —— 按非字母切只会得到一整段，
+       于是首字母退化成 "b"。实测症状：搜「bj」「xa」「cq」「xm」
+       全部 0 条，而界面毫无异常。
+
+       所以音节用空格隔开存，取用时：
+         - 匹配用：去掉空格（用户打的是 "beijing"、"bj" 这种连写）
+         - 首字母用：按空格切，每段取首字母 */
+    function pySyll(s){
+      if (POLY[s]) return POLY[s];
       var out = [];
-      for (var i = 0; i < s.length; i++) if (PY[s[i]]) out.push(PY[s[i]]);
-      return out.join("");
+      for (var i = 0; i < s.length; i++){
+        var c = s[i];
+        // 表里没有的字跳过而不是塞个空串 —— 否则音节数会错位
+        if (PY[c]) out.push(PY[c]);
+      }
+      return out.join(" ");
     }
-    /** 命中判定：名字含关键字，或拼音缩写 / 全拼含关键字 */
-    function nameHit(name, q){
-      if (!q) return true;
-      if (name.toLowerCase().indexOf(q) >= 0) return true;
-      if (pyInitials(name).indexOf(q) >= 0) return true;
-      if (pyFull(name).indexOf(q) >= 0) return true;
-      return false;
+    /** 连写全拼，用于匹配：「北京市」-> beijingshi */
+    function pyFull(s){ return pySyll(s).replace(/ /g, ""); }
+    /* 拼音首字母缩写：「北京市」-> bjs。按音节切，每段取首字母。 */
+    function pyInitials(s){
+      var parts = pySyll(s).split(" ");
+      var out = "";
+      for (var i = 0; i < parts.length; i++){
+        if (parts[i]) out += parts[i].charAt(0);
+      }
+      return out;
     }
+
+    // 把拼音函数挂到window，给自动化验证用。搜索在闭包里，
+    // 测试没法直接调；而「多音字读音对不对」恰恰是最容易静默出错的
+    // 地方—— 界面上完全看不出来，只有人打「cq」找不到重庆才会发现。
+    window.MingLiPyTest = pyFull;
+    window.MingLiIniTest = pyInitials;
 
     var provNames = Object.keys(REG).sort();
     provNames.forEach(function(n){
@@ -678,43 +658,157 @@ function unpackSearch(v){
     citySel.addEventListener("change", fillDistSel);
     distSel.addEventListener("change", onDistChange);
 
-    /* ---------- 搜索兜底 ----------
-       三级下拉里没有的（台湾省下级等）还能搜或手填。
-       搜索同时列出「市自身」和「区县」两类点 —— 只列区县的话，
-       搜「广州」会一条不中，因为广州在数据里是市节点下的 __own__，
-       不是任何区县的父级。之前就是这么漏的。 */
-    function renderCities(){
-      var q = (box2.value || "").trim().toLowerCase();
-      sel.innerHTML = "";
-      var hits = [];
-      Object.keys(REG).forEach(function(pn){
-        Object.keys(REG[pn]).forEach(function(cn){
-          var node = REG[pn][cn];
-          var items = [];
-          if (node.__own__) items.push([cn, node.__own__[0], node.__own__[1]]);
-          Object.keys(node).forEach(function(dn){
-            if (dn !== "__own__") items.push([dn, node[dn][0], node[dn][1]]);
-          });
-          items.forEach(function(it){
-            if (!nameHit(it[0], q)) return;
-            hits.push([pn, cn, it[0], it[1], it[2]]);
-          });
+/* ---------- 搜索 ----------
+   原来的做法是「拿关键字去每个区县名里 indexOf」，三个毛病：
+     1. 打「北京」只命中「北京市」这一条，下面 16 个区一条都不出
+        —— 用户搜的其实是「省/市」，得再打一次区名才找得到
+     2. 命中顺序 = 数据里的省份顺序，跟「哪个更可能是你要的」无关
+     3. 有 30 个重名（市中区 4 个、鼓楼 4 个、新华 3 个），
+        重名的排在一起时用户没法分辨
+
+   改成：认得层级 + 按相关度排序。
+     - 关键字命中省名 -> 展开该省下的市，再展开市下的区
+     - 关键字命中市名 -> 展开该市下的区
+     - 精确同名 > 前缀 > 包含；拼音缩写同等对待
+   排序键：(相关度, 名字长度, 拼音长度, 省名) —— 同类里短名字优先，
+   「东城」比「东城区」更可能是用户心里那个。
+   上限 60 条并说清还剩多少 —— 200 条的列表没人翻得完。 */
+    var MAX_HITS = 60;
+
+    /* 相关度分级。数字越小越靠前。
+
+       拼音一律排在 40 之后 —— 这是被实测逼出来的：
+       两个字母的拼音初值几乎必然撞车。
+
+           bj -> 9 条    xa -> 10 条    xm -> 8 条
+           cq -> 60 条（打满上限，一大半是「城区」「城关」这类
+                        首字母恰好是 cq 的无关地名）
+
+       如果拼音和中文同级，搜「cq」找重庆，第一条会是山西晋城的
+       「城区」—— 用户看到的是「我打的是重庆怎么给我个城区」。
+       所以拼音只作为中文搜不到时的兜底，且按拼音串长度从短到长排
+       （bj 找北京时，beijing 比 beijingshi 更像用户手输的东西）。 */
+    var R_EXACT = 0, R_SELF = 1, R_PREFIX = 2, R_CONTAINS = 3;
+    var R_PY_EXACT = 40, R_PY_PREFIX = 41, R_PY_CONTAINS = 42;
+
+    /* ---- 预建索引（只做一次）----
+       每条预存小写名与拼音，之后每次按键只做子串比较。
+       之前是每按一次键都对 3200 多条重算两遍拼音 —— 手感会发涩。 */
+    function pyKeys(s){
+      return { low: s.toLowerCase(), ini: pyInitials(s), full: pyFull(s) };
+    }
+    function matchRank(k, q){
+      // 中文命中优先，且一律排在拼音之前（理由见上面的 R_PY_EXACT=40）
+      if (k.low === q) return R_EXACT;
+      if (k.low.indexOf(q) === 0) return R_PREFIX;
+      if (k.low.indexOf(q) >= 0) return R_CONTAINS;
+      if (k.ini === q || k.full === q) return R_PY_EXACT;
+      if (k.ini.indexOf(q) === 0 || k.full.indexOf(q) === 0) return R_PY_PREFIX;
+      if (k.ini.indexOf(q) >= 0 || k.full.indexOf(q) >= 0) return R_PY_CONTAINS;
+      return -1;
+    }
+
+    var PLACES = [];              // 扁平的全部可选点
+    var PROV_KEYS = {};           // 省名 -> 拼音键
+    var CITY_KEYS = {};           // 市名 -> 拼音键
+    Object.keys(REG).forEach(function(pn){
+      PROV_KEYS[pn] = pyKeys(pn);
+      Object.keys(REG[pn]).forEach(function(cn){
+        CITY_KEYS[cn] = pyKeys(cn);
+        var node = REG[pn][cn];
+        function add(name, co, own){
+          PLACES.push({ pn: pn, cn: cn, name: name, lon: co[0], lat: co[1],
+                        own: !!own, key: pyKeys(name) });
+        }
+        // 市自身也算一个可选点（很多人只知道到市）
+        if (node.__own__) add(cn, node.__own__, true);
+        Object.keys(node).forEach(function(dn){
+          if (dn !== "__own__") add(dn, node[dn]);
         });
       });
-      hits.slice(0, 200).forEach(function(h){
-        sel.appendChild(opt(h[0] + " / " + h[1] + " / " + h[2]
-                             + "（" + h[3].toFixed(2) + ", " + h[4].toFixed(2) + "）",
-                             h.join("|")));
-      });
-      if (!sel.options.length){
-        sel.appendChild(opt(q ? "没有匹配项 —— 请展开下方手填经纬度"
-                              : "输入关键字搜索（最多显示前 200 条）", ""));
+    });
+
+/* 一条结果的分数。返回 分数*10 + 层级（0=市/省自身，1=区县）。
+       层级只用来在分数相同时细排，不能盖过「精确同名」这种强信号。
+
+       拼音排在前面的判据：**去掉行政通名后的音节首字母，逐字对上**。
+       实测数据（都是拼音首字母 bjs，但只有一个该排前面）：
+
+           毕节市   bi jie shi      -> bi  + jie  + shi
+           宝鸡市   bao ji shi      -> bao + ji   + shi
+           北京市   bei jing shi    -> bei + jing + shi
+
+       用户打「bj」时，bj 是 bi**j**ie 里那对相邻首字母？也是。
+       真正能分开的是「bj 是不是这个地名前两个音节的首字母」：
+           北京市 -> bei+jing 的首字母是 b、j  ✓（前两音节）
+           毕节市 -> bi+jie  的首字母是 b、j  ✓（也是前两音节）
+           宝鸡市 -> bao+ji  的首字母是 b、j  ✓（也是前两音节）
+
+       三者都成立，所以「前两音节」也分不开。真正的差别在**字**：
+       用户打 bj 找的是「Bei**jing**」这种双音节地名（bei jing），
+       而 bi jie / bao ji 的第二音节都是「jie / ji」—— 首字母对上了，
+       但拼音**串**里没有 "bj" 这种连续形态，因为双音节会写成 beijing。
+
+       也就是说：双音节地名的拼音连写里会跨音节产生相邻首字母，
+       而这些相邻首字母恰好就是「bj」这种用户最常敲的两字母键。
+       从数据上无法可靠区分「用户想要北京」和「用户想要毕节」——
+       三者拼音首字母完全相同。
+
+       所以放弃猜测，把「到底哪个更可能」交给排序里已有的
+       「名字短 + 拼音短」这一档（bijieshi 8 字母 < beijingshi 10 字母，
+       毕节市排前面）。这是数据给出的唯一真实差别，不是我编的规则。
+
+       真正有用的改进在别处，见 renderCities：命中过多时
+       明确提示「拼音两个字母会撞车，请补全」，并把同名条目标出来。 */
+    function rankOf(p, q, provR, cityR){
+      var r = matchRank(p.key, q);
+      var isPy = r >= R_PY_EXACT;   // 拼音命中（>=40）
+      if (!isPy){
+        // 关键字命中省名/市名 -> 这条属于「被展开的范围」，
+        // 这样打「北京」才会列出北京的区，而不是一条都没有
+        if (provR >= 0 && provR < R_CONTAINS && (r < 0 || r > R_PREFIX)) r = R_PREFIX;
+        if (cityR >= 0 && cityR < R_CONTAINS && (r < 0 || r > R_PREFIX)) r = R_PREFIX;
+      } else if ((provR >= 0 || cityR >= 0) && r > R_PY_PREFIX){
+        r = R_PY_PREFIX;
       }
-      hint.textContent = q ? ("匹配 " + hits.length + " 条"
-                              + (hits.length > 200 ? "，只显示前 200 条" : ""))
-                           : ("全国 " + Object.keys(REG).length + " 省 / "
-                              + countCities() + " 市 / " + countDistricts() + " 区县");
+      return r * 10 + (p.own ? 0 : 1);
     }
+
+    function searchPlaces(q){
+      q = (q || "").trim().toLowerCase();
+      if (!q) return [];
+      var hits = [];
+      for (var i = 0; i < PLACES.length; i++){
+        var p = PLACES[i];
+        var provR = matchRank(PROV_KEYS[p.pn], q);
+        var cityR = matchRank(CITY_KEYS[p.cn], q);
+        var r = rankOf(p, q, provR, cityR);
+        if (r < 0) continue;
+        hits.push({ pn: p.pn, cn: p.cn, name: p.name, lon: p.lon,
+                    lat: p.lat, rank: r, own: p.own,
+                    pyLen: p.key.full.length });
+      }
+      // 排序键：(相关度[已含层级], 名字长度, 拼音长度, 省名, 市名)
+      // 「名字短 + 拼音短」= 用户最可能手输的那个：
+      // 搜「xa」时「西安」(xian, 4 字母) 排在「新安县」(xinan, 5) 前面。
+      hits.sort(function(a, b){
+        if (a.rank !== b.rank) return a.rank - b.rank;
+        if (a.name.length !== b.name.length) return a.name.length - b.name.length;
+        if (a.pyLen !== b.pyLen) return a.pyLen - b.pyLen;
+        if (a.pn !== b.pn) return a.pn < b.pn ? -1 : 1;
+        return a.cn < b.cn ? -1 : (a.cn > b.cn ? 1 : 0);
+      });
+      return hits;
+    }
+
+    /* 结果标签：北京 / 东城区 这种重复路径压掉一层，
+       「北京市 / 北京市 / 东城区」读起来是噪音。 */
+    function hitLabel(h){
+      var path = (h.cn === h.pn) ? h.pn : h.pn + " / " + h.cn;
+      if (h.name === h.cn || h.name === h.pn) return path + "（整市/整省）";
+      return path + " / " + h.name;
+    }
+
     function countCities(){
       var n = 0;
       Object.keys(REG).forEach(function(pn){ n += Object.keys(REG[pn]).length; });
@@ -730,16 +824,96 @@ function unpackSearch(v){
       });
       return n;
     }
+
+    function renderCities(){
+      var q = (box2.value || "").trim().toLowerCase();
+      var hits = searchPlaces(q);
+      sel.innerHTML = "";
+      hits.slice(0, MAX_HITS).forEach(function(h){
+        sel.appendChild(opt(hitLabel(h), h.pn + "|" + h.cn + "|" + h.name
+                                      + "|" + h.lon + "|" + h.lat));
+      });
+      if (!sel.options.length){
+        sel.appendChild(opt(q ? "没有匹配项 —— 请展开下方手填经纬度"
+                              : "输入关键字：省名 / 市名 / 区县名 / 拼音首字母",
+                              ""));
+      }
+      if (!q){
+        hint.textContent = "全国 " + Object.keys(REG).length + " 省 / "
+                         + countCities() + " 市 / " + countDistricts()
+                         + " 区县　·　也可以在上面直接搜";
+        return;
+      }
+      if (!hits.length){
+        hint.textContent = "没有匹配「" + q + "」的行政区 —— "
+                         + "试试只打市名或区名，或展开下方手填经纬度";
+        return;
+      }
+      /* 提示文案要说清「为什么不好找」，而不是只报个数字。
+
+         实测：拼音两个字母几乎必然撞车，而且从数据上无法可靠区分
+         「bj 想要北京」和「bj 想要毕节」—— 毕节市 bi-jie-shi、
+         宝鸡市 bao-ji-shi、北京市 bei-jing-shi 首字母都是 bjs。
+         所以这时候唯一有用的建议是「再打一个字母」，
+         而不是假装排序知道答案。 */
+      var names = {};
+      hits.forEach(function(h){ names[h.name] = 1; });
+      var dup = hits.length - Object.keys(names).length;
+      var isPyQuery = q.length <= 4 && !/[\u4e00-\u9fa5]/.test(q);
+      var tips = [];
+      if (dup > 0) tips.push("含 " + dup + " 个同名条目，请按省市分辨");
+      if (isPyQuery && hits.length > 3)
+        tips.push("拼音两三个字母容易撞车，再多打一个字母会准很多");
+      if (hits.length > MAX_HITS)
+        tips.push("按相关度只显示前 " + MAX_HITS + " 条，请补全关键字");
+      hint.textContent = "匹配 " + hits.length + " 条"
+        + (tips.length ? "　·　" + tips.join("；") : "")
+        + "　·　回车选第一条";
+    }
+
     box2.addEventListener("input", renderCities);
-    renderCities();
+
+    // 回车选第一条：搜索框里回车是最省事的动作，不该什么都不发生
+    box2.addEventListener("keydown", function(e){
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      var first = sel.options[0];
+      if (first && first.value){
+        sel.value = first.value;
+        sel.dispatchEvent(new Event("change"));
+      }
+    });
+
     sel.addEventListener("change", function(){
       var h = unpackSearch(sel.value);
       if (!h) return;
+      // 把三级下拉同步到搜索结果 —— 否则界面上会出现
+      // 「下拉显示 A、经纬度却是 B 的值」这种自相矛盾的状态
+      if (provSel.value !== h[0]){
+        provSel.value = h[0];
+        fillCitySel();
+      }
+      if (citySel.value !== h[1]){
+        citySel.value = h[1];
+        fillDistSel();
+      }
+      var want = h[2];
+      for (var i = 0; i < distSel.options.length; i++){
+        if (distSel.options[i].textContent.replace(/（.*?）$/, "") === want){
+          distSel.value = distSel.options[i].value;
+          onDistChange();
+          box2.value = "";
+          return;
+        }
+      }
       $("#lon").value = h[3];
       $("#lat").value = h[4];
-      hint.textContent = "已选 " + h[0] + " / " + h[1] + " / " + h[2]
-        + "　经度 " + h[3].toFixed(4) + "，纬度 " + h[4].toFixed(4);
+      hint.textContent = "已选 " + hitLabel({ pn: h[0], cn: h[1], name: h[2] })
+        + "　经度 " + Number(h[3]).toFixed(4) + "，纬度 " + Number(h[4]).toFixed(4);
+      box2.value = "";
     });
+
+    renderCities();
 
     fillCitySel();
 

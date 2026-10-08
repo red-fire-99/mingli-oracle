@@ -38,6 +38,7 @@ TEMPLATE = os.path.join(HERE, "app.html")
 PLACEHOLDER_ENGINE = "/*__MINGLI_ENGINE__*/"
 PLACEHOLDER_CSS = "/*__ORACLE_CSS__*/"
 PLACEHOLDER_REGIONS = "/*__MINGLI_REGIONS__*/"
+PLACEHOLDER_PY = "/*__MINGLI_PY__*/"
 
 # 引擎版本号的占位符。刻意**不带引号**：注入的是 json.dumps(ver) 的结果，
 # 自带引号；模板里若写成 "/*__...__*/" 就会变成 ""1.0.0"" 这种坏代码。
@@ -126,6 +127,9 @@ def main(argv=None):
         print("模板缺少占位符 %s（行政区划经纬度）" % PLACEHOLDER_REGIONS,
               file=sys.stderr)
         return 1
+    if PLACEHOLDER_PY not in html:
+        print("模板缺少占位符 %s（拼音表）" % PLACEHOLDER_PY, file=sys.stderr)
+        return 1
 
     engine = bundle_js()
     ver = engine_version()
@@ -161,6 +165,22 @@ def main(argv=None):
     html = html.replace(PLACEHOLDER_REGIONS,
                         "window.MINGLI_REGIONS = JSON.parse(%s);"
                         % json.dumps(regions, ensure_ascii=False))
+
+    # 拼音表与行政区划同源（同一个 regions.json 里），单独注入成两个变量。
+    # 不用 JSON.parse 是因为这两张表小（~20KB），直接贴字面量解析更快；
+    # 而且贴字面量能在产物里一眼看出「拼音表有没有真的进来」。
+    reg = json.loads(regions)
+    py_map = reg.get("py") or {}
+    poly_map = reg.get("poly") or {}
+    if len(py_map) < 1000:
+        print("regions.json 里没有拼音表（%d 字），拼音搜索会失效。"
+              "请运行 python web/gen_regions.py 重新生成" % len(py_map),
+              file=sys.stderr)
+        return 1
+    html = html.replace(PLACEHOLDER_PY,
+                        "window.MINGLI_PY = %s;\nwindow.MINGLI_POLY = %s;"
+                        % (json.dumps(py_map, ensure_ascii=False),
+                           json.dumps(poly_map, ensure_ascii=False)))
 
     os.makedirs(a.out, exist_ok=True)
     dest = os.path.join(a.out, "index.html")
