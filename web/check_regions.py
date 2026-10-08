@@ -41,6 +41,13 @@ KNOWN = {
 LON_RANGE = (72.0, 136.0)
 LAT_RANGE = (2.0, 54.5)
 
+# 省级坐标自检的容差。0.5° ≈ 55km 纬度 / 44km 经度。
+# 省界是曲线，本省包围盒比省界大，贴边的（甘肃、内蒙古）
+# 省级行政中心可能被排除在外，所以要给容差。
+PROV_TOL = 0.5
+# 超出这个量级一定是放错省了 —— 相邻省界最远也就这个尺度
+PROV_HARD = 4.0
+
 
 def norm(name):
     """把「广州市」「内蒙古自治区」归一化成「广州」「内蒙古」。
@@ -172,6 +179,54 @@ def main():
     else:
         print("   [OK] 含台湾/香港/澳门/西藏/新疆")
 
+    # ---- 省级坐标有没有放错省 ----
+    # 前两条检查都抓不到这一类：坐标只要还在国境内就放行，
+    # 而「河北省的坐标其实是内蒙的」正是这样溜过去的。
+    # 判据不依赖手工表 —— 用本省所有区县的包围盒反推：
+    # 省会级行政中心必然在本省范围内，超出 4° 就是抓错省了。
+    print()
+    print("4) 省级坐标是否落在本省包围盒内")
+    print("   容差 ±%.1f°（约 55km），硬上限 %.1f°" % (PROV_TOL, PROV_HARD))
+    prov_bad, prov_warn, prov_ok = [], [], 0
+    for pn, cities in provs.items():
+        pts = []
+        for cn, node in cities.items():
+            if node.get("__own__"):
+                pts.append(node["__own__"])
+            for k, v in node.items():
+                if k != "__own__":
+                    pts.append(v)
+        own = (cities.get(pn) or {}).get("__own__")
+        if not pts or not own:
+            prov_bad.append((pn, "缺坐标或缺下级，无法自检"))
+            continue
+        lons = [p[0] for p in pts]
+        lats = [p[1] for p in pts]
+        lo0, lo1, la0, la1 = min(lons), max(lons), min(lats), max(lats)
+        over = max(lo0 - own[0], own[0] - lo1, la0 - own[1], own[1] - la1, 0)
+        if over <= PROV_TOL:
+            prov_ok += 1
+        elif over <= PROV_HARD:
+            prov_warn.append((pn, own, over, (lo0, lo1, la0, la1)))
+        else:
+            prov_bad.append((pn, own, over, (lo0, lo1, la0, la1)))
+    print("   [OK]   %d 个省的自身坐标落在本省范围内" % prov_ok)
+    for pn, own, over, bb in prov_warn:
+        print("   [--]   %-14s (%.3f, %.3f) 超出包围盒 %.2f°，请人工确认"
+              % (pn, own[0], own[1], over))
+    if prov_bad:
+        print("   [FAIL] %d 个省坐标明显不在本省：" % len(prov_bad))
+        for item in prov_bad:
+            if len(item) >= 4:
+                pn, own, over, bb = item
+                print("      %-14s (%.3f, %.3f)  本省 lon[%.2f,%.2f] lat[%.2f,%.2f]  超出 %.2f°"
+                      % (pn, own[0], own[1], bb[0], bb[1], bb[2], bb[3], over))
+            else:
+                print("      %-14s %s" % (item[0], item[-1]))
+        fails.append("%d 个省的坐标不在本省范围内" % len(prov_bad))
+    else:
+        print("   -> 未发现省级坐标放错省的情况（这条不依赖手工对照表）")
+
     print()
     print("=" * 60)
     if fails:
@@ -179,7 +234,7 @@ def main():
         for f in fails:
             print("  - " + f)
         return 1
-    print("坐标数据可信：全部在境内，且与手工核对表交叉一致")
+    print("坐标数据可信：在境内、与手工表交叉一致、省级坐标未放错省")
     return 0
 
 
