@@ -86,6 +86,36 @@ RULES = [
 # 且所在文件的同级列表名里含 FORBIDDEN/RULES/NEEDLES。
 LIST_NAMES = ("FORBIDDEN", "RULES", "NEEDLES", "PATTERNS")
 
+
+def list_spans(lines, names):
+    """找出「模式清单」赋值的行区间（可跨行）。
+
+    提成函数是因为白名单分支也要用同一套判据 ——
+    内嵌在循环里的话，白名单文件就只能整体放行或整体拦，
+    两种都太粗。
+    """
+    spans = []
+    depth = 0
+    start = None
+    for i, line in enumerate(lines, 1):
+        m = re.search(r"\b%s\b\s*(=|:)" % "|".join(names), line)
+        if m and depth == 0:
+            start = i
+            depth = line.count("[") + line.count("{") + line.count("(")
+            depth -= line.count("]") + line.count("}") + line.count(")")
+            if depth <= 0:
+                spans.append((start, i))
+                start = None
+            continue
+        if start is not None:
+            depth += (line.count("[") + line.count("{") + line.count("("))
+            depth -= (line.count("]") + line.count("}") + line.count(")"))
+            if depth <= 0:
+                spans.append((start, i))
+                start = None
+    return spans
+
+
 SKIP_EXT = {".png", ".jpg", ".jpeg", ".gif", ".ico", ".wasm", ".zip",
             ".pdf", ".woff", ".woff2", ".ttf"}
 SKIP_DIRS = {"__pycache__", ".git", "node_modules", "pyodide"}
@@ -93,6 +123,12 @@ SKIP_FILES = {
     ".github/workflows/ci.yml",      # 含 actions 相关字段
     "web/check_secrets.py",          # 规则本身（含模式样例）
     "web/test_secret_scanner.py",    # 自检脚本，故意喂各类敏感样本
+    # 历史扫描的自检脚本。它必须造一个含真实形态本机路径的 commit
+    # 来验证「会漏报吗？不会」—— 不造真样本就没法验证，
+    # 而一个从没被验证过的检查等于没有检查。
+    # 里面的路径都是拼出来的（C:/Users/probe 是占位用户，
+    # 真实路径从环境变量取），不是谁的本机目录。
+    "web/test_history_scanner.py",
 }
 
 # 产物目录：里面是「用户真正拿到的东西」，必须一起扫
@@ -136,6 +172,146 @@ def scan_targets():
         files.append(f)
     return sorted(files)
 
+# ---------- git 历史 ----------
+#
+# 为什么要扫历史：工作区干净不等于历史干净。泄露一旦进过 commit，
+# 后来修好了工作区扫描会全绿，但 git 历史是公开的，那一处还留着。
+#
+# 只报「文件 + 模式」的归并结果，不逐 commit 刷屏 —— 一次泄露
+# 通常会出现在后续几十个 commit 里，逐条报没法看。
+
+HIST_EXT = (".py", ".js", ".html", ".md", ".yml", ".yaml", ".json",
+            ".txt", ".cfg", ".toml", ".ini", ".sh")
+
+# 历史扫描用「字面量」而不是 RULES 里的正则：正则里有大量
+# 「匹配但不等于泄露」的形态（如 [A-Za-z]:[\\/]Users），
+# 拿它们扫历史会把「恰好写了这个模式的正常代码」也报出来。
+# 历史里只查最硬的几种：完整路径、完整 token、私钥头。
+HIST_LITERAL = [
+    ("本机绝对路径", "C:/Users/"),
+    ("本机绝对路径", "C:\\Users\\"),
+    ("mac 用户目录", "/Users/"),
+    ("GitHub token", "ghp_"),
+    ("GitHub PAT", "github_pat_"),
+    ("私钥", "BEGIN RSA PRIVATE KEY"),
+    ("私钥", "BEGIN OPENSSH PRIVATE KEY"),
+]
+
+# token 的真形态：至少 20 位。扫描器里的假样例是 ghp_ab…0123 这种短的，
+# 但为了不误判，还是把扫描器文件排除掉。
+HIST_TOKEN_RE = re.compile(r"gh[pousr]_[A-Za-z0-9]{20,}")
+
+# 判定「这个文件是不是模式清单」的判据，与工作区扫描共用。
+#
+# 不能只看 SKIP_FILES：verify_dist.py 就不在那个名单里（它在工作区
+# 扫描里是靠 IN_LIST 机制豁免的），而它的 FORBIDDEN 列表里同样写着
+# "ghp_"。历史扫描若不复用这套判据，就会把它报成「当前文件里也有」——
+# 方向完全反了：那是规则文本，不是泄露。
+HIST_LIST_NAMES = ("FORBIDDEN", "RULES", "NEEDLES", "PATTERNS")
+
+
+def _is_rule_file(path, text):
+    """这个文件是不是「用来列模式的清单文件」。"""
+    if os.path.basename(path) in ("check_secrets.py", "test_secret_scanner.py"):
+        return True
+    return any(re.search(r"\b%s\b" % n, text) for n in HIST_LIST_NAMES)
+
+
+def scan_history(max_commits=200):
+    """扫 git 历史里的硬凭据与本机路径。
+
+    返回 (历史命中列表, 扫了多少 commit)。
+    """
+    try:
+        shas = _git("rev-list", "--all").split()
+    except subprocess.CalledProcessError:
+        print("（读不到 git 历史，跳过）")
+        return [], 0
+    shas = shas[:max_commits]
+
+    found = {}
+    for sha in shas:
+        try:
+            names = _git("-c", "core.quotepath=false", "ls-tree", "-r",
+                         "--name-only", sha).splitlines()
+        except subprocess.CalledProcessError:
+            continue
+        for n in names:
+            n = n.strip().replace("\\", "/")
+            if not n or not n.endswith(HIST_EXT):
+                continue
+            try:
+                blob = _git("cat-file", "blob", "%s:%s" % (sha, n))
+            except (subprocess.CalledProcessError, UnicodeDecodeError):
+                continue
+            for label, lit in HIST_LITERAL:
+                if lit in blob:
+                    # 命中的是不是「规则文本」？要按该文件**当前**的内容判，
+                    # 而不是这个 commit 快照 —— 规则可能后来才加进来。
+                    found.setdefault((n, label, lit), set()).add(sha[:7])
+                    break
+            else:
+                if not _is_rule_file(n, blob):
+                    for m in HIST_TOKEN_RE.finditer(blob):
+                        found.setdefault((n, "真 token 形态",
+                                          m.group(0)[:10] + "…"), set()).add(sha[:7])
+                        break
+    return sorted(found.items()), len(shas)
+
+
+def report_history():
+    """打印历史扫描结论。返回是否有必须处理的真问题。"""
+    print("\n" + "=" * 60)
+    print("git 历史扫描（公开的是历史，不只是当前文件）\n")
+    found, n = scan_history()
+    print("扫了 %d 个 commit" % n)
+    if not found:
+        print("历史里没有硬凭据与本机路径。\n")
+        return False
+
+    # 归并成 (文件, 判定)
+    verdict = {}
+    for (f, label, lit), shas in found:
+        cur = os.path.join(ROOT, f.replace("/", os.sep))
+        cur_text = ""
+        if os.path.isfile(cur):
+            try:
+                cur_text = io.open(cur, encoding="utf-8").read()
+            except UnicodeDecodeError:
+                cur_text = ""
+        # 判定顺序很重要：先看是不是规则文本，再看当前文件。
+        # 反过来会把 verify_dist.py 的 FORBIDDEN 里的 "ghp_" 报成
+        # 「当前文件里也有，需立刻清理」—— 方向完全反了。
+        if _is_rule_file(f, cur_text):
+            v = "规则文本（扫描器/黑名单里故意写的模式）"
+        elif cur_text and lit in cur_text:
+            v = "!!当前文件里也有!! 需立刻清理"
+        elif cur_text:
+            v = "历史遗留（当前文件已修好）"
+        else:
+            v = "历史遗留（文件已删除）"
+        verdict.setdefault((f, label, lit), [v, set()])
+        verdict[(f, label, lit)][1] |= shas
+
+    need_fix = False
+    for (f, label, lit), (v, shas) in sorted(verdict.items()):
+        print("  %s  %s" % (v, f))
+        print("      %s / %s，出现在 %d 个 commit（%s …）"
+              % (label, lit, len(shas), sorted(shas)[0]))
+        if v.startswith("!!"):
+            need_fix = True
+    print("")
+    if not need_fix:
+        # 收尾提示会被 gates.py 抓作门禁的「结论行」，所以必须是
+        # 一句能独立成立的话。之前这里写「注意重写会改所有 commit SHA」，
+        # 实际没问题时读到的是这句 —— 方向完全反了。
+        print("  历史里没有必须处理的泄露（命中的都是规则文本）。")
+        if any(v[0].startswith("历史遗留") for v in verdict.values()):
+            print("  若日后出现「历史遗留」，公开仓库需重写历史才能清掉：")
+            print("      git filter-repo 或 filter-branch + force push（tag 需重打）")
+    print("")
+    return need_fix
+
 
 def main(argv):
     targets = argv[1:]
@@ -151,11 +327,41 @@ def main(argv):
         r = rel.replace("\\", "/")
         if os.path.splitext(r)[1].lower() in SKIP_EXT:
             continue
+        # full 要在使用之前算出来 —— 白名单分支里也要读文件内容
+        full = os.path.join(ROOT, r.replace("/", os.sep))
         if r in SKIP_FILES:
+            # 白名单不是「整文件不看」，但也不能反过来「白名单里一律放行」——
+            # 那样把文件加进名单就成了绕过检查的后门。
+            #
+            # 判据是「命中行是否在它自己的样本清单里」：
+            # test_secret_scanner.py 第 25 行的 ghp_abcdefghij… 是
+            # 扫描器自检**必须存在**的阳性样本（删掉它门禁 10 就失去意义），
+            # 那是数据；同一文件里随便写个真 token 则是泄露。
+            # 靠「是否落在 SAMPLE/NEEDLES 这类列表区间内」区分 ——
+            # 和 RULES 里 IN_LIST 模式用的是同一套思路。
+            if not os.path.isfile(full):
+                continue
+            try:
+                _t = io.open(full, encoding="utf-8").read()
+            except UnicodeDecodeError:
+                continue
+            _lines = _t.splitlines()
+            _spans = list_spans(_lines, ("SAMPLE", "SAMPLES", "NEEDLES",
+                                        "CASES", "SAMPLES_TABLE"))
+            for _label, _pat in (("真 token 形态",
+                                  r"gh[pousr]_[A-Za-z0-9]{20,}"),
+                                 ("真私钥",
+                                  r"-----BEGIN [A-Z ]*PRIVATE KEY-----")):
+                for _i, _line in enumerate(_lines, 1):
+                    if not re.search(_pat, _line):
+                        continue
+                    if any(a <= _i <= b for a, b in _spans):
+                        continue        # 它自己的样本，放行
+                    hits.append((_label + "(白名单文件内，非样本区)",
+                                 r, _i, _line.strip()[:120]))
             continue
         if any(("/%s/" % d) in ("/" + r) or r.startswith(d + "/") for d in SKIP_DIRS):
             continue
-        full = os.path.join(ROOT, r.replace("/", os.sep))
         if not os.path.isfile(full):
             continue
         try:
@@ -167,33 +373,10 @@ def main(argv):
         lines = text.splitlines()
         # 该文件是否是「模式清单」—— 是的话，盘符路径只在本行是
         # 字符串字面量（用于匹配）时才放行；真赋值给变量仍然报。
-        in_list = any(re.search(r"\b%s\b" % n, text) for n in LIST_NAMES)
-
-        # 精确圈出「模式清单」的行区间：变量赋值那几行（可跨行，
-        # 因为一个 list 可能写好几行）。只在这个区间里放行。
-        list_spans = []
-        if in_list:
-            depth = 0
-            start = None
-            for i, line in enumerate(lines, 1):
-                m = re.search(r"\b%s\b\s*(=|:)" % "|".join(LIST_NAMES), line)
-                if m and depth == 0:
-                    start = i
-                    depth = line.count("[") + line.count("{") + line.count("(")
-                    depth -= line.count("]") + line.count("}") + line.count(")")
-                    if depth <= 0:
-                        list_spans.append((start, i))
-                        start = None
-                    continue
-                if start is not None:
-                    depth += (line.count("[") + line.count("{") + line.count("("))
-                    depth -= (line.count("]") + line.count("}") + line.count(")"))
-                    if depth <= 0:
-                        list_spans.append((start, i))
-                        start = None
+        _spans0 = list_spans(lines, LIST_NAMES)
 
         def in_list_span(i):
-            return any(a <= i <= b for a, b in list_spans)
+            return any(a <= i <= b for a, b in _spans0)
 
         for label, pat, mode in RULES:
             if mode == "IN_LIST":
@@ -227,4 +410,11 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv))
+    _rc = main(sys.argv)
+    # 历史单独判：工作区干净但历史脏，也要让人看见
+    try:
+        if report_history():
+            _rc = 1
+    except Exception as e:                      # 历史扫描不该拖垮主流程
+        print("（历史扫描异常：%s）" % e)
+    sys.exit(_rc)
