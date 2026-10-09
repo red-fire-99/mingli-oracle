@@ -507,6 +507,51 @@ export function renderPlain(data) {
     }
 
     }
+    // 1.6.0：六亲
+    if (b["六亲详批"] && b["六亲详批"]["列表"].length) {
+      const kd = b["六亲详批"];
+      P.push('<details class="fold"><summary>六亲怎么看'
+        + '<span class="cnt">' + h(kd["性别"]) + "</span></summary>"
+        + '<div class=\"fbody\">'
+        + '<p class="sub2">' + h(kd["口径"]) + "</p>"
+        + '<div class="ssx">');
+      for (const it of kd["列表"]) {
+        if (!it["位置"].length) {
+          // 一颗都没出现 —— 要说出来，不能留个空卡片让人以为漏了
+          P.push('<div class="it"><div class="hd">'
+            + '<span class="pn">' + h(it["角色"]) + "</span>"
+            + '<span class="pc">这一块没出现</span></div>'
+            + '<p class="li">你这张盘里' + h(it["星"].join("、"))
+            + "都没有显出来，不代表没这部分关系，"
+            + "只说明它不靠星象主导。</p></div>");
+          continue;
+        }
+        P.push('<div class="it"><div class="hd">'
+          + '<span class="pn">' + h(it["角色"]) + "</span>"
+          + '<span class="pc">' + h(it["星"].join("、")) + " · "
+          + it["个数"] + " 个"
+          + (it["有透"] ? "，有透干" : "，都藏在支里") + "</span></div>"
+          + '<p class="li">' + h(it["说明"]) + "</p>");
+        for (const x of it["位置"]) {
+          P.push('<p class="sub2">' + h(x["柱"]) + h(x["干支"]) + " "
+            + h(x["十神"]) + "（"
+            + (x["透"] ? "透干，明面上的分量重"
+                       : "藏" + h(x["藏"] || "") + "，存在感弱一些")
+            + "）</p>");
+        }
+        P.push("</div>");
+      }
+      P.push("</div>");
+      P.push("<h3 style='font-size:14px;margin:14px 0 6px'>四柱各代表谁</h3>");
+      P.push('<div class="ssx">');
+      for (const x of kd["柱位"]) {
+        P.push('<div class="it"><div class="hd">'
+          + '<span class="pn">' + h(x["柱"]) + h(x["干支"])
+          + "</span></div>"
+          + '<p class="li">' + h(x["代表"]) + "</p></div>");
+      }
+      P.push("</div></div></details>");
+    }
   }   // <- 收尾 if (data.八字)
 
   if (data.紫微) {
@@ -652,6 +697,65 @@ export function renderPlain(data) {
       P.push("</div></div></details>");
     }
 
+    // 1.6.0：夫妻宫。措辞走「需要磨合的地方」，不走「好 / 坏」。
+    const sp = z["夫妻详批"] || {};
+    // 一律用 .length：Python 的 [] 是 falsy，JS 的 [] 是 truthy，
+    // 直接判空会两边行为分叉（这批已经栽过一次）。
+    if ((sp["主星"] && sp["主星"].length) || (sp["煞星"] && sp["煞星"].length)) {
+      P.push('<details class="fold"><summary>夫妻宫'
+        + '<span class="cnt">'
+        + h(sp["宫干"] ? "宫干 " + sp["宫干"] : "")
+        + h(sp["大限年龄"] ? "大限 " + sp["大限年龄"] : "")
+        + "</span></summary>"
+        + '<div class=\"fbody\">');
+      // 用 .length 而不是直接判空：Python 的 [] 是 falsy，
+      // JS 的 [] 是 **truthy**，直接判空会多输出一段「主星：」。
+      if (sp["组合"]) {
+        P.push('<p class="li"><span class="h">' + h(sp["组合"]["型"])
+          + "</span>" + h(sp["组合"]["说明"]) + "</p>");
+      } else if (sp["主星"] && sp["主星"].length) {
+        P.push('<p class="li">主星：' + h(sp["主星"].join("、")) + "</p>");
+      }
+      if (sp["四化"] && sp["四化"].length) {
+        // 主星上的四化是「这块星曜的当前状态」，要单独讲 ——
+        // 混进煞星或「未解读」里都是错的
+        P.push("<h3 style='font-size:14px;margin:14px 0 6px'>主星带四化</h3>"
+          + "<div class='ssx'>");
+        for (const x of sp["四化"]) {
+          P.push('<div class="it"><div class="hd">'
+            + '<span class="pn">' + h(x["星"]) + "</span>"
+            + '<span class="pc">' + h(x["化"]) + "</span></div>"
+            + '<p class="li">' + h(x["说明"]) + "</p></div>");
+        }
+        P.push("</div>");
+      }
+      if (sp["对宫"]) {
+        P.push('<p class="sub2">对宫是' + h(sp["对宫"])
+          + "宫 —— 夫妻和事业这一头互相牵动，不只是感情的事。</p>");
+      }
+      if (sp["煞星"].length) {
+        P.push("<h3 style='font-size:14px;margin:14px 0 6px'>要磨合的地方</h3>"
+          + "<div class='ssx'>");
+        for (const x of sp["煞星"]) {
+          P.push('<div class="it"><div class="hd">'
+            + '<span class="pn xiong">' + h(x["星"]) + "</span>"
+            + '<span class="pc">' + h(x["型"]) + "</span></div>"
+            + '<p class="li">' + h(x["说明"]) + "</p></div>");
+        }
+        P.push("</div>");
+      }
+      if (sp["未解读"].length) {
+        // 查不到解读的星要显式报出来，不能静默跳过
+        P.push('<p class="warn">这些星还没写解读：'
+          + h(sp["未解读"].join("、")) + "</p>");
+      }
+      if (sp["大限说明"]) {
+        P.push("<h3 style='font-size:14px;margin:14px 0 6px'>什么时候走到这块</h3>");
+        P.push('<p class="li">大限虚岁 ' + h(sp["大限年龄"]) + "</p>");
+        P.push('<p class="sub2">' + h(sp["大限说明"]) + "</p>");
+      }
+      P.push("</div></details>");
+    }
   }
 
   if (data.占星) {
@@ -806,6 +910,42 @@ export function renderPlain(data) {
       P.push("</div></details>");
     }
 
+    }
+    // 1.6.0：关系宫
+    if (a["关系宫详批"] && a["关系宫详批"]["列表"].length) {
+      const hd2 = a["关系宫详批"];
+      let nEmpty = 0;
+      for (const x of hd2["列表"]) if (x["空"]) nEmpty++;
+      P.push('<details class="fold"><summary>关系相关的宫'
+        + '<span class="cnt">' + hd2["列表"].length + " 宫 · 空 "
+        + nEmpty + " 个</span></summary>"
+        + '<div class=\"fbody\">'
+        // 概述不能直接用「空宫说明」—— 那是给单个空宫写的，
+        // 放在开头会变成「整块的关系宫都没星」的意思，方向是错的。
+        + '<p class="sub2">这五宫分别管伴侣、深度联结、家、事业角色与朋友。'
+        + "先看每宫管什么，再看落了哪些星。</p>");
+      if (nEmpty) {
+        P.push('<p class="sub2">其中 ' + nEmpty + " 宫没有星。"
+          + h(hd2["空宫说明"]) + "</p>");
+      }
+      P.push('<div class="ssx">');
+      for (const x of hd2["列表"]) {
+        P.push('<div class="it"><div class="hd">'
+          + '<span class="pn">第 ' + x["宫"] + " 宫</span>"
+          + '<span class="pc">' + h(x["星座"]) + "</span></div>"
+          + '<p class="li"><span class="h">' + h(x["名"]) + "</span>"
+          + h(x["管什么"]) + "</p>");
+        if (x["空"]) {
+          P.push('<p class="sub2">这一宫没有星，不靠外力推 —— '
+            + "怎么走看你自己的选择。</p>");
+        } else {
+          for (const y of x["星"]) {
+            P.push('<p class="li">' + h(y["名"]) + " · " + h(y["说明"]) + "</p>");
+          }
+        }
+        P.push("</div>");
+      }
+      P.push("</div></div></details>");
     }
   }
 

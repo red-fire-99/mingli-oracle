@@ -27,6 +27,10 @@ const {
   DAXIAN_THEME, SIHUA_ROLE, LIUNIAN_NOTE,
   SHENSHA_KIND, SHENSHA_KIND_NOTE, SHISHEN_COUNT_NOTE, SHISHEN_PAIR,
   ANGLE_ROLE, QUALITY_ROLE, ASPECT_TONE,
+  PILLAR_ROLE, KIN_STARS, KIN_ROLE_NOTE, STAR_VISIBILITY,
+  SPOUSE_PAIR, SPOUSE_SINGLE, SPOUSE_SHA,
+  SPOUSE_DAXIAN_YOUNG, SPOUSE_DAXIAN_LATE,
+  HOUSE_REL, HOUSE_REL_PLANET, HOUSE_REL_EMPTY, KIN_CAVEAT,
 } = DATA;
 
 /* ------------------------------------------------------------------
@@ -230,6 +234,7 @@ export function baziPlain(r) {
                 最强: wxImg.strong, 最弱: wxImg.weak, 明细: wxImg.items },
     神煞详批: shenshaList(r),
     十神详批: shishenList(r),
+    六亲详批: kinList(r),
     术语: [["日主", GLOSSARY["日主/日干"]], ["十神", GLOSSARY["十神"]],
            ["大运", GLOSSARY["大运"]], ["神煞", GLOSSARY["神煞"]],
            ["喜用神", GLOSSARY["喜用神"]]],
@@ -417,6 +422,7 @@ function sihuaList(r) {
     大限详批: { 标题: "你一生十二步大限", 列表: daxianList(r) },
     流年详情: liunianNote(r),
     四化详批: sihuaList(r),
+    夫妻详批: spouseList(r),
     术语: [["命宫", GLOSSARY["命宫"]], ["主星", GLOSSARY["主星"]],
            ["四化", GLOSSARY["四化"]], ["大限", GLOSSARY["大限"]]],
   };
@@ -577,6 +583,185 @@ function aspectList(r) {
            "合计": good.length + tension.length };
 }
 
+/* ---------------- 1.6.0: 六亲 / 夫妻宫 / 关系宫 ---------------- */
+
+/** 二元组键的查法。SPOUSE_PAIR 的键是 Python 的二元组，
+    导出成 JSON 后会变成 Python 的 str(tuple) 形式：
+    "('天机', '巨门')" —— 注意是**单引号**。
+    用 JSON.stringify 拼出来的是双引号版本，查不到。
+    所以这里必须手工按单引号拼。 */
+function pairKey(a, b) {
+  return "('" + a + "', '" + b + "')";
+}
+
+/** 八字六亲。男女分派是硬要求 —— 同盘只差性别，
+    不分派的话男女会看到同一段关于配偶的话。 */
+function kinList(r) {
+  const inp = r["输入"] || {};
+  let sex = inp["性别"] || "男";
+  if (!KIN_STARS[sex]) sex = "男";
+  const cols = r["柱详解"] || [];
+
+  const place = {};
+  for (const c of cols) {
+    const p = c["柱"];
+    const g = c["干十神"];
+    if (g && g !== "日主") {
+      if (!place[g]) place[g] = [];
+      place[g].push({ "柱": p, "位": "干", "干支": c["干"] });
+    }
+    for (const z of (c["支藏干"] || [])) {
+      const s = z["十神"];
+      if (!s) continue;
+      if (!place[s]) place[s] = [];
+      place[s].push({ "柱": p, "位": "支", "干支": c["支"], "藏": z["干"] });
+    }
+  }
+
+  const ORD = { "年柱": 0, "月柱": 1, "日柱": 2, "时柱": 3 };
+  const items = [];
+  for (const role of ["配偶", "父母", "兄弟", "子女"]) {
+    const stars = KIN_STARS[sex][role];
+    let got = [];
+    for (const st of stars) {
+      for (const it of (place[st] || [])) {
+        got.push({ "柱": it["柱"], "位": it["位"], "干支": it["干支"],
+                   "藏": it["藏"], "十神": st, "透": it["位"] === "干" });
+      }
+    }
+    // 先透后藏，同类按柱序（年→月→日→时）。
+    // 用插入排序而不是 sort：JS 的 sort 不稳定。
+    for (let i = 1; i < got.length; i++) {
+      const cur = got[i];
+      const kc = (cur["透"] ? 0 : 1) * 10 + (ORD[cur["柱"]] === undefined ? 9 : ORD[cur["柱"]]);
+      let j = i - 1;
+      while (j >= 0) {
+        const kj = (got[j]["透"] ? 0 : 1) * 10
+                 + (ORD[got[j]["柱"]] === undefined ? 9 : ORD[got[j]["柱"]]);
+        if (kj <= kc) break;
+        got[j + 1] = got[j];
+        j--;
+      }
+      got[j + 1] = cur;
+    }
+    items.push({
+      "角色": role, "星": stars, "个数": got.length, "位置": got,
+      "有透": got.some((x) => x["透"]),
+      "说明": KIN_ROLE_NOTE[sex][role],
+    });
+  }
+
+  const pillars = cols.map((c) => ({
+    "柱": c["柱"], "干支": c["干"] + (c["支"] || ""),
+    "代表": PILLAR_ROLE[c["柱"]] || "",
+  }));
+  return { "标题": "六亲怎么看", "口径": KIN_CAVEAT, "列表": items,
+           "柱位": pillars, "性别": sex };
+}
+
+/** 紫微夫妻宫。措辞全部走「需要磨合的地方」，不走「好 / 坏」。 */
+function spouseList(r) {
+  const pal = {};
+  for (const p of (r["十二宫"] || [])) pal[p["宫名"]] = p;
+  const fu = pal["夫妻"];
+  if (!fu) return { "标题": "夫妻宫" };
+
+  const ZHI = ["子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥"];
+  const z = fu["地支"];
+  let oppName = "";
+  if (ZHI.indexOf(z) >= 0) {
+    const oppZ = ZHI[(ZHI.indexOf(z) + 6) % 12];
+    for (const k of Object.keys(pal)) {
+      if (pal[k]["地支"] === oppZ) { oppName = k; break; }
+    }
+  }
+
+  // 主星可能带四化后缀（"太阳·化禄"）。**不能**用
+  // `filter((s) => s.indexOf("·") < 0)` 把它们滤掉 ——
+  // 那样带四化的夫妻宫主星全空，整块不渲染。
+  // 这个错在 512 例对拍里抓不到（那些盘夫妻宫要么有普通主星、
+  // 要么本来就空），是时辰路径门禁用辰时那个盘才暴露的。
+  const rawMain = (fu["主星"] || []).filter((s) => s);
+  const main = rawMain.slice();
+  const baseOf = (s) => s.split("·")[0];
+
+  let combo = null;
+  outer:
+  for (let i = 0; i < main.length; i++) {
+    for (let j = i + 1; j < main.length; j++) {
+      const a = main[i], b = main[j];
+      const hit = SPOUSE_PAIR[pairKey(a, b)]
+               || SPOUSE_PAIR[pairKey(b, a)]
+               || SPOUSE_PAIR[pairKey(baseOf(a), baseOf(b))]
+               || SPOUSE_PAIR[pairKey(baseOf(b), baseOf(a))];
+      if (hit) {
+        combo = { "型": hit[0], "说明": hit[1], "星": [a, b] };
+        break outer;
+      }
+    }
+  }
+  if (!combo && main.length === 1) {
+    const one = main[0];
+    const txt = SPOUSE_SINGLE[one] || SPOUSE_SINGLE[baseOf(one)];
+    if (txt) combo = { "型": one, "说明": txt, "星": main.slice(0, 1) };
+  }
+
+  const sha = [], unknown = [];
+  for (const s of (fu["星曜"] || [])) {
+    const base = baseOf(s);
+    if (rawMain.indexOf(s) >= 0) continue;
+    if (SPOUSE_SHA[base]) {
+      sha.push({ "星": base, "型": SPOUSE_SHA[base][0], "说明": SPOUSE_SHA[base][1] });
+    } else {
+      unknown.push(s);
+    }
+  }
+
+  // 主星上的四化单独讲 —— 它是这块星曜的当前状态，
+  // 不是「另一种星」。混进煞星或未解读里都是错的。
+  const hua = [];
+  for (const s of rawMain) {
+    const i = s.indexOf("·");
+    if (i < 0) continue;
+    const k = s.slice(i + 1);
+    const role = SIHUA_ROLE[k];
+    hua.push({ "星": s, "化": k, "说明": (role ? role[1] : "") });
+  }
+
+  let dx = "", dxAge = "";
+  for (const x of (((r["大限"] || {})["列表"]) || [])) {
+    if (x["宫位"] !== "夫妻") continue;
+    dxAge = x["虚岁起"] + "–" + x["虚岁止"];
+    const from = parseInt(x["虚岁起"], 10);
+    if (!isNaN(from)) dx = from >= 45 ? SPOUSE_DAXIAN_LATE : SPOUSE_DAXIAN_YOUNG;
+    break;
+  }
+
+  return { "标题": "夫妻宫", "宫干": fu["天干"] || "", "地支": z,
+           "对宫": oppName, "主星": main, "组合": combo, "四化": hua,
+           "煞星": sha, "未解读": unknown,
+           "大限年龄": dxAge, "大限说明": dx };
+}
+
+/** 占星关系相关宫。空的宫也要讲 —— 空宫不是「这块没有」，
+    而是不靠外力推。 */
+function houseRelList(r) {
+  const houses = {};
+  for (const h of (r["宫位"] || [])) houses[h["宫"]] = h;
+  const items = [];
+  for (const n of [7, 8, 4, 10, 11]) {
+    const h = houses[n] || {};
+    const pls = h["内行星"] || [];
+    const info = HOUSE_REL[String(n)] || ["", ""];
+    items.push({
+      "宫": n, "名": info[0], "管什么": info[1], "星座": h["星座"] || "",
+      "星": pls.map((p) => ({ "名": p, "说明": HOUSE_REL_PLANET[p] || "" })),
+      "空": pls.length === 0,
+    });
+  }
+  return { "标题": "关系相关的宫", "列表": items, "空宫说明": HOUSE_REL_EMPTY };
+}
+
 /* ---------------- 占星白话 ---------------- */
 
 export function astroPlain(r) {
@@ -699,6 +884,7 @@ export function astroPlain(r) {
     轴点详批: angleList(r),
     性质详批: qualityList(r),
     相位详批: aspectList(r),
+    关系宫详批: houseRelList(r),
     实用档案: { 标题: "你的星座档案", 列表: profiles },
     术语: [["太阳星座", "你的核心自我和人生主题。"],
            ["月亮星座", "你的情绪需求和内心世界。"],

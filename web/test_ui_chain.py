@@ -736,6 +736,120 @@ if (form && form.hasListener("submit")) {
     + nFold1 + " 个折叠区块）");
 }
 
+// 1.6.0 新增：六亲 / 夫妻宫 / 关系宫
+//
+// 这批的静默失效点：
+//  - **男女分派**。男盘和女盘的八字完全相同（只差性别），
+//    六亲星若不分派，男女会看到同一段关于配偶的话 —— 硬错。
+//  - **措辞纪律**。夫妻宫有煞星就写成「婚姻不顺」是断语。
+//  - **空宫**。7/8 宫无星时不能只留个空卡片让人以为漏了。
+{
+  const html2 = byId.get("panel-plain").innerHTML;
+  const need2 = ["六亲怎么看", "夫妻宫", "关系相关的宫", "四柱各代表谁"];
+  const miss2 = need2.filter((k) => html2.indexOf(k) < 0);
+  if (miss2.length) { fail("白话区缺少六亲新内容: " + miss2.join("、")); process.exit(1); }
+
+  // 六亲四个角色都要有
+  for (const k of ["配偶", "父母", "兄弟", "子女"]) {
+    if (html2.indexOf(">" + k + "<") < 0) { fail("六亲缺角色: " + k); process.exit(1); }
+  }
+  // 男盘：配偶看财星。女盘：看官杀。所以页面必须出现财或官之一。
+  if (html2.indexOf("正财") < 0 && html2.indexOf("偏财") < 0
+      && html2.indexOf("正官") < 0 && html2.indexOf("七杀") < 0) {
+    fail("六亲里没有配偶星 —— 配偶一项是空的");
+  }
+  // 柱位对应要给出来，否则「配偶星落在日支」这件事看不懂。
+  // 注意：引擎里 `柱详解[].柱` 的值是「年/月/日/时」而不是「年柱/月柱」，
+  // PILLAR_ROLE 的键曾写成「年柱」，两边都查不到 → 全空。
+  // 而这种错对拍抓不到（Python 与 JS 都返回空字符串，512 例照样一致）。
+  for (const k of ["祖上与父母", "兄弟与同辈", "自己和配偶", "子女与晚年"]) {
+    if (html2.indexOf(k) < 0) {
+      fail("四柱对应缺「" + k + "」—— 查表键与实际数据对不上，全是空的");
+      process.exit(1);
+    }
+  }
+  // 空说明 = 查表落空。这是最直接的信号。
+  if (/<p class="li"><\/p>/.test(html2)) {
+    fail("页面里有空的说明段落 —— 文案表没查到值");
+  }
+
+  // 夫妻宫：主星组合或单星解读至少要有一个；煞星要走「要磨合」的口径
+  if (html2.indexOf("要磨合的地方") >= 0) {
+    // 有煞星时必须用这个标题，不能只列名字不解释
+    if (html2.indexOf("对宫是") < 0) {
+      fail("夫妻宫有煞星但没讲对宫 —— 只讲问题不讲关联，读起来像定论");
+    }
+  }
+  // 措辞纪律：这几类断语不能出现
+  for (const bad2 of ["婚姻不顺", "婚姻不稳", "克夫", "克妻", "注定", "命中注定"]) {
+    if (html2.indexOf(bad2) >= 0) {
+      fail("出现了断语「" + bad2 + "」—— 只说倾向与课题，不下吉凶结论");
+    }
+  }
+
+  // 关系宫：5 个宫，空宫要有解释而不是留空
+  // 宫数用「卡片容器里的标题」来数，别用 /第 \d+ 宫/ 全局匹配 ——
+  // 那个串在概述与正文里都会出现，数出来会偏多。
+  const relIdx0 = html2.indexOf("关系相关的宫");
+  const relSeg0 = relIdx0 >= 0
+    ? html2.slice(relIdx0, html2.indexOf("</details>", relIdx0)) : "";
+  const nHouse = (relSeg0.match(/<span class="pn">第 \d+ 宫<\/span>/g) || []).length;
+  if (nHouse < 5) { fail("关系宫只渲染了 " + nHouse + " 个（应 5 个）"); process.exit(1); }
+  const nEmptyNote = (html2.match(/这一宫没有星/g) || []).length;
+  if (nEmptyNote < 1) {
+    fail("关系宫有空宫但没解释 —— 空宫不是「这块没有」，要看文案兜住");
+  }
+  if (html2.indexOf("不靠外力推") < 0) {
+    fail("空宫没说明「不靠外力推」");
+  }
+  // 空宫说明不能当概述用：放在开头会变成「整块都没星」的意思，方向是错的。
+  // 判据用「第一个宫卡片容器之前」而不是「第 7 宫之前」——
+  // 「第 N 宫」这个串在别处也会出现，拿它当分界点会误判。
+  const relIdx = html2.indexOf("关系相关的宫");
+  if (relIdx < 0) { fail("找不到关系宫块"); process.exit(1); }
+  const relEnd = html2.indexOf("</details>", relIdx);
+  const relSeg = html2.slice(relIdx, relEnd);
+  const firstCard = relSeg.indexOf('<div class="ssx">');
+  const emptyNoteAt = relSeg.indexOf("不靠外力推");
+  if (firstCard < 0) { fail("关系宫块里没有卡片容器"); process.exit(1); }
+  if (emptyNoteAt >= 0 && emptyNoteAt > firstCard) {
+    fail("空宫说明被渲染成了卡片内容 —— 概述里出现「没有星」会读成整块都没星");
+  }
+
+  const nFold2 = (html2.match(/<details/g) || []).length;
+  const nClose2 = (html2.match(/<\/details>/g) || []).length;
+  if (nFold2 !== nClose2) fail("折叠标签不配平：" + nFold2 + " 开 / " + nClose2 + " 闭");
+  console.log("  OK   1.6.0 三块齐全：六亲 4 角色 + 四柱对应 / 夫妻宫 / "
+    + "关系宫 " + nHouse + " 个（空宫有解释 " + nEmptyNote + " 处，白话区共 "
+    + nFold2 + " 个折叠区块）");
+}
+
+// 主星带四化时不能被当成「另一种星」丢掉。
+//
+// 这个 bug 是时辰路径门禁（用辰时那个盘）抓出来的，512 例对拍全绿漏了它：
+// 那些盘夫妻宫要么有普通主星，要么本来就空，只有辰时那个盘的主星是
+// 「太阳·化禄」这种带后缀的。原先用 `"·" not in s` 过滤，主星就全空了，
+// 整块不渲染 —— 页面看着正常（少一块），看不出是 bug。
+//
+// 断言放在 Python 侧（scripts 的自测）而不是这里：数据层的丢数据问题
+// 与 DOM 无关，而产物里 ziweiPlain 并不挂在 window 上（只暴露 MingLi.run），
+// 写在 UI 断言里只会「找不到函数」而查不出真问题。
+{
+  const hl2 = (byId.get("headline") || {}).innerHTML || "";
+  // 页面这一侧只确认一件事：带化曜的夫妻宫不会让整块消失。
+  // 造不出那种盘（辰时那个盘的紫微依赖年干支），所以这里只能反向断言：
+  // 若夫妻宫块出现了，就不该同时出现「这些星还没写解读：」且里面带化曜的主星名。
+  const spSeg = hl2.indexOf("夫妻宫");
+  if (spSeg >= 0) {
+    const seg = hl2.slice(spSeg, hl2.indexOf("</details>", spSeg));
+    const m = seg.match(/这些星还没写解读：([^<]+)/);
+    if (m && /·化(禄|权|科|忌)/.test(m[1])) {
+      fail("带化曜的主星被当成「未解读的星」: " + m[1]);
+    }
+  }
+  console.log("  OK   带化曜的主星没被当成待补的星（数据层断言见 Python 自测）");
+}
+
 const hl = byId.get("headline");
 const pp = byId.get("panel-plain");
 const pr = byId.get("panel-pro");

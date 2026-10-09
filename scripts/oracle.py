@@ -633,6 +633,46 @@ def render_plain(data):
                 P.append("</div>")
             P.append("</div></details>")
 
+        # ---- 1.6.0：六亲 ----
+        if b.get("六亲详批") and b["六亲详批"]["列表"]:
+            kd = b["六亲详批"]
+            P.append('<details class="fold"><summary>六亲怎么看'
+                     '<span class="cnt">%s</span></summary><div class="fbody">'
+                     % _h(kd["性别"]))
+            P.append('<p class="sub2">%s</p>' % _h(kd["口径"]))
+            P.append('<div class="ssx">')
+            for it in kd["列表"]:
+                if not it["位置"]:
+                    # 一颗都没出现 —— 要说出来，不能留个空卡片让人以为漏了
+                    P.append('<div class="it"><div class="hd">'
+                             '<span class="pn">%s</span>'
+                             '<span class="pc">这一块没出现</span></div>'
+                             '<p class="li">你这张盘里%s都没有显出来，'
+                             '不代表没这部分关系，只说明它不靠星象主导。</p></div>'
+                             % (_h(it["角色"]), _h("、".join(it["星"]))))
+                    continue
+                P.append('<div class="it"><div class="hd">'
+                         '<span class="pn">%s</span>'
+                         '<span class="pc">%s · %d 个%s</span></div>'
+                         % (_h(it["角色"]), _h("、".join(it["星"])), it["个数"],
+                            "，有透干" if it["有透"] else "，都藏在支里"))
+                P.append('<p class="li">%s</p>' % _h(it["说明"]))
+                for x in it["位置"]:
+                    P.append('<p class="sub2">%s%s %s（%s）</p>'
+                             % (_h(x["柱"]), _h(x["干支"]), _h(x["十神"]),
+                                "透干，明面上的分量重"
+                                if x["透"] else "藏%s，存在感弱一些"
+                                % _h(x.get("藏") or "")))
+                P.append("</div>")
+            P.append("</div>")
+            P.append("<h3 style='font-size:14px;margin:14px 0 6px'>四柱各代表谁</h3>")
+            P.append('<div class="ssx">')
+            for x in kd["柱位"]:
+                P.append('<div class="it"><div class="hd">'
+                         '<span class="pn">%s%s</span></div>'
+                         '<p class="li">%s</p></div>'
+                         % (_h(x["柱"]), _h(x["干支"]), _h(x["代表"])))
+            P.append("</div></div></details>")
     if "紫微" in data:
         z = M_plain.ziwei_plain(data["紫微"])
         P.append('<h2 style="font-size:15px;border-left-color:var(--gold);margin-top:22px">紫微斗数 · 看事业、财运、感情</h2>')
@@ -763,6 +803,57 @@ def render_plain(data):
                 P.append("</div>")
             P.append("</div></div></details>")
 
+        # ---- 1.6.0：夫妻宫 ----
+        # 措辞纪律：这里最容易顺嘴写成断语（「婚姻不顺」）。
+        # 一律走「需要磨合的地方 / 怎么相处」，不走「好 / 坏」。
+        sp = z.get("夫妻详批") or {}
+        if sp.get("主星") or sp.get("煞星"):
+            P.append('<details class="fold"><summary>夫妻宫'
+                     '<span class="cnt">%s%s</span></summary><div class="fbody">'
+                     % (_h(("宫干 " + sp["宫干"]) if sp.get("宫干") else ""),
+                        _h(("大限 " + sp["大限年龄"]) if sp.get("大限年龄") else "")))
+            if sp.get("组合"):
+                P.append('<p class="li"><span class="h">%s</span>%s</p>'
+                         % (_h(sp["组合"]["型"]), _h(sp["组合"]["说明"])))
+            elif sp.get("主星"):
+                P.append('<p class="li">主星：%s</p>'
+                         % _h("、".join(sp["主星"])))
+            if sp.get("四化"):
+                # 主星上的四化是「这块星曜的当前状态」，要单独讲 ——
+                # 混进煞星或「未解读」里都是错的
+                P.append("<h3 style='font-size:14px;margin:14px 0 6px'>"
+                         "主星带四化</h3><div class='ssx'>")
+                for x in sp["四化"]:
+                    P.append('<div class="it"><div class="hd">'
+                             '<span class="pn">%s</span>'
+                             '<span class="pc">%s</span></div>'
+                             '<p class="li">%s</p></div>'
+                             % (_h(x["星"]), _h(x["化"]), _h(x["说明"])))
+                P.append("</div>")
+            if sp.get("对宫"):
+                P.append('<p class="sub2">对宫是%s宫 —— 夫妻和事业这一头'
+                         '互相牵动，不只是感情的事。</p>' % _h(sp["对宫"]))
+            if sp.get("煞星"):
+                P.append("<h3 style='font-size:14px;margin:14px 0 6px'>"
+                         "要磨合的地方</h3><div class=\'ssx\'>")
+                for x in sp["煞星"]:
+                    P.append('<div class="it"><div class="hd">'
+                             '<span class="pn xiong">%s</span>'
+                             '<span class="pc">%s</span></div>'
+                             '<p class="li">%s</p></div>'
+                             % (_h(x["星"]), _h(x["型"]), _h(x["说明"])))
+                P.append("</div>")
+            if sp.get("未解读"):
+                # 查不到解读的星要显式报出来，不能静默跳过 ——
+                # 静默跳过的话页面看着完整，其实少讲了东西
+                P.append('<p class="warn">这些星还没写解读：%s</p>'
+                         % _h("、".join(sp["未解读"])))
+            if sp.get("大限说明"):
+                P.append("<h3 style='font-size:14px;margin:14px 0 6px'>"
+                         "什么时候走到这块</h3>")
+                P.append('<p class="li">大限虚岁 %s</p>' % _h(sp["大限年龄"]))
+                P.append('<p class="sub2">%s</p>' % _h(sp["大限说明"]))
+            P.append("</div></details>")
     if "占星" in data:
         a = M_plain.astro_plain(data["占星"])
         P.append('<h2 style="font-size:15px;border-left-color:var(--gold);margin-top:22px">西洋占星 · 看性格的另一面</h2>')
@@ -904,6 +995,37 @@ def render_plain(data):
                     P.append("</div>")
                 P.append("</div>")
             P.append("</div></details>")
+        # ---- 1.6.0：关系宫 ----
+        if a.get("关系宫详批") and a["关系宫详批"]["列表"]:
+            hd2 = a["关系宫详批"]
+            nEmpty = len([x for x in hd2["列表"] if x["空"]])
+            P.append('<details class="fold"><summary>关系相关的宫'
+                     '<span class="cnt">%d 宫 · 空 %d 个</span></summary>'
+                     '<div class="fbody">' % (len(hd2["列表"]), nEmpty))
+            # 概述不能直接用「空宫说明」—— 那是给单个空宫写的，
+            # 放在开头会变成「整块的关系宫都没星」的意思，方向是错的。
+            P.append('<p class="sub2">这五宫分别管伴侣、深度联结、家、'
+                     '事业角色与朋友。先看每宫管什么，再看落了哪些星。</p>')
+            if nEmpty:
+                P.append('<p class="sub2">其中 %d 宫没有星。%s</p>'
+                         % (nEmpty, _h(hd2["空宫说明"])))
+            P.append('<div class="ssx">')
+            for x in hd2["列表"]:
+                P.append('<div class="it"><div class="hd">'
+                         '<span class="pn">第 %d 宫</span>'
+                         '<span class="pc">%s</span></div>'
+                         % (x["宫"], _h(x["星座"])))
+                P.append('<p class="li"><span class="h">%s</span>%s</p>'
+                         % (_h(x["名"]), _h(x["管什么"])))
+                if x["空"]:
+                    P.append('<p class="sub2">这一宫没有星，'
+                             '不靠外力推 —— 怎么走看你自己的选择。</p>')
+                else:
+                    for y in x["星"]:
+                        P.append('<p class="li">%s · %s</p>'
+                                 % (_h(y["名"]), _h(y["说明"])))
+                P.append("</div>")
+            P.append("</div></div></details>")
     P.append("</section>")
 
     return "".join(P)
