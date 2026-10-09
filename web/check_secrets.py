@@ -209,12 +209,25 @@ HIST_TOKEN_RE = re.compile(r"gh[pousr]_[A-Za-z0-9]{20,}")
 # 方向完全反了：那是规则文本，不是泄露。
 HIST_LIST_NAMES = ("FORBIDDEN", "RULES", "NEEDLES", "PATTERNS")
 
+# 只有「以变量名赋出一个列表」才算规则文件。
+# 原来只判「文本里出现过 FORBIDDEN/PATTERNS 等词」—— 结果 CHANGELOG 里
+# 一句「模式清单」就被当成规则文件，把真路径归成误报放过去了。
+# 判据必须是**赋值**，不是提及。
+RULE_FILE_ASSIGN = re.compile(
+    r"^\s*(?:_?[A-Z][A-Z_0-9]*|RULES|FORBIDDEN|NEEDLES|PATTERNS)\s*=\s*[\[{(]",
+    re.M)
+
 
 def _is_rule_file(path, text):
-    """这个文件是不是「用来列模式的清单文件」。"""
+    """这个文件是不是「用来列模式的清单文件」。
+
+    判据是**变量赋值出一个列表字面量**，而不是「文本里出现过这个词」。
+    否则 CHANGELOG 里写一句「模式清单」就会被当成规则文件，
+    把真路径归成误报放过去 —— 那正好是这次发生的事。
+    """
     if os.path.basename(path) in ("check_secrets.py", "test_secret_scanner.py"):
         return True
-    return any(re.search(r"\b%s\b" % n, text) for n in HIST_LIST_NAMES)
+    return bool(RULE_FILE_ASSIGN.search(text))
 
 
 def scan_history(max_commits=200):
@@ -279,10 +292,15 @@ def report_history():
                 cur_text = io.open(cur, encoding="utf-8").read()
             except UnicodeDecodeError:
                 cur_text = ""
-        # 判定顺序很重要：先看是不是规则文本，再看当前文件。
-        # 反过来会把 verify_dist.py 的 FORBIDDEN 里的 "ghp_" 报成
-        # 「当前文件里也有，需立刻清理」—— 方向完全反了。
-        if _is_rule_file(f, cur_text):
+        # 判定顺序：白名单 > 规则文本 > 当前文件 > 历史遗留。
+        #
+        # 白名单排第一是有意的：SKIP_FILES 里是「已知会写这类模式、
+        # 且模式本身是设计的一部分」的文件（扫描器、它的自检脚本）。
+        # 它们的本机路径全是拼出来的占位符，不是谁的本机目录。
+        # 排在规则文本之后也可以，但语义上白名单是更强的声明。
+        if f in SKIP_FILES:
+            v = "规则文本（白名单文件：扫描器/自检脚本里故意写的模式）"
+        elif _is_rule_file(f, cur_text):
             v = "规则文本（扫描器/黑名单里故意写的模式）"
         elif cur_text and lit in cur_text:
             v = "!!当前文件里也有!! 需立刻清理"
@@ -301,14 +319,20 @@ def report_history():
         if v.startswith("!!"):
             need_fix = True
     print("")
+    # gates.py 抓「最后一行非空输出」当门禁结论行，所以结论必须放最后。
+    # 之前把操作提示（git filter-repo…）写在最后，gates 抓到的就是它 ——
+    # 读起来像出了事，实际是「工作区没泄露，只有历史遗留待决策」。
     if not need_fix:
-        # 收尾提示会被 gates.py 抓作门禁的「结论行」，所以必须是
-        # 一句能独立成立的话。之前这里写「注意重写会改所有 commit SHA」，
-        # 实际没问题时读到的是这句 —— 方向完全反了。
-        print("  历史里没有必须处理的泄露（命中的都是规则文本）。")
-        if any(v[0].startswith("历史遗留") for v in verdict.values()):
-            print("  若日后出现「历史遗留」，公开仓库需重写历史才能清掉：")
+        legacy = [k for k, v in verdict.items() if v[0].startswith("历史遗留")]
+        if legacy:
+            print("  要彻底清掉历史遗留，需重写历史：")
             print("      git filter-repo 或 filter-branch + force push（tag 需重打）")
+            print("")
+            print("  结论：工作区无泄露；历史有 %d 处遗留（当前文件已修好）。" % len(legacy))
+        else:
+            print("  结论：历史里没有必须处理的泄露（命中的都是规则文本）。")
+    else:
+        print("  结论：!!有 %d 处当前文件里仍存在的泄露，见上。!!" % need_fix)
     print("")
     return need_fix
 

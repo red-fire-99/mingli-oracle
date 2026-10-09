@@ -9,12 +9,12 @@
 原来只扫**工作区当前内容**。但泄露一旦进过 commit，
 即使后来修好了，工作区扫描会全绿 —— 而 git 历史是公开的，那一处还留着。
 
-这次的实际情况正是如此：`tools/verify_ziwei.py` 曾硬编码
-
-    NODE = "C:/Users/<用户名>/.workbuddy-ai/binaries/node/versions/22.22.2-3/node.exe"
-    WORKSPACE = "C:/Users/<用户名>/.workbuddy-ai/binaries/node/workspace"
-
+这次的实际情况正是如此：`tools/verify_ziwei.py` 曾硬编码本机的
+node 可执行文件绝对路径（含真实用户名与工具链安装目录），
 工作区里早已改成 `$NODE` / `shutil.which`，工作区扫描一直是绿的。
+
+> 这里刻意不把原路径贴出来 —— 原样引用等于把刚清掉的东西又写回去。
+> 这正是新增的门禁当场抓到的问题。
 那个 commit 已在远端历史中移除，但**本机仍留着重写前的备份分支**
 （`backup/pre-rewrite-history`）—— 留着它就等于本机上还留着那份数据，
 将来一次误推就出去了。已删除该分支。
