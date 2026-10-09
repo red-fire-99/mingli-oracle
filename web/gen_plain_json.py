@@ -39,7 +39,10 @@ NAMES = ["DAY_MASTER", "STRENGTH", "SHISHEN", "ZIWEI_STAR", "SHENSHA",
          "STAGE_MEAN", "WUXING_IMAGERY", "ELEMENT_CROSS",
          # 1.4.0 新增：紫微十二宫 / 大限 / 四化
          "PALACE_MEANING", "PALACE_STAR_NOTE", "ZW_MALEFIC",
-         "DAXIAN_THEME", "SIHUA_ROLE", "LIUNIAN_NOTE"]
+         "DAXIAN_THEME", "SIHUA_ROLE", "LIUNIAN_NOTE",
+         # 1.5.0：神煞吉凶、十神分布、占星轴点/性质/相位
+         "SHENSHA_KIND", "SHENSHA_KIND_NOTE", "SHISHEN_COUNT_NOTE",
+         "SHISHEN_PAIR", "ANGLE_ROLE", "QUALITY_ROLE", "ASPECT_TONE"]
 
 
 def sanitize(o):

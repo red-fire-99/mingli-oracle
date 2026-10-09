@@ -449,6 +449,63 @@ export function renderPlain(data) {
         P.push("</div>");
       }
       P.push("</div></div></details>");
+    // 1.5.0：神煞逐条（修掉按名字猜吉凶的错判）
+    if (b["神煞详批"] && b["神煞详批"]["列表"].length) {
+      const ssd = b["神煞详批"];
+      const cnt = ssd["计数"];
+      P.push('<details class="fold"><summary>你命里的神煞'
+        + '<span class="cnt">助你 ' + cnt["助你"] + " · 中性 " + cnt["中性"]
+        + " · 留意 " + cnt["留意"] + "</span></summary><div class=\"fbody\">");
+      if (ssd["未归类"].length) {
+        // 未归类要显式说出来。默认当成吉的话，
+        // 等于「没查过就说好」—— 方向是错的，而且看不见。
+        P.push('<p class="warn">以下神煞还没归类，不计入吉凶统计：'
+          + h(ssd["未归类"].join("、")) + "</p>");
+      }
+      P.push('<div class="ssx">');
+      for (const x of ssd["列表"]) {
+        const cls = x["类别"] === "ji" ? " ji"
+                  : (x["类别"] === "xiong" ? " xiong" : "");
+        P.push('<div class="it"><div class="hd">'
+          + '<span class="pn' + cls + '">' + h(x["神煞"]) + "</span>"
+          + '<span class="pc">' + h(x["类别说明"]) + "</span></div>"
+          + '<p class="li">' + h(x["说明"]) + "</p>"
+          + '<p class="sub2">查' + h(x["查法"]) + "，落" + h(x["落支"])
+          + "（" + h(x["位置"]) + "）</p></div>");
+      }
+      P.push("</div></div></details>");
+    }
+
+    // 1.5.0：十神分布
+    if (b["十神详批"] && b["十神详批"]["明细"].length) {
+      const shd = b["十神详批"];
+      P.push('<details class="fold"><summary>你的十神分布'
+        + '<span class="cnt">哪个最重</span></summary><div class="fbody">'
+        + '<p class="li"><span class="h">最重的是</span>' + h(shd["最多"]) + "</p>"
+        + '<p class="sub2">' + h(shd["最多说明"]) + "</p>"
+        + '<div class="ssx">');
+      for (const x of shd["明细"]) {
+        P.push('<div class="it"><div class="hd">'
+          + '<span class="pn">' + h(x["十神"]) + "</span>"
+          + '<span class="pc">' + x["合计"] + " 个 · " + x["占比"].toFixed(1)
+          + "%</span></div>"
+          + '<p class="li">干上 ' + x["干上"] + " · 藏干 " + x["藏干"] + "</p>"
+          + '<p class="sub2">' + h(x["说明"]) + "</p></div>");
+      }
+      P.push("</div>");
+      if (shd["组合"].length) {
+        P.push("<h3 style='font-size:14px;margin:14px 0 6px'>组合看</h3>"
+          + "<div class='ssx'>");
+        for (const x of shd["组合"]) {
+          P.push('<div class="it"><div class="hd"><span class="pn">'
+            + h(x["组合"]) + "</span></div>"
+            + '<p class="li">' + h(x["说明"]) + "</p></div>");
+        }
+        P.push("</div>");
+      }
+      P.push("</div></details>");
+    }
+
     }
   }   // <- 收尾 if (data.八字)
 
@@ -676,6 +733,79 @@ export function renderPlain(data) {
           + "<div><b>对应身体</b>" + h(dd.身体) + "</div></div>");
       }
       P.push("</div>");
+    // 1.5.0：轴点
+    if (a["轴点详批"] && a["轴点详批"]["列表"].length) {
+      P.push('<details class="fold"><summary>两个轴点'
+        + '<span class="cnt">上升与天顶</span></summary><div class="fbody">'
+        + '<p class="sub2">上升不是「真正的你」，是别人看到的你；'
+        + "天顶是命运把你推向的位置。两者都不是性格本身，"
+        + "而是「你在别人眼里」和「你被认可的方向」。</p>"
+        + '<div class="ssx">');
+      for (const x of a["轴点详批"]["列表"]) {
+        P.push('<div class="it"><div class="hd">'
+          + '<span class="pn">' + h(x["名"]) + "</span>"
+          + '<span class="gz2">' + h(x["符号"]) + "</span>"
+          + '<span class="pc">' + h(x["星座"]) + " " + h(x["度数"])
+          + "</span></div>"
+          + '<p class="li"><span class="h">' + h(x["角色"]) + "</span>"
+          + h(x["含义"]) + "</p></div>");
+      }
+      P.push("</div></div></details>");
+    }
+
+    // 1.5.0：行星性质
+    if (a["性质详批"] && a["性质详批"]["明细"].length) {
+      const qd = a["性质详批"];
+      P.push('<details class="fold"><summary>你的行星性质'
+        + '<span class="cnt">' + h(qd["最多"]) + " 最多</span></summary>"
+        + '<div class="fbody">'
+        + '<p class="li">' + h(qd["最多说明"]) + "</p>"
+        + '<div class="ssx">');
+      for (const x of qd["明细"]) {
+        P.push('<div class="it"><div class="hd">'
+          + '<span class="pn">' + h(x["性质"]) + "</span>"
+          + '<span class="pc">' + x["个数"] + " 个</span></div>"
+          + '<p class="sub2">' + h(x["含义"]) + "</p></div>");
+      }
+      P.push("</div>");
+      P.push("<h3 style='font-size:14px;margin:14px 0 6px'>各星落哪类</h3>");
+      P.push('<p class="sub2">'
+        + h(qd["各星"].map((x) => x["天体"] + x["性质"][0]).join("；"))
+        + "</p>");
+      P.push("</div></details>");
+    }
+
+    // 1.5.0：全部相位
+    if (a["相位详批"] && a["相位详批"]["合计"]) {
+      const ad = a["相位详批"];
+      P.push('<details class="fold"><summary>全部相位'
+        + '<span class="cnt">和谐 ' + ad["和谐"].length + " · 张力 "
+        + ad["张力"].length + "</span></summary><div class=\"fbody\">"
+        + '<p class="sub2">和谐相是天生助力，张力相是要练的地方 —— '
+        + "「哪些是助力、哪些是功课」这个分组比逐个列更重要。"
+        + "之前只讲了强度前 4 组，其余 19 组算了白算。</p>");
+      const groups = [["和谐", "ji", "天生的助力"],
+                      ["张力", "xiong", "要练的地方"]];
+      for (const grp of groups) {
+        const tag = grp[0], cls = grp[1], title = grp[2];
+        if (!ad[tag].length) continue;
+        P.push("<h3 style='font-size:14px;margin:14px 0 6px'>" + title
+          + "（" + ad[tag].length + " 组）</h3>");
+        P.push('<div class="ssx">');
+        for (const x of ad[tag]) {
+          P.push('<div class="it"><div class="hd">'
+            + '<span class="pn' + (cls ? " " + cls : "") + '">'
+            + h(x["职能1"]) + " · " + h(x["职能2"]) + "</span>"
+            + '<span class="pc">' + h(x["强度档"]) + " " + x["强度"].toFixed(2)
+            + "</span></div>"
+            + '<p class="li">' + h(x["说明"]) + "</p>"
+            + '<p class="sub2">' + h(x["强度含义"]) + "</p></div>");
+        }
+        P.push("</div>");
+      }
+      P.push("</div></details>");
+    }
+
     }
   }
 

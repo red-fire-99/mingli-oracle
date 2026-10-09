@@ -25,6 +25,8 @@ const {
   STAGE_MEAN, WUXING_IMAGERY, ELEMENT_CROSS,
   PALACE_MEANING, PALACE_STAR_NOTE, ZW_MALEFIC,
   DAXIAN_THEME, SIHUA_ROLE, LIUNIAN_NOTE,
+  SHENSHA_KIND, SHENSHA_KIND_NOTE, SHISHEN_COUNT_NOTE, SHISHEN_PAIR,
+  ANGLE_ROLE, QUALITY_ROLE, ASPECT_TONE,
 } = DATA;
 
 /* ------------------------------------------------------------------
@@ -226,6 +228,8 @@ export function baziPlain(r) {
     流年详批: { 标题: "未来七年的年度节奏", 列表: liunianFull },
     五行意象: { 标题: "你身上五股的劲儿",
                 最强: wxImg.strong, 最弱: wxImg.weak, 明细: wxImg.items },
+    神煞详批: shenshaList(r),
+    十神详批: shishenList(r),
     术语: [["日主", GLOSSARY["日主/日干"]], ["十神", GLOSSARY["十神"]],
            ["大运", GLOSSARY["大运"]], ["神煞", GLOSSARY["神煞"]],
            ["喜用神", GLOSSARY["喜用神"]]],
@@ -418,6 +422,161 @@ function sihuaList(r) {
   };
 }
 
+/* ---------------- 1.5.0: 神煞 / 十神 / 轴点 / 性质 / 相位 ---------------- */
+
+/** 相位强度档位。与 Python 侧 _aspect_level 同构（阈值必须一致）。 */
+function aspectLevel(v) {
+  if (v >= 0.85) return ["很强", "影响很明显，基本构成性格的一部分"];
+  if (v >= 0.6) return ["较强", "有影响，但会随环境变化"];
+  return ["一般", "是底色，不是主线"];
+}
+
+function shenshaList(r) {
+  const out = [];
+  for (const s of (r["神煞"] || [])) {
+    const name = s["神煞"];
+    const kind = SHENSHA_KIND[name] || "";
+    out.push({
+      "神煞": name, "查法": s["查法"] || "", "落支": s["落支"] || "",
+      "位置": s["位置"] || "", "说明": s["说明"] || "",
+      "类别": kind,
+      // 表里没有的标成空而不是默认吉 —— 默认吉等于「没查过就说好」
+      "类别说明": SHENSHA_KIND_NOTE[kind] || "未归类",
+    });
+  }
+  const unknown = out.filter((x) => !x["类别"]).map((x) => x["神煞"]);
+  const cnt = (k) => out.filter((x) => x["类别"] === k).length;
+  return { "标题": "你命里的神煞", "列表": out, "未归类": unknown,
+           "计数": { "助你": cnt("ji"), "中性": cnt("xu"),
+                     "留意": cnt("xiong"), "未归类": unknown.length } };
+}
+
+function shishenList(r) {
+  const count = {};
+  const zCount = {};
+  for (const c of (r["柱详解"] || [])) {
+    const g = c["干十神"];
+    if (g && g !== "日主") count[g] = (count[g] || 0) + 1;
+    for (const z of (c["支藏干"] || [])) {
+      const ss = z["十神"];
+      if (ss) zCount[ss] = (zCount[ss] || 0) + 1;
+    }
+  }
+  let total = 0;
+  for (const k of Object.keys(count)) total += count[k];
+  for (const k of Object.keys(zCount)) total += zCount[k];
+
+  /* 十神的首次出现顺序：必须与 Python 侧一致。
+   Python 的 dict 保持插入序，JS 的对象键序在「字符串键」上也是插入序 ——
+   但下面 count/zCount 是分开建的，Python 侧 items 的初始顺序来自
+   set(list(count) + list(zCount))，那是**无序**的。
+   所以两边都改成显式的「先 count 的插入序、再 zCount 补充」，
+   不依赖语言各自的集合/对象顺序。 */
+  const keys = [];
+  for (const k of Object.keys(count)) keys.push(k);
+  for (const k of Object.keys(zCount)) if (keys.indexOf(k) < 0) keys.push(k);
+  const items = keys.map((ss) => {
+    const gan = count[ss] || 0, zhi = zCount[ss] || 0;
+    return { "十神": ss, "干上": gan, "藏干": zhi, "合计": gan + zhi,
+             "占比": total ? Math.round((gan + zhi) / total * 1000) / 10 : 0,
+             "说明": SHISHEN_COUNT_NOTE[ss] || "" };
+  });
+  // 稳定插入排序：Python 的 sort 是稳定的，JS 的 sort 不是
+  for (let i = 1; i < items.length; i++) {
+    const cur = items[i];
+    let j = i - 1;
+    while (j >= 0 && items[j]["合计"] < cur["合计"]) { items[j + 1] = items[j]; j--; }
+    items[j + 1] = cur;
+  }
+
+  // 并列最高要全列：八个字摊到十种十神上，四五个并列第一是常态
+  const topN = items.length ? items[0]["合计"] : 0;
+  const tied = items.filter((x) => x["合计"] === topN).map((x) => x["十神"]);
+  let lead;
+  if (tied.length === 1) {
+    lead = { "名": tied[0], "并列": false, "说明": SHISHEN_COUNT_NOTE[tied[0]] || "" };
+  } else {
+    lead = { "名": tied.join("、"), "并列": true,
+             "说明": "你的十神没有单一主角——" + tied.join("、") + " 各占 "
+               + topN + " 个。这类盘的特点是均衡：适应面广，什么环境都能待，"
+               + "代价是「没有特别想抓的那一样」。" };
+  }
+
+  const pairs = [];
+  const top = items.filter((x) => x["合计"] >= 2).map((x) => x["十神"]).slice(0, 4);
+  for (let i = 0; i < top.length; i++) {
+    for (let j = i + 1; j < top.length; j++) {
+      const txt = SHISHEN_PAIR[top[i] + "|" + top[j]]
+               || SHISHEN_PAIR[top[j] + "|" + top[i]];
+      if (txt) pairs.push({ "组合": top[i] + " + " + top[j], "说明": txt });
+    }
+  }
+  return { "标题": "你的十神分布", "明细": items, "组合": pairs,
+           "最多": lead["名"], "并列": lead["并列"],
+           "最多说明": lead["说明"], "并列项": tied };
+}
+
+function angleList(r) {
+  const out = [];
+  for (const key of ["上升", "天顶"]) {
+    const v = (r["轴点"] || {})[key];
+    if (!v) continue;
+    const role = ANGLE_ROLE[key] || { "角色": "", "含义": "" };
+    out.push({ "名": key, "符号": v["符号"] || "", "星座": v["星座"] || "",
+               "度数": v["星座内度"] || "",
+               "角色": role["角色"], "含义": role["含义"] });
+  }
+  return { "标题": "两个轴点", "列表": out };
+}
+
+function qualityList(r) {
+  const dist = r["性质分布"] || {};
+  const planets = [];
+  for (const p of (r["天体"] || [])) {
+    const q = QUALITY_ROLE[p["性质"]];
+    if (q) planets.push({ "天体": p["天体"], "性质": p["性质"],
+                          "星座": p["星座"] || "", "含义": q["含义"] });
+  }
+  const items = [];
+  for (const name of ["基本", "固定", "变动"]) {
+    if (!(name in dist)) continue;
+    const info = QUALITY_ROLE[name] || {};
+    items.push({ "性质": name, "名": info["名"] || name,
+                 "个数": dist[name], "含义": info["含义"] || "" });
+  }
+  for (let i = 1; i < items.length; i++) {
+    const cur = items[i]; let j = i - 1;
+    while (j >= 0 && items[j]["个数"] < cur["个数"]) { items[j + 1] = items[j]; j--; }
+    items[j + 1] = cur;
+  }
+  let total = 0;
+  for (const k of Object.keys(dist)) total += dist[k];
+  return { "标题": "你的行星性质", "明细": items, "各星": planets,
+           "最多": items.length ? items[0]["性质"] : "",
+           "最多说明": items.length ? items[0]["含义"] : "", "总计": total };
+}
+
+function aspectList(r) {
+  const good = [], tension = [];
+  const list = (r["相位"] || []).slice().sort((a, b) => b["强度"] - a["强度"]);
+  for (const a of list) {
+    const tone = ASPECT_TONE[a["相位"]];
+    if (!tone) continue;
+    const lv = aspectLevel(a["强度"]);
+    const p1 = (PLANET_ROLE[a["天体1"]] || [a["天体1"], ""])[0];
+    const p2 = (PLANET_ROLE[a["天体2"]] || [a["天体2"], ""])[0];
+    const item = { "天体1": a["天体1"], "天体2": a["天体2"],
+                   "职能1": p1, "职能2": p2, "相位": a["相位"],
+                   "强度": a["强度"], "强度档": lv[0], "强度含义": lv[1],
+                   "性质": tone[0], "说明": tone[1],
+                   "文": "你的「" + p1 + "」和「" + p2 + "」" + a["相位"]
+                       + "——" + tone[1] + "（" + lv[0] + "）" };
+    if (tone[0] === "和谐") good.push(item); else tension.push(item);
+  }
+  return { "标题": "全部相位", "和谐": good, "张力": tension,
+           "合计": good.length + tension.length };
+}
+
 /* ---------------- 占星白话 ---------------- */
 
 export function astroPlain(r) {
@@ -537,6 +696,9 @@ export function astroPlain(r) {
       最多: topE, 缺失: missing,
     },
     关系张力: { 标题: "你身上的主要张力", 列表: tension },
+    轴点详批: angleList(r),
+    性质详批: qualityList(r),
+    相位详批: aspectList(r),
     实用档案: { 标题: "你的星座档案", 列表: profiles },
     术语: [["太阳星座", "你的核心自我和人生主题。"],
            ["月亮星座", "你的情绪需求和内心世界。"],

@@ -672,6 +672,70 @@ if (form && form.hasListener("submit")) {
     + "流年命宫 / 四化 4 项（白话区共 " + nFold0 + " 个折叠区块）");
 }
 
+// 1.5.0 新增第二批：神煞 / 十神 / 轴点 / 性质 / 全部相位
+//
+// 这批的坑全在「静默失效」上，静态标签检查抓不到：
+//  - 神煞吉凶原先按名字猜，把亡神判成吉、寡宿判成凶；
+//    渲染对了但分类错了，页面看不出异常。
+//  - 十神八个字摊到十种十神上，出现四五个并列第一是常态；
+//    只报一个就等于说「你最重要的是偏印」，方向是错的。
+//  - 相位原先只讲强度前 4 组，其余 19 组算了白算。
+// 所以这里断言的是内容与分类，不是「有没有这个标签」。
+{
+  const html1 = byId.get("panel-plain").innerHTML;
+  const need1 = ["你命里的神煞", "你的十神分布", "两个轴点",
+                 "你的行星性质", "全部相位",
+                 "天生的助力", "要练的地方"];
+  const miss1 = need1.filter((k) => html1.indexOf(k) < 0);
+  if (miss1.length) { fail("白话区缺少 A2 新内容: " + miss1.join("、")); process.exit(1); }
+
+  // 神煞：逐条都要有「查法 + 落支」，不能只是一串名字
+  const nSs = (html1.match(/查[^<]+，落/g) || []).length;
+  if (nSs < 5) { fail("神煞只渲染了 " + nSs + " 条（应 5 条以上且逐条带查法）"); process.exit(1); }
+  if (html1.indexOf("不计入吉凶统计") >= 0) {
+    fail("还有神煞没归类 —— 分类表漏了，不能就这样发出去");
+  }
+  // 三类标签都要出现：全归成同一类说明表又退回按名字猜了
+  const nKinds = ["助你的", "中性的", "要留意的"].filter((k) => html1.indexOf(k) >= 0).length;
+  if (nKinds < 2) { fail("神煞只有 " + nKinds + " 种分类（都归成一类等于没分）"); process.exit(1); }
+
+  // 十神：明细要有占比，并列时必须写成并列而不是只报一个
+  if (html1.indexOf("干上") < 0 || html1.indexOf("藏干") < 0) {
+    fail("十神明细没区分干上/藏干");
+  }
+  const tied = html1.indexOf("并列") >= 0 || html1.indexOf("各占") >= 0;
+  if (!tied) {
+    // 这个盘不一定并列，只要求：报了「最多」时不能是并列却当成唯一
+    const m = html1.match(/最重的是<\/span>([^<]+)/);
+    if (m && /、/.test(m[1])) { fail("并列十神被当成唯一报了: " + m[1]); process.exit(1); }
+  }
+
+  // 轴点：上升与天顶两个都要在，且都要说明「这不是性格本身」
+  for (const k of ["上升", "天顶"]) {
+    if (html1.indexOf(">" + k + "<") < 0) { fail("轴点缺: " + k); process.exit(1); }
+  }
+  if (html1.indexOf("别人看到的你") < 0) { fail("轴点没说明上升是「别人看到的你」"); process.exit(1); }
+
+  // 性质：三类各自的个数要列出来
+  for (const k of ["基本", "固定", "变动"]) {
+    if (html1.indexOf(k) < 0) { fail("行星性质缺: " + k); process.exit(1); }
+  }
+
+  // 相位：原先只画前 4 组，现在要全列。至少 10 组。
+  const nAs = (html1.match(/<span class="pn[ ji]*">[^<]+ · [^<]+<\/span>/g) || []).length;
+  if (nAs < 10) { fail("相位只渲染了 " + nAs + " 组（这批的改动就是补全全部相位）"); process.exit(1); }
+  if (html1.indexOf("很强") < 0 && html1.indexOf("较强") < 0 && html1.indexOf("一般") < 0) {
+    fail("相位没有强度档位 —— 只有裸数字的话读者判断不了轻重");
+  }
+
+  const nFold1 = (html1.match(/<details/g) || []).length;
+  const nClose1 = (html1.match(/<\/details>/g) || []).length;
+  if (nFold1 !== nClose1) fail("折叠标签不配平：" + nFold1 + " 开 / " + nClose1 + " 闭");
+  console.log("  OK   A2 五块齐全：神煞 " + nSs + " 条 / 十神分布 / "
+    + "轴点 2 个 / 行星性质 3 类 / 相位 " + nAs + " 组（白话区共 "
+    + nFold1 + " 个折叠区块）");
+}
+
 const hl = byId.get("headline");
 const pp = byId.get("panel-plain");
 const pr = byId.get("panel-pro");

@@ -217,6 +217,22 @@ details.fold .fbody{padding:2px 16px 14px}
  border-radius:8px;padding:0 7px}
 .pl .tag.hi,.dx .tag.hi{background:var(--red);color:#fff}
 .sh .it.ji .pn{color:#8a6a1f}
+/* 1.5.0：神煞 / 十神 / 轴点 / 性质 / 相位 的卡片容器
+   布局沿用 .pl/.dx/.sh，只是条目长短差得多，用 flex 竖排更好读 */
+.ssx{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.ssx .it{background:#fff;border:1px solid var(--line);border-radius:10px;
+ padding:10px 13px;line-height:1.7}
+.ssx .hd{display:flex;align-items:baseline;gap:7px;margin-bottom:4px;flex-wrap:wrap}
+.ssx .pn{font-size:15px;font-weight:700;color:var(--red)}
+.ssx .pc{margin-left:auto;font-size:12px;color:var(--sub);text-align:right}
+.ssx .li{font-size:13px;margin:4px 0 0;color:var(--ink)}
+.ssx .li .h{color:var(--sub);margin-right:5px}
+.ssx .sub2{color:var(--sub);font-size:12px;margin:3px 0 0}
+.ssx .gz2{font-size:15px;font-weight:700;letter-spacing:1px}
+/* 类别色只加在神煞名这个标签上。整张卡染色会变成
+   「吉=绿卡、凶=红卡」的吉凶断语观感，而这里只想区分标签。 */
+.ssx .pn.ji{color:var(--green)}
+.ssx .pn.xiong{color:#8a4a20}
 /* 两套体系并置的说明条 */
 .note-sys{background:#f3f6f8;border-left:4px solid var(--blue);border-radius:0 8px 8px 0;
  padding:9px 14px;font-size:13px;color:#3c5566;line-height:1.75;margin:9px 0}
@@ -564,6 +580,59 @@ def render_plain(data):
                 P.append("</div>")
             P.append("</div></div></details>")
 
+
+        # ---- 1.5.0：神煞逐条（修掉按名字猜吉凶的错判）----
+        if b.get("神煞详批") and b["神煞详批"]["列表"]:
+            ssd = b["神煞详批"]
+            cnt = ssd["计数"]
+            P.append('<details class="fold"><summary>你命里的神煞'
+                     '<span class="cnt">助你 %d · 中性 %d · 留意 %d</span>'
+                     '</summary><div class="fbody">' % (cnt["助你"], cnt["中性"], cnt["留意"]))
+            if ssd["未归类"]:
+                # 未归类要显式说出来。默认当成吉的话，
+                # 等于「没查过就说好」—— 方向是错的，而且看不见。
+                P.append('<p class="warn">以下神煞还没归类，不计入吉凶统计：%s</p>'
+                         % _h("、".join(ssd["未归类"])))
+            P.append('<div class="ssx">')
+            for x in ssd["列表"]:
+                cls = {"ji": "ji", "xiong": "xiong"}.get(x["类别"], "")
+                P.append('<div class="it"><div class="hd">'
+                         '<span class="pn%s">%s</span>' % (
+                             " " + cls if cls else "", _h(x["神煞"])))
+                P.append('<span class="pc">%s</span></div>'
+                         % _h(x["类别说明"]))
+                P.append('<p class="li">%s</p>' % _h(x["说明"]))
+                P.append('<p class="sub2">查%s，落%s（%s）</p>'
+                         % (_h(x["查法"]), _h(x["落支"]), _h(x["位置"])))
+                P.append("</div>")
+            P.append("</div></div></details>")
+
+        # ---- 1.5.0：十神分布 ----
+        if b.get("十神详批") and b["十神详批"]["明细"]:
+            shd = b["十神详批"]
+            P.append('<details class="fold"><summary>你的十神分布'
+                     '<span class="cnt">哪个最重</span></summary><div class="fbody">')
+            P.append('<p class="li"><span class="h">最重的是</span>%s</p>'
+                     % _h(shd["最多"]))
+            P.append('<p class="sub2">%s</p>' % _h(shd["最多说明"]))
+            P.append('<div class="ssx">')
+            for x in shd["明细"]:
+                P.append('<div class="it"><div class="hd">'
+                         '<span class="pn">%s</span>'
+                         '<span class="pc">%d 个 · %.1f%%</span></div>'
+                         '<p class="li">干上 %d · 藏干 %d</p>'
+                         '<p class="sub2">%s</p></div>'
+                         % (_h(x["十神"]), x["合计"], x["占比"],
+                            x["干上"], x["藏干"], _h(x["说明"])))
+            P.append("</div>")
+            if shd["组合"]:
+                P.append("<h3 style='font-size:14px;margin:14px 0 6px'>组合看</h3><div class='ssx'>")
+                for x in shd["组合"]:
+                    P.append('<div class="it"><div class="hd"><span class="pn">%s</span></div>'
+                             '<p class="li">%s</p></div>' % (_h(x["组合"]), _h(x["说明"])))
+                P.append("</div>")
+            P.append("</div></details>")
+
     if "紫微" in data:
         z = M_plain.ziwei_plain(data["紫微"])
         P.append('<h2 style="font-size:15px;border-left-color:var(--gold);margin-top:22px">紫微斗数 · 看事业、财运、感情</h2>')
@@ -772,7 +841,71 @@ def render_plain(data):
                             _h(d["职业"]), _h(d["身体"])))
             P.append("</div>")
 
+        # ---- 1.5.0：轴点 ----
+        if a.get("轴点详批") and a["轴点详批"]["列表"]:
+            P.append('<details class="fold"><summary>两个轴点'
+                     '<span class="cnt">上升与天顶</span></summary><div class="fbody">')
+            P.append('<p class="sub2">上升不是「真正的你」，是别人看到的你；'
+                     '天顶是命运把你推向的位置。两者都不是性格本身，'
+                     '而是「你在别人眼里」和「你被认可的方向」。</p><div class="ssx">')
+            for x in a["轴点详批"]["列表"]:
+                P.append('<div class="it"><div class="hd">'
+                         '<span class="pn">%s</span><span class="gz2">%s</span>'
+                         '<span class="pc">%s %s</span></div>'
+                         % (_h(x["名"]), _h(x["符号"]), _h(x["星座"]), _h(x["度数"])))
+                P.append('<p class="li"><span class="h">%s</span>%s</p>'
+                         % (_h(x["角色"]), _h(x["含义"])))
+                P.append("</div>")
+            P.append("</div></div></details>")
+
+        # ---- 1.5.0：行星性质 ----
+        if a.get("性质详批") and a["性质详批"]["明细"]:
+            qd = a["性质详批"]
+            P.append('<details class="fold"><summary>你的行星性质'
+                     '<span class="cnt">%s 最多</span></summary><div class="fbody">'
+                     % _h(qd["最多"]))
+            P.append('<p class="li">%s</p>' % _h(qd["最多说明"]))
+            P.append('<div class="ssx">')
+            for x in qd["明细"]:
+                P.append('<div class="it"><div class="hd">'
+                         '<span class="pn">%s</span><span class="pc">%d 个</span></div>'
+                         '<p class="sub2">%s</p></div>'
+                         % (_h(x["性质"]), x["个数"], _h(x["含义"])))
+            P.append("</div>")
+            P.append("<h3 style='font-size:14px;margin:14px 0 6px'>各星落哪类</h3>")
+            P.append('<p class="sub2">%s</p>'
+                     % _h("；".join("%s%s" % (x["天体"], x["性质"][0]) for x in qd["各星"])))
+            P.append("</div></details>")
+
+        # ---- 1.5.0：全部相位 ----
+        if a.get("相位详批") and a["相位详批"]["合计"]:
+            ad = a["相位详批"]
+            P.append('<details class="fold"><summary>全部相位'
+                     '<span class="cnt">和谐 %d · 张力 %d</span></summary><div class="fbody">'
+                     % (len(ad["和谐"]), len(ad["张力"])))
+            P.append('<p class="sub2">和谐相是天生助力，张力相是要练的地方 —— '
+                     '「哪些是助力、哪些是功课」这个分组比逐个列更重要。'
+                     '之前只讲了强度前 4 组，其余 19 组算了白算。</p>')
+            for tag, cls, title in (("和谐", "ji", "天生的助力"),
+                                    ("张力", "xiong", "要练的地方")):
+                if not ad[tag]:
+                    continue
+                P.append("<h3 style='font-size:14px;margin:14px 0 6px'>%s（%d 组）</h3>"
+                         % (title, len(ad[tag])))
+                P.append('<div class="ssx">')
+                for x in ad[tag]:
+                    P.append('<div class="it"><div class="hd">'
+                             '<span class="pn%s">%s · %s</span>'
+                             '<span class="pc">%s %.2f</span></div>'
+                             % (" " + cls if cls else "", _h(x["职能1"]),
+                                _h(x["职能2"]), _h(x["强度档"]), x["强度"]))
+                    P.append('<p class="li">%s</p>' % _h(x["说明"]))
+                    P.append('<p class="sub2">%s</p>' % _h(x["强度含义"]))
+                    P.append("</div>")
+                P.append("</div>")
+            P.append("</div></details>")
     P.append("</section>")
+
     return "".join(P)
 
 
