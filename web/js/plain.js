@@ -12,6 +12,7 @@
    =================================================================== */
 
 import DATA from "./plain-data.json" with { type: "json" };
+import { pyRoundN } from "./kernel.js";
 
 const {
   DAY_MASTER, STRENGTH, SHISHEN, ZIWEI_STAR, SHENSHA,
@@ -31,6 +32,13 @@ const {
   SPOUSE_PAIR, SPOUSE_SINGLE, SPOUSE_SHA,
   SPOUSE_DAXIAN_YOUNG, SPOUSE_DAXIAN_LATE,
   HOUSE_REL, HOUSE_REL_PLANET, HOUSE_REL_EMPTY, KIN_CAVEAT,
+  CROSS_AXES, CROSS_SHORT, ZW_CROSS, ASTRO_CROSS,
+  CROSS_HEAD, CROSS_CAVEAT,
+  VENUS_ATTRACT, MOON_RELATION, VENUS_MOON_ASPECT,
+  TAOHUA_HEAD, TAOHUA_CAVEAT,
+  INDUSTRY_ROLES, ROLE_FALLBACK,
+  ZW_CAREER_ROLE, ASTRO_CAREER_ROLE,
+  CAREER_HEAD, CAREER_CAVEAT,
 } = DATA;
 
 /* ------------------------------------------------------------------
@@ -891,6 +899,402 @@ export function astroPlain(r) {
            ["上升星座", GLOSSARY["上升星座"]],
            ["宫位", "星盘里的十二个生活领域，比如第4宫管家庭、第10宫管事业。"],
            ["相位", GLOSSARY["相位"]]],
+  };
+}
+
+/* ===================================================================
+   crossPlain —— B 类：三盘交叉印证的 JS 移植（对 plain.py 的 cross_plain）
+
+   移植时踩过的坑，写在这里免得下次重犯：
+
+   1. **只有一盘参与时整行会静默消失。** Python 里 `agree = len(set(hits)) == 1`
+      在只有一盘时平凡为真，于是这一行既进不了「一致」（要 >=2 盘）
+      也进不了「分歧」（要不一致），两边同时消失 —— 页面一声不吭地少了
+      一半内容。修法是加第三个桶「单盘」。JS 侧必须同步，
+      否则 diff_py_js 会报不一致（而那正是我们要的行为）。
+
+   2. **不能用 `if (r)` 判空。** Python 的 `(0, "…")` 是真值，
+      JS 的 `[0, "…"]` 也是真值，这边一致；但如果哪天改成返回
+      `ends[side]` 这种可能是 "" 的值，两边就会分叉。统一用 `!= null`。
+
+   3. **空数组在 Python 是 falsy、JS 是 truthy。** 判「有没有数据」
+      一律用 `.length`，不要写 `if (!arr)`。
+   =================================================================== */
+
+function baziCrossCtx(r) {
+  /* 只数透干（天干上出现的十神），不算藏干。
+     六个维度里好几个都靠十神判，全部掺进藏干就分不出来了。 */
+  const c = { 食伤: 0, 同侪: 0, 守: 0, 变: 0, 对宫星: 0, 官杀: 0, 快: 0, 慢: 0 };
+  for (const d of (r.柱详解 || [])) {
+    if (d.柱 === "日") continue;
+    const ss = d.干十神;
+    if (ss === "食神" || ss === "伤官") c.食伤 += 1;
+    else if (ss === "比肩" || ss === "劫财") { c.同侪 += 1; c.守 += 1; }
+    else if (ss === "正印" || ss === "偏印") c.守 += 1;
+    else if (ss === "正财" || ss === "偏财" || ss === "正官" || ss === "七杀") {
+      c.变 += 1; c.对宫星 += 1;
+    }
+    if (ss === "正官" || ss === "七杀") c.官杀 += 1;
+  }
+  const pct = r.五行统计 || {};
+  /* Python 的 round() 是银行家舍入（.5 归偶），JS 的 Math.round 是四舍五入。
+     kernel.js 的 pyRoundN 就是为这件事写的（nd 省略时等价于 round()），
+     这里必须用它 —— 自己写一份必然在 .5 上分叉。 */
+  c.快 = pyRoundN((pct.木 || 0) + (pct.火 || 0));
+  c.慢 = pyRoundN((pct.金 || 0) + (pct.水 || 0));
+  return c;
+}
+
+function baziCrossSide(ctx, axisName) {
+  if (!ctx) return null;
+  switch (axisName) {
+    case "表达方式":
+      return [ctx.食伤 ? 0 : 1,
+        ctx.食伤 ? `八字·食伤透干 ${ctx.食伤} 个`
+                  : "八字·食伤不透，思路先在心里过一遍"];
+    case "行动节奏":
+      return [ctx.快 >= ctx.慢 ? 0 : 1,
+        `八字·木火 ${ctx.快}% 对金水 ${ctx.慢}%`];
+    case "社交范围":
+      return [ctx.同侪 ? 0 : 1,
+        ctx.同侪 ? `八字·比劫透干 ${ctx.同侪} 个`
+                 : "八字·比劫不显，圈子偏小而固定"];
+    case "守旧与换新":
+      return [ctx.守 >= ctx.变 ? 0 : 1,
+        `八字·印比 ${ctx.守} 个 对 食伤财 ${ctx.变} 个`];
+    case "关系经营":
+      return [ctx.对宫星 ? 0 : 1,
+        ctx.对宫星 ? `八字·财官透干 ${ctx.对宫星} 个`
+                    : "八字·财官不显，关系上偏向留有余地"];
+    case "事业路子":
+      return [ctx.官杀 > ctx.食伤 ? 0 : 1,
+        `八字·官杀 ${ctx.官杀} 个 对 食伤 ${ctx.食伤} 个`];
+    default:
+      return null;
+  }
+}
+
+/* 紫微命宫主星；空宫借对宫 —— 与 ziweiPlain 同一套取法。
+   主星名可能带「·化禄」这类后缀，必须先切掉再查表
+   （不切的话 `s in ZIWEI_STAR` 为假，整块内容静默不渲染 ——
+   这个坑在夫妻宫那块踩过一次）。 */
+const ZW_OPPOSITE_LOCAL = {
+  子: "午", 午: "子", 丑: "未", 未: "丑", 寅: "申", 申: "寅",
+  卯: "酉", 酉: "卯", 辰: "戌", 戌: "辰", 巳: "亥", 亥: "巳",
+};
+
+function zwMingStar(ziweiR) {
+  const palaces = ziweiR.十二宫 || [];
+  const ming = palaces.find((p) => p.是否命宫);
+  if (!ming) return null;
+  let cand = (ming.星曜 || []).map((s) => s.split("·")[0])
+    .filter((s) => s in ZIWEI_STAR);
+  if (!cand.length) {
+    const oz = ZW_OPPOSITE_LOCAL[ming.地支] || "";
+    const op = palaces.find((p) => p.地支 === oz);
+    if (op) {
+      cand = (op.星曜 || []).map((s) => s.split("·")[0])
+        .filter((s) => s in ZIWEI_STAR);
+    }
+  }
+  return cand.length ? cand[0] : null;
+}
+
+export function crossPlain(baziR, ziweiR, astroR) {
+  baziR = baziR || {};
+  ziweiR = ziweiR || {};
+  astroR = astroR || {};
+
+  const ctx = (baziR.柱详解 && baziR.柱详解.length) ? baziCrossCtx(baziR) : null;
+  const zwStar = zwMingStar(ziweiR);
+  const sun = astroR.太阳星座;
+
+  const rows = [];
+  for (let i = 0; i < CROSS_AXES.length; i++) {
+    const axis = CROSS_AXES[i];
+    const name = axis.名;
+    const short = CROSS_SHORT[i];
+    const ends = axis.两端;
+    const got = [];
+
+    if (ctx) {
+      const r = baziCrossSide(ctx, name);
+      if (r) got.push({ 盘: "八字", 端: ends[r[0]], 依据: r[1] });
+    }
+
+    if (zwStar && ZW_CROSS[zwStar]) {
+      const v = ZW_CROSS[zwStar][short];
+      if (v !== null && v !== undefined) {
+        got.push({ 盘: "紫微", 端: ends[v],
+                   依据: `紫微·命宫主星「${zwStar}」` });
+      }
+    }
+
+    if (sun && ASTRO_CROSS[sun]) {
+      const v = ASTRO_CROSS[sun][short];
+      if (v !== null && v !== undefined) {
+        got.push({ 盘: "占星", 端: ends[v],
+                   依据: `占星·太阳星座${sun}` });
+      }
+    }
+
+    if (!got.length) continue;
+    const hits = got.map((g) => g.端);
+    const agree = new Set(hits).size === 1;
+    rows.push({
+      维度: name,
+      问: axis.问,
+      两端: ends.slice(),
+      各家: got,
+      一致: agree,
+      同向: agree ? hits[0] : null,
+      参与: got.map((g) => g.盘),
+    });
+  }
+
+  const same = rows.filter((r) => r.一致 && r.各家.length >= 2);
+  const diff = rows.filter((r) => !r.一致);
+  const solo = rows.filter((r) => r.一致 && r.各家.length < 2);
+
+  return {
+    标题: "三盘交叉印证",
+    要点: CROSS_HEAD,
+    提醒: CROSS_CAVEAT,
+    一致: same,
+    分歧: diff,
+    单盘: solo,
+    说明: `${same.length} 个维度上两边以上说的是同一件事，` +
+          `${diff.length} 个维度有分歧，` +
+          `${solo.length} 个维度只有一盘给了信号（无从交叉）。`,
+    依据: [
+      { 盘: "八字", 源: "透干十神与五行分布" },
+      { 盘: "紫微", 源: zwStar ? `命宫主星「${zwStar}」` : "本次命宫无主星可判" },
+      { 盘: "占星", 源: sun ? `太阳星座${sun}` : "无太阳星座" },
+    ],
+  };
+}
+
+/* ===================================================================
+   C 类：桃花星 + 行业细分的 JS 移植
+   （对 plain.py 的 taohua_plain / career_plain）
+
+   表全部来自 plain-data.json（VENUS_ATTRACT / MOON_RELATION /
+   VENUS_MOON_ASPECT / INDUSTRY_ROLES / ROLE_FALLBACK /
+   ZW_CAREER_ROLE / ASTRO_CAREER_ROLE / SHENSHA / WUXING_LUCK /
+   ZIWEI_STAR / SPOUSE_PAIR / SPOUSE_SINGLE），本文件只移植逻辑。
+
+   与 B 类同源的坑：
+     - 判空用 `.length` / `!= null`，不用 `!arr`（空数组在 JS 是 truthy）
+     - tuple 键在 Python 侧是 ('天机','巨门')，JS 必须按同样形式拼
+   =================================================================== */
+
+function taohuaAstro(astroR) {
+  if (!astroR) return [];
+  const signOf = {};
+  for (const p of (astroR.天体 || [])) signOf[p.天体] = p.星座;
+  const out = [];
+
+  const ven = signOf["金星"];
+  if (ven && VENUS_ATTRACT[ven]) {
+    const [kind, why] = VENUS_ATTRACT[ven];
+    out.push({ 盘: "占星", 项: "你被什么样的人吸引", 答: kind,
+               依据: `金星落在${ven}`, 说明: why });
+  }
+  const moon = signOf["月亮"];
+  if (moon && MOON_RELATION[moon]) {
+    const [kind, why] = MOON_RELATION[moon];
+    out.push({ 盘: "占星", 项: "关系里你希望怎么被对待", 答: kind,
+               依据: `月亮落在${moon}`, 说明: why });
+  }
+  // 金星对月亮
+  for (const a of (astroR.相位 || [])) {
+    const pair = new Set([a.天体1, a.天体2]);
+    if (pair.has("金星") && pair.has("月亮")) {
+      const nm = a.相位;
+      if (VENUS_MOON_ASPECT[nm]) {
+        const [kind, why] = VENUS_MOON_ASPECT[nm];
+        out.push({ 盘: "占星", 项: "吸引与需求是否对得上", 答: kind,
+                   依据: `金星${nm}月亮`, 说明: why });
+      }
+      break;
+    }
+  }
+  // 第七宫宫主星
+  for (const h of (astroR.宫位 || [])) {
+    if (h.宫位 === "第七宫" || h.序号 === 7) {
+      const r = h.宫主星;
+      if (r && signOf[r] && MOON_RELATION[signOf[r]]) {
+        const kind = MOON_RELATION[signOf[r]][0];
+        out.push({ 盘: "占星", 项: "关系里更吃哪一套", 答: kind,
+                   依据: `第七宫宫主星${r}落${signOf[r]}`,
+                   说明: "这一条说的是你在关系里更容易接受哪种相处方式。" });
+      }
+      break;
+    }
+  }
+  return out;
+}
+
+function taohuaZiwei(ziweiR) {
+  if (!ziweiR) return [];
+  const palaces = ziweiR.十二宫 || [];
+  const fu = palaces.find((p) => p.宫名 === "夫妻");
+  if (!fu) return [];
+  const stars = (fu.星曜 || []).map((s) => s.split("·")[0]);
+  let mains = stars.filter((s) => s in ZIWEI_STAR);
+  let borrowed = "";
+  if (!mains.length) {
+    const oz = ZW_OPPOSITE_LOCAL[fu.地支] || "";
+    const op = palaces.find((p) => p.地支 === oz);
+    if (op) {
+      mains = (op.星曜 || []).map((s) => s.split("·")[0])
+        .filter((s) => s in ZIWEI_STAR);
+      if (mains.length) borrowed = `（本宫无主星，借对宫「${mains[0]}」而论）`;
+    }
+  }
+  if (!mains.length) {
+    return [{ 盘: "紫微", 项: "你在感情里的样子", 答: "夫妻宫无主星",
+              依据: `夫妻宫 ${fu.地支 || ""}`,
+              说明: "这一宫没有星，感情里可塑性很强，被什么样的人塑造得比较多。" }];
+  }
+  // SPOUSE_PAIR / SPOUSE_SINGLE 的值有两种形态：
+  //   tuple（组合，取 [-1]）/ str（单星，直接用）。
+  // 判据要跟着实际类型走，写死一种就会在另一种上拿到 undefined。
+  let txt = "";
+  if (mains.length >= 2) {
+    const pair = mains.slice(0, 2).slice().sort();
+    const key = "(" + pair.map((s) => `'${s}'`).join(", ") + ")";
+    const v = SPOUSE_PAIR[key];
+    if (v !== undefined) {
+      txt = Array.isArray(v) ? v[v.length - 1] : String(v);
+    }
+  }
+  if (!txt && SPOUSE_SINGLE[mains[0]] !== undefined) {
+    const v = SPOUSE_SINGLE[mains[0]];
+    txt = Array.isArray(v) ? v[v.length - 1] : String(v);
+  }
+  return [{ 盘: "紫微", 项: "你在感情里的样子",
+            答: `夫妻宫见「${mains[0]}」`,
+            依据: `夫妻宫主星${borrowed}`,
+            说明: txt || "这一宫的主星决定了你在关系里的姿态。" }];
+}
+
+function taohuaBazi(baziR) {
+  if (!baziR) return [];
+  const out = [];
+  const want = ["桃花（咸池）", "红艳煞"];
+  for (const x of (baziR.神煞 || [])) {
+    if (!want.includes(x.神煞)) continue;
+    const info = SHENSHA[x.神煞];
+    if (!info) continue;
+    out.push({ 盘: "八字", 项: "人缘的广度", 答: x.神煞,
+               依据: `${x.查法 || ""}，落${x.位置 || ""}`, 说明: info[1] });
+  }
+  if (!out.length) {
+    out.push({ 盘: "八字", 项: "人缘的广度", 答: "盘里没有桃花类神煞",
+               依据: "查了咸池与红艳",
+               说明: "不代表没人缘，只是不靠这类神煞来表现 —— "
+                    + "感情里的事要看十神与夫妻宫，不看神煞。" });
+  }
+  return out;
+}
+
+export function taohuaPlain(baziR, ziweiR, astroR) {
+  const rows = taohuaBazi(baziR)
+    .concat(taohuaZiwei(ziweiR), taohuaAstro(astroR));
+  const n = (p) => rows.filter((r) => r.盘 === p).length;
+  return {
+    标题: "桃花星 · 感情里你是怎么被吸引的",
+    要点: TAOHUA_HEAD,
+    提醒: TAOHUA_CAVEAT,
+    列表: rows,
+    说明: `${new Set(rows.map((r) => r.盘)).size} 盘各给了线索`
+         + `（八字 ${n("八字")} 条、紫微 ${n("紫微")} 条、占星 ${n("占星")} 条）。`,
+  };
+}
+
+/* ---------------- 行业细分 ---------------- */
+
+function careerBazi(baziR) {
+  if (!baziR) return [];
+  const strong = baziR.日主强弱 || {};
+  const xy = strong.喜用神 || [];
+  const out = [];
+  for (const wx of xy) {
+    const row = WUXING_LUCK[wx];
+    if (!row) continue;
+    for (const ind of (row.行业 || "").split("、").filter(Boolean)) {
+      const roles = INDUSTRY_ROLES[ind];
+      out.push({ 盘: "八字", 行业: ind, 角色: roles ? roles.slice() : ["专业岗"],
+                 依据: `喜用神${wx}`,
+                 角色来源: roles ? "行业内通用分类" : "兜底分类" });
+    }
+  }
+  return out;
+}
+
+function careerZiwei(ziweiR) {
+  if (!ziweiR) return [];
+  const palaces = ziweiR.十二宫 || [];
+  const gl = palaces.find((p) => p.宫名 === "官禄");
+  if (!gl) return [];
+  let mains = (gl.星曜 || []).map((s) => s.split("·")[0]).filter((s) => s in ZIWEI_STAR);
+  if (!mains.length) {
+    const oz = ZW_OPPOSITE_LOCAL[gl.地支] || "";
+    const op = palaces.find((p) => p.地支 === oz);
+    if (op) {
+      mains = (op.星曜 || []).map((s) => s.split("·")[0]).filter((s) => s in ZIWEI_STAR);
+    }
+  }
+  if (!mains.length) {
+    return [{ 盘: "紫微", 行业: "（待定）",
+              角色: ["专业岗", "业务岗", "技术岗"],
+              依据: `官禄宫无主星（${gl.地支 || ""}）`,
+              角色来源: "空宫：给三个最常见方向，不锁定" }];
+  }
+  const role = ZW_CAREER_ROLE[mains[0]] || "专业岗";
+  return [{ 盘: "紫微", 行业: role, 角色: [role],
+            依据: `官禄宫主星「${mains[0]}」`, 角色来源: "主星性质" }];
+}
+
+function careerAstro(astroR) {
+  if (!astroR) return [];
+  const signOf = {};
+  for (const p of (astroR.天体 || [])) signOf[p.天体] = p.星座;
+  const out = [];
+  const ten = (astroR.宫位 || []).find(
+    (h) => h.宫位 === "第十宫" || h.序号 === 10);
+  if (ten) {
+    const r = ten.宫主星;
+    if (r && signOf[r]) {
+      const role = ASTRO_CAREER_ROLE[signOf[r]] || "专业岗";
+      out.push({ 盘: "占星", 行业: role, 角色: [role],
+                 依据: `第十宫宫主星${r}落${signOf[r]}`, 角色来源: "星座性质" });
+    }
+  }
+  const asc = signOf["上升"] || astroR.上升星座;
+  if (asc && ASTRO_CAREER_ROLE[asc]) {
+    const role = ASTRO_CAREER_ROLE[asc];
+    out.push({ 盘: "占星", 行业: role, 角色: [role],
+               依据: `上升${asc}`, 角色来源: "星座性质" });
+  }
+  return out;
+}
+
+export function careerPlain(baziR, ziweiR, astroR) {
+  const rows = careerBazi(baziR)
+    .concat(careerZiwei(ziweiR), careerAstro(astroR));
+  for (const r of rows) {
+    r.角色说明 = r.角色.map((x) => ROLE_FALLBACK[x] || "");
+  }
+  const n = (p) => rows.filter((r) => r.盘 === p).length;
+  return {
+    标题: "行业细分 · 你能往哪些方向走",
+    要点: CAREER_HEAD,
+    提醒: CAREER_CAVEAT,
+    列表: rows,
+    说明: `${rows.length} 条行业线索（八字 ${n("八字")}、紫微 ${n("紫微")}、`
+         + `占星 ${n("占星")}）。`,
   };
 }
 

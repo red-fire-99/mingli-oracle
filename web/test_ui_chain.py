@@ -850,6 +850,111 @@ if (form && form.hasListener("submit")) {
   console.log("  OK   带化曜的主星没被当成待补的星（数据层断言见 Python 自测）");
 }
 
+// 1.7.0 新增：B 类三盘交叉
+//
+// 断言要盯「页面上真的出现了三边各自的说法」，不能只断言「有交叉这个标题」——
+// 这一块最容易出的错就是某一边静默为空（星座名差一个字就查不到表），
+// 而标题照样在，页面看着正常。
+//
+// html2 / hl2 都是上一个 { } 块里的 const，在本块外取不到（踩过一次
+// ReferenceError）。所以这里自己从 DOM 取，不依赖外层作用域 ——
+// 否则这段断言的失败原因会是「变量不存在」而不是「内容不对」。
+{
+  const ppX = byId.get("panel-plain");
+  const htmlX = ppX ? ppX.innerHTML : "";
+  const cx = htmlX.indexOf("三盘交叉");
+  if (cx < 0) {
+    fail("页面上没有 B 类「三盘交叉」块");
+  } else {
+    const closeX = htmlX.indexOf("</details>", cx);
+    const seg = htmlX.slice(cx, closeX > 0 ? closeX : htmlX.length);
+    // 三边来源都要写出来 —— 交叉的可信度取决于每边各自用了什么
+    for (const pan of ["八字", "紫微", "占星"]) {
+      if (seg.indexOf(pan) < 0) {
+        fail("B 类块里没标出「" + pan + "」这一边的来源");
+      }
+    }
+    // 六个维度逐项都要在
+    for (const dim of ["表达方式", "行动节奏", "社交范围",
+                       "守旧与换新", "关系经营", "事业路子"]) {
+      if (seg.indexOf(dim) < 0) fail("B 类块里少了维度：" + dim);
+    }
+    // 每条依据都要写清是按什么算出来的，否则读者无法判断可信度
+    if (!/透干十神|命宫主星|太阳星座/.test(seg)) {
+      fail("B 类块没有写清各边的判据来源");
+    }
+    // 必须明说「三套不换算」—— 不加这句就成了伪交叉
+    if (seg.indexOf("没有换算关系") < 0) {
+      fail("B 类块没说明三套体系之间没有换算关系");
+    }
+    // 折叠标签不能被转义出来
+    if (seg.indexOf("&lt;b&gt;") >= 0) {
+      fail("B 类块把 HTML 标签转义成文字显示了");
+    }
+    // 每个维度都要有一致或分歧的判词，不能只有裸数据
+    if (!/三边都指向|三边说法不一/.test(seg)) {
+      fail("B 类块没有对每个维度给出一致/分歧的判词");
+    }
+    console.log("  OK   1.7.0 B 类三盘交叉：六维度齐全 + 三边来源标出 + "
+      + "明说无换算关系 + 默认折叠");
+  }
+}
+
+// 1.7.0：C 类桃花星 + 行业细分
+//
+// 同样不能只断言「有标题」。这一类最危险的错是**缺键静默退化**：
+// 表里少一个键，那一条不会空、不会报错，只会换成泛泛的兜底文案，
+// 页面看着完整，内容其实被削平了。所以断言要看内容本身。
+{
+  const ppC = byId.get("panel-plain");
+  const htmlC = ppC ? ppC.innerHTML : "";
+  const th = htmlC.indexOf("桃花星");
+  if (th < 0) {
+    fail("页面上没有 C 类「桃花星」块");
+  } else {
+    const seg = htmlC.slice(th, htmlC.indexOf("</section>", th));
+    for (const pan of ["八字", "紫微", "占星"]) {
+      if (seg.indexOf(pan) < 0) fail("桃花星块没标出「" + pan + "」这一边");
+    }
+    // 每条都要有依据（是按什么算出来的）
+    if (!/金星落在|月亮落在|夫妻宫主星|咸池/.test(seg)) {
+      fail("桃花星块没有写清各条的判据来源");
+    }
+    // 必须有免责：只讲倾向、不预测
+    if (seg.indexOf("不预测") < 0) {
+      fail("桃花星块缺少「不预测具体事件」的口径说明");
+    }
+    // 措辞纪律：不得出现吉凶断语
+    for (const w of ["注定", "必然", "艳福", "桃花运旺", "容易出轨"]) {
+      if (seg.indexOf(w) >= 0) fail("桃花星块出现禁用表述：" + w);
+    }
+    console.log("  OK   1.7.0 桃花星：三边来源标出 + 有判据依据 + 含免责口径");
+  }
+
+  const cr = htmlC.indexOf("行业细分");
+  if (cr < 0) {
+    fail("页面上没有 C 类「行业细分」块");
+  } else {
+    const seg = htmlC.slice(cr, htmlC.indexOf("</section>", cr));
+    // 行业 + 角色类型两层都要在
+    if (seg.indexOf("角色类型") < 0) fail("行业细分块没有角色类型这一层");
+    if (!/依据：/.test(seg)) fail("行业细分块没有标出每条的依据");
+    // 明说不做加权合成
+    if (seg.indexOf("不做加权合成") < 0) {
+      fail("行业细分块没有说明三盘不做加权合成");
+    }
+    // 不得越界成星座职位细分
+    for (const w of ["适合当基金经理", "适合当医生", "天生是领导"]) {
+      if (seg.indexOf(w) >= 0) fail("行业细分块越界成职位细分：" + w);
+    }
+    // 兜底文案不该出现（表覆盖完整时不该退化）
+    if (seg.indexOf("兜底分类") >= 0) {
+      fail("行业细分出现了兜底分类 —— 说明 INDUSTRY_ROLES 缺了键，内容被削平");
+    }
+    console.log("  OK   1.7.0 行业细分：行业+角色两层 + 标依据 + 无兜底退化");
+  }
+}
+
 const hl = byId.get("headline");
 const pp = byId.get("panel-plain");
 const pr = byId.get("panel-pro");

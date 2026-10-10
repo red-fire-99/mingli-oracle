@@ -13,7 +13,7 @@
 
 import { pyRoundN } from "./kernel.js";
 import { STAR_BRIEF } from "./ziwei.js";
-import { baziPlain, ziweiPlain, astroPlain, headline, GLOSSARY } from "./plain.js";
+import { baziPlain, ziweiPlain, astroPlain, headline, GLOSSARY, crossPlain as P_crossPlain, taohuaPlain as P_taohuaPlain, careerPlain as P_careerPlain } from "./plain.js";
 import { paiPan as baziPaiPan } from "./bazi.js";
 import { paiPan as ziweiPaiPan } from "./ziwei.js";
 import { paiPan as astroPaiPan } from "./astro.js";
@@ -948,6 +948,100 @@ export function renderPlain(data) {
       P.push("</div></div></details>");
     }
   }
+
+  // ---------- B 类：三盘交叉 ----------
+  // 放在三段之后：三盘数据都齐了才交叉得出来。
+  // 必须与 oracle.py 的同名块**逐字相同** —— render 层门禁比的是 HTML 字符串。
+  if ("八字" in data || "紫微" in data || "占星" in data) {
+    const x = P_crossPlain(data["八字"], data["紫微"], data["占星"]);
+    const rows = x["一致"].concat(x["分歧"], x["单盘"]);
+    if (rows.length) {
+      P.push('<h2 style="font-size:15px;border-left-color:var(--gold)">'
+           + "三盘交叉 · 三套体系分别怎么说</h2>");
+      P.push('<div class="plain"><p>' + h(x["要点"]) + "</p><p class=\"sub2\">"
+           + h(x["说明"]) + "</p><p class=\"sub2\">" + h(x["提醒"])
+           + "</p></div>");
+      // 先说数据从哪来：交叉的可信度取决于每边各自用了什么
+      P.push('<div class="plain"><h3>这三边分别按什么算的</h3><div class="tagline">');
+      for (const s of x["依据"]) {
+        P.push('<div class="tag"><b>' + h(s["盘"]) + "</b>" + h(s["源"]) + "</div>");
+      }
+      P.push("</div></div>");
+
+      // 默认折叠：这一块是「进阶看」，不是必读
+      P.push('<details class="ssx"><summary>六个维度逐项对照'
+           + "（点开看三边各说了什么）</summary>");
+      P.push('<div class="plain">');
+      for (const r of rows) {
+        // head 里只能放**纯文本**：整段会过一次 h()，
+        // 若在里面拼 <b> 会被转义成 &lt;b&gt; 显示出来。
+        let head, tag;
+        if (r["一致"]) {
+          head = r["维度"] + " —— 三边都指向「" + r["同向"] + "」";
+          tag = "同";
+        } else {
+          head = r["维度"] + " —— 三边说法不一";
+          tag = "异";
+        }
+        P.push('<div class="xsx"><p class="xsx-q">' + h(r["维度"]) + "："
+             + h(r["问"]) + "</p>");
+        P.push('<p class="xsx-h"><b>' + h(tag) + "</b>"
+             + h(head.slice(r["维度"].length)) + "</p>");
+        for (const g of r["各家"]) {
+          P.push('<p class="li"><b>' + h(g["盘"]) + "</b>：" + h(g["端"])
+               + '　<span class="sub2">' + h(g["依据"]) + "</span></p>");
+        }
+        if (r["一致"] && r["各家"].length < 2) {
+          P.push('<p class="sub2">只有一盘给了信号，'
+               + "无从交叉 —— 这里只代表那一套体系怎么看。</p>");
+        }
+        P.push("</div>");
+      }
+      P.push("</div></details>");
+    }
+  }
+
+  // ---------- C 类：桃花星 + 行业细分 ----------
+  // 两块都默认折叠。必须与 oracle.py 的同名块**逐字相同**（门禁比 HTML）。
+  const th = P_taohuaPlain(data["八字"], data["紫微"], data["占星"]);
+  if (th["列表"].length) {
+    P.push('<h2 style="font-size:15px;border-left-color:var(--gold)">'
+         + h(th["标题"]) + "</h2>");
+    P.push('<div class="plain"><p>' + h(th["要点"]) + '</p><p class="sub2">'
+         + h(th["提醒"]) + "</p></div>");
+    P.push('<details class="ssx"><summary>三盘分别怎么说'
+         + "（点开逐条对照）</summary><div class=\"plain\">");
+    for (const r of th["列表"]) {
+      P.push('<div class="xsx"><p class="xsx-h"><b>' + h(r["盘"]) + "</b>"
+           + h(r["项"]) + "</p>");
+      P.push('<p class="li">→ ' + h(r["答"]) + '　<span class="sub2">'
+           + h(r["依据"]) + "</span></p>");
+      P.push('<p class="sub2">' + h(r["说明"]) + "</p>");
+      P.push("</div>");
+    }
+    P.push("</div></details>");
+  }
+
+  const cr = P_careerPlain(data["八字"], data["紫微"], data["占星"]);
+  if (cr["列表"].length) {
+    P.push('<h2 style="font-size:15px;border-left-color:var(--gold)">'
+         + h(cr["标题"]) + "</h2>");
+    P.push('<div class="plain"><p>' + h(cr["要点"]) + '</p><p class="sub2">'
+         + h(cr["提醒"]) + "</p></div>");
+    P.push('<details class="ssx"><summary>行业与角色类型逐条'
+         + "（点开看每条的依据）</summary><div class=\"plain\">");
+    for (const r of cr["列表"]) {
+      P.push('<div class="xsx"><p class="xsx-h"><b>' + h(r["盘"]) + "</b>"
+           + h(r["行业"]) + "</p>");
+      P.push('<p class="li">角色类型：' + h(r["角色"].join("、")) + "</p>");
+      P.push('<p class="sub2">依据：' + h(r["依据"]) + "（" + h(r["角色来源"])
+           + "）</p>");
+      P.push("</div>");
+    }
+    P.push("</div></details>");
+  }
+
+  P.push("</section>");
 
   P.push("</section>");
   return P.join("");

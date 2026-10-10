@@ -149,6 +149,63 @@ def test_divination():
     ck("八宫卦序覆盖 64 卦", sum(len(v) for v in D.GONG_ORDER.values()), 64)
 
 
+def _astro_sun_names():
+    """跑引擎，取它**真实产出**的太阳星座名集合。
+
+    不能硬编码 12 个星座名去比对 —— 那样断言的是「我以为引擎会返回什么」，
+    而真正要防的是「表里的键和引擎的输出对不上」。
+    之前就踩过：ASTRO_CROSS 的键写成「双子座」，引擎给的是「双子」，
+    查表全部落空、占星那一整边静默消失，对拍还全绿。
+    """
+    import astro as AS
+    seen = set()
+    for mm in range(1, 13):
+        for dd, hh in ((3, 2), (11, 9), (19, 17), (27, 22)):
+            try:
+                r = AS.pai_pan(solar=(1995, mm, dd), hour=(hh, 20),
+                               sex="男", lat=39.9, lon=116.4)
+            except Exception:
+                continue
+            n = r.get("太阳星座")
+            if n:
+                seen.add(n)
+    return seen
+
+
+def _astro_venus_names():
+    """引擎真实产出的金星落座名。"""
+    import astro as AS
+    seen = set()
+    for mm in range(1, 13):
+        for dd, hh in ((3, 2), (11, 9), (19, 17), (27, 22)):
+            try:
+                r = AS.pai_pan(solar=(1995, mm, dd), hour=(hh, 20),
+                               sex="男", lat=39.9, lon=116.4)
+            except Exception:
+                continue
+            for p in (r.get("天体") or []):
+                if p.get("天体") == "金星" and p.get("星座"):
+                    seen.add(p["星座"])
+    return seen
+
+
+def _astro_phase_names():
+    """引擎真实产出的相位名集合。"""
+    import astro as AS
+    seen = set()
+    for mm in (1, 4, 7, 10):
+        for dd in (5, 20):
+            try:
+                r = AS.pai_pan(solar=(1995, mm, dd), hour=(12, 0),
+                               sex="男", lat=39.9, lon=116.4)
+            except Exception:
+                continue
+            for a in (r.get("相位") or []):
+                if a.get("相位"):
+                    seen.add(a["相位"])
+    return seen
+
+
 def test_plain():
     print("== 白话解读引擎 ==")
     ck("日主文案覆盖 10 天干", len(PL.DAY_MASTER), 10)
@@ -296,6 +353,136 @@ def test_plain():
     z2 = PL.ziwei_plain(d2["紫微"])
     ck("空宫借对宫主星（武曲）", z2["主星"], "武曲")
     ck("空宫说明含「借」字", "借" in z2["一句话"], True)
+
+    # ---- 1.7.0：B 类三盘交叉 ----
+    #
+    # 这一块的对拍完全抓不到三类问题，必须在这里断言：
+    #   1. 查表键与引擎输出不一致（星座名差一个「座」字就静默失效）
+    #   2. 只有一盘参与的维度整行消失（两边都空，一致）
+    #   3. 某一盘无论换什么盘落点都不变（常量假输出）
+    x = PL.cross_plain(d["八字"], d["紫微"], d["占星"])
+    ck("交叉-六个维度全部有结论",
+       len(x["一致"]) + len(x["分歧"]) + len(x["单盘"]), len(PL.CROSS_AXES))
+    ck("交叉-三边都参与了（无单盘项）", len(x["单盘"]), 0)
+    ck("交叉-每一维至少两家有信号",
+       all(len(r["各家"]) >= 2 for r in x["一致"] + x["分歧"]), True)
+    # 一致必须按**端点**算，不是按盘数算
+    ck("交叉-一致项两端确实相同",
+       all(len(set(g["端"] for g in r["各家"])) == 1 for r in x["一致"]), True)
+    ck("交叉-分歧项两端确实不同",
+       all(len(set(g["端"] for g in r["各家"])) > 1 for r in x["分歧"]), True)
+    ck("交叉-每条依据都写清来源盘",
+       all(g["盘"] in ("八字", "紫微", "占星") and g["依据"]
+           for r in x["一致"] + x["分歧"] for g in r["各家"]), True)
+    ck("交叉-明说三套不换算", "没有换算关系" in x["提醒"], True)
+    # 查表键：引擎能产出的每个星座/主星都必须查得到
+    ck("交叉-ASTRO_CROSS 覆盖引擎的 12 个星座名",
+       sorted(PL.ASTRO_CROSS), sorted(_astro_sun_names()))
+    ck("交叉-ZW_CROSS 覆盖全部 14 主星",
+       sorted(set(PL.ZIWEI_STAR) - set(PL.ZW_CROSS)), [])
+    # 维度不能有死条目：某一维若在某表整列是 None，那一边永远没信号
+    ck("交叉-无死维度（紫微/占星每维都有落点）",
+       all(any(row.get(s) is not None for row in PL.ZW_CROSS.values())
+           and any(row.get(s) is not None for row in PL.ASTRO_CROSS.values())
+           for s in PL.CROSS_SHORT), True)
+    # 缺盘：单盘必须进「单盘」桶，不许静默消失
+    only_b = PL.cross_plain(d["八字"], None, None)
+    ck("交叉-只给八字时不丢维度",
+       len(only_b["一致"]) + len(only_b["分歧"]) + len(only_b["单盘"]),
+       len(PL.CROSS_AXES))
+    ck("交叉-只给八字时全进单盘桶", len(only_b["单盘"]), len(PL.CROSS_AXES))
+    empty = PL.cross_plain(None, None, None)
+    ck("交叉-三盘全空不报错且为空",
+       (len(empty["一致"]), len(empty["分歧"]), len(empty["单盘"])), (0, 0, 0))
+    # 落点必须随盘变化：同一套八字换 12 个生辰，两端都要出现过
+    seen = set()
+    for mm, dd in ((1, 15), (3, 10), (5, 20), (7, 5), (9, 25),
+                   (11, 8), (2, 28), (4, 3), (6, 30), (8, 18),
+                   (10, 12), (12, 22)):
+        dd2 = PL.cross_plain(
+            O.build(solar=(1985, mm, dd), hour=(12, 0), sex="男",
+                    lat=39.9, lon=116.4)["八字"], None, None)
+        for r in dd2["单盘"]:
+            seen.add(r["同向"])
+    ck("交叉-八字落点两端都出现过（不是常量）", len(seen) > 1, True)
+
+    # 渲染层：B 类块必须在、必须在 </section> 内、缺盘也要说话
+    h = O.render_plain(d)
+    ck("交叉-渲染出 B 类块", "三盘交叉" in h, True)
+    ck("交叉-渲染块在 </section> 之前",
+       h.find("三盘交叉") < h.rfind("</section>"), True)
+    ck("交叉-渲染块默认折叠", '<details class="ssx">' in h, True)
+    ck("交叉-渲染块标出三边来源",
+       all(s["盘"] in h for s in x["依据"]), True)
+    ck("交叉-渲染没把 HTML 标签转义出来", "&lt;b&gt;" in h, False)
+    h_only_b = O.render_plain({"八字": d["八字"]})
+    ck("交叉-缺盘时渲染块仍在", "三盘交叉" in h_only_b, True)
+    ck("交叉-缺盘时说清只有一盘给了信号",
+       "只有一盘给了信号" in h_only_b, True)
+    ck("交叉-三盘全空时不渲染 B 类块",
+       "三盘交叉" in O.render_plain({}), False)
+
+    # ---- 1.7.0：C 类桃花星 + 行业细分 ----
+    #
+    # 这一类最危险的错是「缺键静默退化」：表里少一个键，
+    # 那一条不会报错、不会空，只会换成泛泛的兜底文案，
+    # 页面看着完整，内容其实被削平了。所以断言全部是
+    # 「表里的键必须覆盖数据里出现的值」，不是「有内容」。
+    _inds = set()
+    for _row in PL.WUXING_LUCK.values():
+        for _s in _row.get("行业", "").split("、"):
+            if _s:
+                _inds.add(_s)
+    ck("行业细分-INDUSTRY_ROLES 覆盖 WUXING_LUCK 全部行业词",
+       sorted(_inds - set(PL.INDUSTRY_ROLES)), [])
+    ck("行业细分-每个行业都有角色类型且非空",
+       all(v and all(isinstance(x, str) and x for x in v)
+           for v in PL.INDUSTRY_ROLES.values()), True)
+    # 角色必须是「行业内的通用分类」而不是具体职位名。
+    # 判据用数量：通用分类每个行业 3~4 个且互不相同；
+    # 若有人写成「适合当基金经理」这种，角色表就会退化成职位清单。
+    ck("行业细分-每行业 3~4 个角色",
+       all(3 <= len(v) <= 4 for v in PL.INDUSTRY_ROLES.values()), True)
+    ck("行业细分-同一行业内角色不重复",
+       all(len(set(v)) == len(v) for v in PL.INDUSTRY_ROLES.values()), True)
+
+    th = PL.taohua_plain(d["八字"], d["紫微"], d["占星"])
+    ck("桃花-三盘都给了线索",
+       sorted(set(r["盘"] for r in th["列表"])), ["八字", "占星", "紫微"])
+    ck("桃花-每条都有依据", all(r["依据"] for r in th["列表"]), True)
+    ck("桃花-每条都有说明", all(r["说明"] for r in th["列表"]), True)
+    ck("桃花-明说只讲倾向不预测", "不预测" in th["提醒"], True)
+    ck("桃花-占星金星落座覆盖 12 星座",
+       sorted(set(PL.VENUS_ATTRACT) - set(_astro_venus_names())), [])
+    ck("桃花-相位表覆盖引擎的 6 类相位",
+       sorted(set(_astro_phase_names()) - set(PL.VENUS_MOON_ASPECT)), [])
+    ck("桃花-只给一盘时不崩也不空",
+       all(len(PL.taohua_plain(*a)["列表"]) > 0
+           for a in ((d["八字"], None, None), (None, d["紫微"], None),
+                     (None, None, d["占星"]))), True)
+    ck("桃花-三盘全空时为空不报错", PL.taohua_plain(None, None, None)["列表"], [])
+
+    cr = PL.career_plain(d["八字"], d["紫微"], d["占星"])
+    ck("行业-三盘都给了线索",
+       sorted(set(r["盘"] for r in cr["列表"])), ["八字", "占星", "紫微"])
+    ck("行业-每条都有依据", all(r["依据"] for r in cr["列表"]), True)
+    ck("行业-每条都标明角色来源", all(r["角色来源"] for r in cr["列表"]), True)
+    ck("行业-不用兜底分类（表覆盖完整）",
+       [r["行业"] for r in cr["列表"] if r["角色来源"] == "兜底分类"], [])
+    ck("行业-只到两层（不给具体职位名）",
+       any(x in ("基金经理", "公务员", "医生", "律师", "教师")
+           for r in cr["列表"] for x in r["角色"]), False)
+    ck("行业-紫微/占星只用六类通用角色（不细分职位）",
+       sorted(set(x for r in cr["列表"] if r["盘"] in ("紫微", "占星")
+                  for x in r["角色"]) - set(PL.ROLE_FALLBACK)), [])
+    ck("行业-八字用的是行业内细分角色（不是那六类）",
+       all(x not in PL.ROLE_FALLBACK for r in cr["列表"]
+           if r["盘"] == "八字" for x in r["角色"]), True)
+    ck("行业-兜底六类都有说明",
+       all(PL.ROLE_FALLBACK.get(k) for k in PL.ROLE_FALLBACK), True)
+    ck("行业-明说不做加权合成", "不做加权合成" in cr["提醒"], True)
+    ck("行业-三盘全空时为空不报错",
+       PL.career_plain(None, None, None)["列表"], [])
 
 
 def test_server():

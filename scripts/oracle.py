@@ -1026,8 +1026,97 @@ def render_plain(data):
                                  % (_h(y["名"]), _h(y["说明"])))
                 P.append("</div>")
             P.append("</div></div></details>")
+
+    # ---------- B 类：三盘交叉 ----------
+    # 放在三段之后：三盘的数据都齐了才交叉得出来，
+    # 插在任何一段中间都会拿到还没算完的盘。
+    if "八字" in data or "紫微" in data or "占星" in data:
+        x = M_plain.cross_plain(data.get("八字"), data.get("紫微"),
+                                data.get("占星"))
+        rows = x["一致"] + x["分歧"] + x["单盘"]
+        if rows:
+            P.append('<h2 style="font-size:15px;border-left-color:var(--gold)">'
+                     '三盘交叉 · 三套体系分别怎么说</h2>')
+            P.append('<div class="plain"><p>%s</p><p class="sub2">%s</p>'
+                     '<p class="sub2">%s</p></div>'
+                     % (_h(x["要点"]), _h(x["说明"]), _h(x["提醒"])))
+            # 先说数据从哪来：交叉的可信度取决于每边各自用了什么
+            P.append('<div class="plain"><h3>这三边分别按什么算的</h3>'
+                     '<div class="tagline">')
+            for s in x["依据"]:
+                P.append('<div class="tag"><b>%s</b>%s</div>'
+                         % (_h(s["盘"]), _h(s["源"])))
+            P.append("</div></div>")
+
+            # 默认折叠：这一块是「进阶看」，不是必读
+            P.append("<details class=\"ssx\"><summary>六个维度逐项对照"
+                     "（点开看三边各说了什么）</summary>")
+            P.append('<div class="plain">')
+            for r in rows:
+                # head 里只能放**纯文本**：整段会过一次 _h()，
+                # 若在里面拼 <b> 会被转义成 &lt;b&gt; 显示出来。
+                # 要强调就靠外层的 <b> 包住整句。
+                if r["一致"]:
+                    head = "%s —— 三边都指向「%s」" % (r["维度"], r["同向"])
+                    tag = "同"
+                else:
+                    head = "%s —— 三边说法不一" % r["维度"]
+                    tag = "异"
+                P.append('<div class="xsx"><p class="xsx-q">%s：%s</p>'
+                         % (_h(r["维度"]), _h(r["问"])))
+                P.append('<p class="xsx-h"><b>%s</b>%s</p>'
+                         % (_h(tag), _h(head[len(r["维度"]):])))
+                for g in r["各家"]:
+                    P.append('<p class="li"><b>%s</b>：%s　'
+                             '<span class="sub2">%s</span></p>'
+                             % (_h(g["盘"]), _h(g["端"]), _h(g["依据"])))
+                if r["一致"] and len(r["各家"]) < 2:
+                    P.append('<p class="sub2">只有一盘给了信号，'
+                             '无从交叉 —— 这里只代表那一套体系怎么看。</p>')
+                P.append("</div>")
+            P.append("</div></details>")
+    # ---------- C 类：桃花星 + 行业细分 ----------
+    # 两块都默认折叠：属于「进阶看」，不该挤在结论区里。
+    th = M_plain.taohua_plain(data.get("八字"), data.get("紫微"),
+                              data.get("占星"))
+    if th["列表"]:
+        P.append('<h2 style="font-size:15px;border-left-color:var(--gold)">'
+                 '%s</h2>' % _h(th["标题"]))
+        P.append('<div class="plain"><p>%s</p><p class="sub2">%s</p></div>'
+                 % (_h(th["要点"]), _h(th["提醒"])))
+        P.append('<details class="ssx"><summary>三盘分别怎么说'
+                 '（点开逐条对照）</summary><div class="plain">')
+        for r in th["列表"]:
+            P.append('<div class="xsx"><p class="xsx-h"><b>%s</b>%s</p>'
+                     % (_h(r["盘"]), _h(r["项"])))
+            P.append('<p class="li">→ %s　<span class="sub2">%s</span></p>'
+                     % (_h(r["答"]), _h(r["依据"])))
+            P.append('<p class="sub2">%s</p>' % _h(r["说明"]))
+            P.append("</div>")
+        P.append("</div></details>")
+
+    cr = M_plain.career_plain(data.get("八字"), data.get("紫微"),
+                              data.get("占星"))
+    if cr["列表"]:
+        P.append('<h2 style="font-size:15px;border-left-color:var(--gold)">'
+                 '%s</h2>' % _h(cr["标题"]))
+        P.append('<div class="plain"><p>%s</p><p class="sub2">%s</p></div>'
+                 % (_h(cr["要点"]), _h(cr["提醒"])))
+        P.append('<details class="ssx"><summary>行业与角色类型逐条'
+                 '（点开看每条的依据）</summary><div class="plain">')
+        for r in cr["列表"]:
+            P.append('<div class="xsx"><p class="xsx-h"><b>%s</b>%s</p>'
+                     % (_h(r["盘"]), _h(r["行业"])))
+            P.append('<p class="li">角色类型：%s</p>'
+                     % _h("、".join(r["角色"])))
+            P.append('<p class="sub2">依据：%s（%s）</p>'
+                     % (_h(r["依据"]), _h(r["角色来源"])))
+            P.append("</div>")
+        P.append("</div></details>")
+
     P.append("</section>")
 
+    P.append("</section>")
     return "".join(P)
 
 

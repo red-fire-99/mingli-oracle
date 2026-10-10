@@ -348,8 +348,23 @@ def cases_plain():
     同时验证「移植后的 plain.js 能吃 JS 引擎自己产出的结构」——
     这是纯 JS 站点能否独立跑通的关键一环。
     """
-    import bazi as B, ziwei as Z, astro as AS, plain as PL
+    import bazi as B, ziwei as Z, astro as AS, plain as PL, oracle as O
+    O_render_plain = O.render_plain
     from datetime import datetime
+
+    def _mkdata(triple):
+        """按页面实际的构造方式组 data：只放算成功的盘。
+
+        不能把 None 也塞进去 —— render_plain 判的是 `if "紫微" in data`，
+        键在值为 None 时照样进分支，然后在 ziwei_plain 里炸掉。
+        页面的 data 是「算出哪盘才放哪盘」，对拍必须照同样的方式来，
+        否则测的是一个页面永远不会产生的输入。
+        """
+        d = {}
+        for k, v in zip(("八字", "紫微", "占星"), triple):
+            if v is not None:
+                d[k] = v
+        return d
     out = []
     add = lambda op, label, inp, want: out.append((op, label, inp, want))
 
@@ -388,6 +403,59 @@ def cases_plain():
         add("plain_headline", "headline(%s)" % tag,
             dict(common, lat=c["lat"], lon=c["lon"]),
             PL.headline({"八字": rb, "紫微": rz, "占星": ra}))
+
+        # B 类：三盘交叉。必须进对拍 —— 这一层最容易出现
+        # 「Python 有输出、JS 整块为空」而不报错的分叉
+        #（星座键名差一个「座」字就足以让占星那一整边静默消失）。
+        add("plain_cross", "cross_plain(%s)" % tag,
+            dict(common, lat=c["lat"], lon=c["lon"]),
+            PL.cross_plain(rb, rz, ra))
+        # C 类两块同样要进对拍：taohua/career 里有大量「查表键」，
+        # 键写错时两边都返回空、页面上只是少一块，对拍全绿。
+        add("plain_taohua", "taohua_plain(%s)" % tag,
+            dict(common, lat=c["lat"], lon=c["lon"]),
+            PL.taohua_plain(rb, rz, ra))
+        add("plain_career", "career_plain(%s)" % tag,
+            dict(common, lat=c["lat"], lon=c["lon"]),
+            PL.career_plain(rb, rz, ra))
+        # 渲染层也要逐字比：B 类这块最容易出现「Python 渲染了、
+        # JS 整块不渲染」的分叉，而这种分叉在页面上只是「少一块」，
+        # 不会报错。
+        add("render_cross", "render_plain 含交叉(%s)" % tag,
+            dict(common, lat=c["lat"], lon=c["lon"]),
+            {"html": O_render_plain(_mkdata((rb, rz, ra)))})
+
+    # 缺盘组合：交叉层必须如实说「哪一盘没参与」，而不是默默少一维。
+    # 只有一盘时最容易出「整行消失」这种静默丢失，所以单独覆盖。
+    c = combos[0]
+    common = dict(solar=c["solar"], hour=c["hour"], sex=c["sex"], place=c["place"])
+    rb = B.pai_pan(longitude=c["lon"], shichen=None, lunar=None, leap=False,
+                   deceased_year=None, now=datetime(PINNED_YEAR, 1, 1), **common)
+    rz = Z.pai_pan(lunar=None, leap=False, shichen=None, year=PINNED_YEAR, **common)
+    for label, args in (
+        ("只八字", (rb, None, None)),
+        ("只紫微", (None, rz, None)),
+        ("只占星", (None, None,
+                    AS.pai_pan(lunar=None, leap=False, lat=c["lat"],
+                               lon=c["lon"], **common))),
+        ("八字+紫微", (rb, rz, None)),
+        ("全空", (None, None, None)),
+    ):
+        add("plain_cross_partial", "cross_plain(%s)" % label,
+            dict(common, lat=c["lat"], lon=c["lon"], partial=label),
+            PL.cross_plain(*args))
+        # 缺盘时渲染层也要一致：单盘那一档（「只有一盘给了信号」）
+        # 是在渲染块里加的，引擎层对了不代表页面说得出来
+        add("render_cross_partial", "render_plain 缺盘(%s)" % label,
+            dict(common, lat=c["lat"], lon=c["lon"], partial=label),
+            {"html": O_render_plain(_mkdata(args))})
+        # C 类的缺盘组合：单盘时两块都要还能说话
+        add("plain_taohua_partial", "taohua_plain 缺盘(%s)" % label,
+            dict(common, lat=c["lat"], lon=c["lon"], partial=label),
+            PL.taohua_plain(*args))
+        add("plain_career_partial", "career_plain 缺盘(%s)" % label,
+            dict(common, lat=c["lat"], lon=c["lon"], partial=label),
+            PL.career_plain(*args))
 
     # 词汇表
     add("glossary", "glossary_html()", {}, {"g": PL.glossary_html()})
@@ -636,17 +704,100 @@ for (const c of CASES) {
         break;
       }
       case "plain_headline": {
-        const c = i;
-        const rb = B.paiPan({ solar: c.solar || null, hour: c.hour || null,
-                              shichen: null, sex: c.sex, place: c.place || null,
-                              longitude: c.lon, leap: false, nowYear: 2026 });
-        const rz = ZW.paiPan({ solar: c.solar || null, hour: c.hour || null,
-                               shichen: null, sex: c.sex, place: c.place || null,
+        const rb = B.paiPan({ solar: i.solar || null, hour: i.hour || null,
+                              shichen: null, sex: i.sex, place: i.place || null,
+                              longitude: i.lon, leap: false, nowYear: 2026 });
+        const rz = ZW.paiPan({ solar: i.solar || null, hour: i.hour || null,
+                               shichen: null, sex: i.sex, place: i.place || null,
                                leap: false, year: 2026 });
-        const ra = A.paiPan({ solar: c.solar || null, hour: c.hour || null,
-                              shichen: null, sex: c.sex, place: c.place || null,
-                              lat: c.lat, lon: c.lon, leap: false });
+        const ra = A.paiPan({ solar: i.solar || null, hour: i.hour || null,
+                              shichen: null, sex: i.sex, place: i.place || null,
+                              lat: i.lat, lon: i.lon, leap: false });
         got = P.headline({ 八字: rb, 紫微: rz, 占星: ra });
+        break;
+      }
+      case "plain_cross":
+      case "plain_cross_partial": {
+        // 缺盘组合靠 i.partial 传：字符串 "只八字" / "全空" …
+        // 不要写 `const c = i`：i 已经是 c.in，再声明一个同名 const
+        // 会把外层的用例对象遮住，于是 `c.partial` 读的是 inp 上的
+        // 属性 —— 永远是 undefined，于是所有缺盘组合都被当成
+        // 「没给 partial」而走了全盘分支。测的就不是缺盘路径了。
+        // 不用 null 占位 —— JS 里 null 会和「引擎没算出来」混淆，
+        // 而 Python 侧是显式传的 None，两边表示法必须一样。
+        let rb = null, rz = null, ra = null;
+        const want = i.partial;
+        if (!want || want === "只八字" || want === "八字+紫微" || want === "全盘") {
+          rb = B.paiPan({ solar: i.solar || null, hour: i.hour || null,
+                          shichen: null, sex: i.sex, place: i.place || null,
+                          longitude: i.lon, leap: false, nowYear: 2026 });
+        }
+        if (!want || want === "只紫微" || want === "八字+紫微" || want === "全盘") {
+          rz = ZW.paiPan({ solar: i.solar || null, hour: i.hour || null,
+                           shichen: null, sex: i.sex, place: i.place || null,
+                           leap: false, year: 2026 });
+        }
+        if (!want || want === "只占星" || want === "全盘") {
+          ra = A.paiPan({ solar: i.solar || null, hour: i.hour || null,
+                          shichen: null, sex: i.sex, place: i.place || null,
+                          lat: i.lat, lon: i.lon, leap: false });
+        }
+        got = P.crossPlain(rb, rz, ra);
+        break;
+      }
+      case "render_cross":
+      case "render_cross_partial": {
+        let rb = null, rz = null, ra = null;
+        const want = i.partial;
+        if (!want || want === "只八字" || want === "八字+紫微" || want === "全盘") {
+          rb = B.paiPan({ solar: i.solar || null, hour: i.hour || null,
+                          shichen: null, sex: i.sex, place: i.place || null,
+                          longitude: i.lon, leap: false, nowYear: 2026 });
+        }
+        if (!want || want === "只紫微" || want === "八字+紫微" || want === "全盘") {
+          rz = ZW.paiPan({ solar: i.solar || null, hour: i.hour || null,
+                           shichen: null, sex: i.sex, place: i.place || null,
+                           leap: false, year: 2026 });
+        }
+        if (!want || want === "只占星" || want === "全盘") {
+          ra = A.paiPan({ solar: i.solar || null, hour: i.hour || null,
+                          shichen: null, sex: i.sex, place: i.place || null,
+                          lat: i.lat, lon: i.lon, leap: false });
+        }
+        const d = {};
+        if (rb) d.八字 = rb;
+        if (rz) d.紫微 = rz;
+        if (ra) d.占星 = ra;
+        got = { html: RD.renderPlain(d) };
+        break;
+      }
+      case "plain_taohua":
+      case "plain_taohua_partial":
+      case "plain_career":
+      case "plain_career_partial": {
+        // 不要写 `const c = i`：i 已经是 c.in，再声明一个同名 const
+        // 会把外层的用例对象遮住，于是 `c.partial` 读的是 inp 上的
+        // 属性 —— 症状是「读不到 partial」，而不是「遮蔽了 c」。
+        // 直接用外层的 c（用例）与 i（输入），各司其职。
+        let rb = null, rz = null, ra = null;
+        const want = i.partial;
+        if (!want || want === "只八字" || want === "八字+紫微" || want === "全盘") {
+          rb = B.paiPan({ solar: i.solar || null, hour: i.hour || null,
+                          shichen: null, sex: i.sex, place: i.place || null,
+                          longitude: i.lon, leap: false, nowYear: 2026 });
+        }
+        if (!want || want === "只紫微" || want === "八字+紫微" || want === "全盘") {
+          rz = ZW.paiPan({ solar: i.solar || null, hour: i.hour || null,
+                           shichen: null, sex: i.sex, place: i.place || null,
+                           leap: false, year: 2026 });
+        }
+        if (!want || want === "只占星" || want === "全盘") {
+          ra = A.paiPan({ solar: i.solar || null, hour: i.hour || null,
+                          shichen: null, sex: i.sex, place: i.place || null,
+                          lat: i.lat, lon: i.lon, leap: false });
+        }
+        got = c.op.indexOf("taohua") >= 0 ? P.taohuaPlain(rb, rz, ra)
+                                          : P.careerPlain(rb, rz, ra);
         break;
       }
       case "glossary": got = { g: P.glossaryHtml() }; break;
