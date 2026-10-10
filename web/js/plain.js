@@ -513,8 +513,8 @@ function shishenList(r) {
   } else {
     lead = { "名": tied.join("、"), "并列": true,
              "说明": "你的十神没有单一主角——" + tied.join("、") + " 各占 "
-               + topN + " 个。这类盘的特点是均衡：适应面广，什么环境都能待，"
-               + "代价是「没有特别想抓的那一样」。" };
+               + topN + " 个。这类盘的特点是均衡：适应面广，什么环境都能待。"
+               + "代价是不容易说出「我最想要什么」，因为没有一样明显压过其他。" };
   }
 
   const pairs = [];
@@ -845,8 +845,9 @@ export function astroPlain(r) {
       if (rSign) txt += "（" + ruler + "在" + rSign + "）";
       if (rHouse) {
         txt += "，落在第 " + rHouse + " 宫（" + HOUSE_MEANING[rHouse] + "）。"
-          + "这是整张盘最关键的一条线索——你这辈子的重要课题，往往跟「"
-          + HOUSE_MEANING[rHouse] + "」有关。";
+          + "这是整张盘最关键的一条线索。"
+          + "你这辈子的重要课题，往往跟「" + HOUSE_MEANING[rHouse]
+          + "」有关。别把它当性格标签看，那是一处要持续练的地方。";
       } else {
         txt += "。这是整张盘最关键的一条线索。";
       }

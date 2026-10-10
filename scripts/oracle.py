@@ -84,7 +84,7 @@ CSS = """
   --red:#a8322d; --gold:#a8842c; --green:#3f7a52; --blue:#2f5d7c;
   --purple:#6b4a7a;
   /* 字阶 */
-  --t-xs:11px; --t-sm:12px; --t-md:13px; --t-base:14px;
+  --t-xs:11px; --t-sm:12px; --t-md:13px; --t-base:15px;
   --t-lg:16px; --t-xl:19px; --t-2xl:23px; --t-3xl:28px;
   /* 间距 */
   --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:22px; --s6:30px;
@@ -106,7 +106,7 @@ html{-webkit-text-size-adjust:100%}
 body{margin:0;padding:28px 18px 60px;background:var(--bg);color:var(--ink);
   font-family:"PingFang SC","Microsoft YaHei","Noto Sans SC",system-ui,sans-serif;
   line-height:1.65;font-size:var(--t-base)}
-.wrap{max-width:1000px;margin:0 auto}
+.wrap{max-width:760px;margin:0 auto}
 h1{font-size:var(--t-2xl);text-align:center;margin:0 0 var(--s1);
   letter-spacing:6px;color:var(--red)}
 .sub{text-align:center;color:var(--sub);font-size:var(--t-md);
@@ -183,9 +183,11 @@ th{background:#f1ece1;font-weight:600;color:var(--sub);font-size:var(--t-md)}
 .plain{background:#fbf8f1;border-left:4px solid var(--gold);
   border-radius:0 10px 10px 0;padding:var(--s3) var(--s5);margin:var(--s3) 0}
 .plain h3{margin:0 0 7px;font-size:15px;color:var(--red);letter-spacing:1px}
-.plain p{margin:5px 0;font-size:var(--t-base);line-height:1.85}
+.plain p{margin:5px 0;font-size:var(--t-base);line-height:1.85;
+  max-width:38em;text-wrap:pretty}
 .plain .k{color:var(--red);font-weight:600}
-.plain .sub2{color:var(--sub);font-size:var(--t-md)}
+.plain .sub2{color:var(--sub);font-size:var(--t-md);line-height:1.8;
+  max-width:40em}
 .tagline{display:flex;flex-wrap:wrap;gap:var(--s2);margin:var(--s2) 0 var(--s1)}
 .tagline .tag{background:#fff;border:1px solid var(--line);
   border-radius:10px;padding:var(--s2) var(--s3);font-size:var(--t-md);
@@ -238,7 +240,8 @@ details.fold>summary:focus-visible{outline:2px solid var(--gold);
 .persona .p-block:first-of-type{border-top:none;padding-top:0;margin-top:0}
 .persona .p-k{font-size:var(--t-sm);color:#c9ab7e;letter-spacing:2px;
   margin-bottom:var(--s1);font-weight:600}
-.persona .p-v{font-size:var(--t-base);line-height:1.85;color:#ede0cd}
+.persona .p-v{font-size:var(--t-base);line-height:1.9;color:#ede0cd;
+  max-width:38em;text-wrap:pretty}
 .persona .p-src{font-size:var(--t-xs);color:#a98f6c;margin-top:var(--s1)}
 .persona .p-note{font-size:var(--t-sm);color:#b79b76;margin-top:var(--s4);
   padding-top:var(--s3);border-top:1px solid rgba(246,236,224,.12)}
@@ -289,6 +292,66 @@ WX_COLOR = {"木": "#5b8c5a", "火": "#c0504d", "土": "#b08d4a", "金": "#8a8f9
 
 # 占星四元素的颜色，与五行区分开
 EL_COLOR = {"火": "#c0504d", "土": "#b08d4a", "风": "#4a6fa5", "水": "#3f7a52"}
+
+
+_MAXP = 34
+
+
+def _split_sentences(text):
+    """按中文句末标点把一段切成多段。
+
+    为什么在渲染层切
+    ----------------
+    量化发现页面上 11 段超过 60 字（最长 105）。中文一段超过 30 字
+    就开始难读 —— 读者容易串行，然后就跳读。而文案里大量是
+    「三句话写在一个字符串里」。回去改每条文案不解决根本问题，
+    所以在渲染层按句切。
+
+    切法
+    ----
+    - 只切句末标点（。！？），不切句内停顿（逗号顿号）——
+      句内切开反而更碎
+    - 少于两句就不切；本来不长的段不要动
+    - 短于 8 字的句子并到前一句，避免出现「孤句」
+    - 标签安全：切完补未闭合的行内标签，否则 <b> 被切成两半
+    """
+    import re as _re
+    if not text:
+        return [text]
+    parts = [p for p in _re.split(r"(?<=[。！？])", text) if p.strip()]
+    if len(parts) < 2:
+        return [text]
+    merged = []
+    for p in parts:
+        plain = _re.sub(r"<[^>]+>", "", p)
+        if merged and len(plain) < 8:
+            prev = _re.sub(r"<[^>]+>", "", merged[-1])
+            if len(prev) + len(plain) <= _MAXP * 2:
+                merged[-1] += p
+                continue
+        merged.append(p)
+    out = []
+    for p in merged:
+        opens = _re.findall(r"<(b|em|i|strong|span|a)\b[^>]*>", p)
+        clo = _re.findall(r"</([a-z]+)>", p)
+        need = list(opens)
+        for c in clo:
+            if c in need:
+                need.remove(c)
+        for tag in reversed([x for x in need
+                             if x in ("b", "em", "i", "strong",
+                                      "span", "a")]):
+            p += "</%s>" % tag
+        out.append(p)
+    return out
+
+
+def _p(text, cls="li"):
+    """把一段文本渲染成一个或多个 <p>。排版的关键一步。"""
+    segs = _split_sentences(text)
+    if len(segs) <= 1:
+        return '<p class="%s">%s</p>' % (cls, text)
+    return "".join('<p class="%s">%s</p>' % (cls, s) for s in segs)
 
 
 def _h(s):
@@ -478,6 +541,66 @@ def render_astro(r):
                 " ".join("%s%d" % (k, v) for k, v in r["性质分布"].items())))
     p.append("</section>")
     return "".join(p)
+
+
+def _tag(cls, body):
+    """按 class 拼 <p>。class 为空时输出无 class 的 <p>。
+
+    必须与 render.js 的 _pTag 一致：空 class 时**不写 class 属性**。
+    写成 class="" 会让两侧 HTML 差几个字符，对拍全红。
+    """
+    return ('<p class="%s">%s</p>' % (cls, body)) if cls \
+        else ("<p>%s</p>" % body)
+
+
+def _despacify(html, max_len=36):
+    """把 HTML 里过长的正文 <p> 按中文句末标点拆成多个 <p>。
+
+    只动 <p class="li"> 与 <p class="sub2">（纯文本正文段）。
+    含块级标签（<div>/<ul>/<table>）的段不碰 ——
+    切开会破坏结构。
+
+    阈值 36：中文一行 15~25 字，36 字以上就该拆。
+    """
+    import re as _re
+
+    def repl(cls, body):
+        # 有块级标签就不碰
+        if _re.search(r"<(div|ul|ol|table|tr|td|th|h\d|section|details)\b",
+                      body):
+            return _tag(cls, body)
+        plain = _re.sub(r"<[^>]+>", "", body)
+        if len(plain) <= max_len:
+            return _tag(cls, body)
+        parts = [p for p in _re.split(r"(?<=[。！？])", body) if p.strip()]
+        if len(parts) < 2:
+            return _tag(cls, body)
+        # 短句合并，避免孤句
+        merged = []
+        for p in parts:
+            pl = _re.sub(r"<[^>]+>", "", p)
+            if merged and len(pl) < 8 and len(
+                    _re.sub(r"<[^>]+>", "", merged[-1])) + len(pl) <= max_len * 2:
+                merged[-1] += p
+                continue
+            merged.append(p)
+        out = []
+        for p in merged:
+            opens = _re.findall(r"<(b|em|i|strong|span|a)\b[^>]*>", p)
+            clo = _re.findall(r"</([a-z]+)>", p)
+            need = list(opens)
+            for c in clo:
+                if c in need:
+                    need.remove(c)
+            for tag in reversed([x for x in need if x in
+                                 ("b", "em", "i", "strong", "span", "a")]):
+                p += "</%s>" % tag
+            out.append(_tag(cls, p))
+        return "".join(out)
+
+    return _re.sub(r'<p(?: class="(li|sub2)")?>(.*?)</p>',
+                   lambda m: repl(m.group(1) or "", m.group(2)),
+                   html, flags=_re.S)
 
 
 def render_plain(data):
@@ -1222,7 +1345,7 @@ def render_plain(data):
     P.append("</section>")
 
     P.append("</section>")
-    return "".join(P)
+    return _despacify("".join(P))
 
 
 def render_glossary():

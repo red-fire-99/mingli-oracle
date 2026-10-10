@@ -300,6 +300,81 @@ export function renderAstro(r) {
 /* 白话解读                                                            */
 /* ------------------------------------------------------------------ */
 
+/* ===================================================================
+   despacify —— 把过长正文 <p> 按中文句末标点拆成多个 <p>
+
+   与 Python 侧 _despacify 行为一致（render 层对拍比 HTML 字符串）。
+   排版依据：中文一段超过 30 字就开始难读，而文案里大量是
+   「三句话写在一个字符串里」，所以在渲染层按句切。
+
+   与 Python 的差异只有一处：JS 的老版本不支持后向断言，
+   所以用「替换成分隔符再 split」实现，等价于 Python 的
+   re.split(r"(?<=[。！？])")。
+   =================================================================== */
+function _pTag(cls, body) {
+  return cls ? '<p class="' + cls + '">' + body + "</p>"
+             : "<p>" + body + "</p>";
+}
+
+function despacify(html, maxLen) {
+  if (maxLen === undefined || maxLen === null) maxLen = 36;
+  return html.replace(/<p(?: class="(li|sub2)")?>([\s\S]*?)<\/p>/g,
+    function (m, cls, body) {
+      cls = cls || "";
+      // 有块级标签就不碰
+      if (/<(div|ul|ol|table|tr|td|th|h[1-6]|section|details)\b/.test(body)) {
+        return _pTag(cls, body);
+      }
+      const plain = body.replace(/<[^>]+>/g, "");
+      if (plain.length <= maxLen) return _pTag(cls, body);
+      // JS 不用后向断言：按句末标点切开
+      const parts = body.split(/(?<=[。！？])/).filter(function (s) {
+        return s.trim() !== "";
+      });
+      if (parts.length < 2) return _pTag(cls, body);
+      // 短句合并，避免孤句（与 Python 一致）
+      const merged = [];
+      for (const p of parts) {
+        const pl = p.replace(/<[^>]+>/g, "");
+        const last = merged.length
+          ? merged[merged.length - 1].replace(/<[^>]+>/g, "") : "";
+        if (merged.length && pl.length < 8
+            && last.length + pl.length <= maxLen * 2) {
+          merged[merged.length - 1] += p;
+          continue;
+        }
+        merged.push(p);
+      }
+      // 补未闭合的行内标签
+      const out = [];
+      for (let p of merged) {
+        const opens = [];
+        const reO = /<(b|em|i|strong|span|a)\b[^>]*>/g;
+        let mm;
+        while ((mm = reO.exec(p)) !== null) opens.push(mm[1]);
+        const clo = [];
+        const reC = /<\/([a-z]+)>/g;
+        while ((mm = reC.exec(p)) !== null) clo.push(mm[1]);
+        const need = opens.slice();
+        for (const c of clo) {
+          const i = need.indexOf(c);
+          if (i >= 0) need.splice(i, 1);
+        }
+        const known = need.filter(function (x) {
+          return ["b", "em", "i", "strong", "span", "a"].indexOf(x) >= 0;
+        });
+        for (let i = known.length - 1; i >= 0; i--) {
+          p += "</" + known[i] + ">";
+        }
+        out.push(_pTag(cls, p));
+      }
+      return out.join("");
+    });
+}
+
+export function _despacifyForTest(html) { return despacify(html); }
+
+
 export function renderPlain(data) {
   const P = ['<section><h2>先说人话</h2>',
     '<div class="secnote">这一段不用懂任何术语，看完就知道自己大概是什么样的人。'
@@ -865,7 +940,8 @@ export function renderPlain(data) {
       P.push('<details class="fold"><summary>两个轴点'
         + '<span class="cnt">上升与天顶</span></summary><div class="fbody">'
         + '<p class="sub2">上升不是「真正的你」，是别人看到的你；'
-        + "天顶是命运把你推向的位置。两者都不是性格本身，"
+        + "天顶是命运把你推向的位置。"
+        + "两者都不是性格本身，"
         + "而是「你在别人眼里」和「你被认可的方向」。</p>"
         + '<div class="ssx">');
       for (const x of a["轴点详批"]["列表"]) {
@@ -1109,7 +1185,7 @@ export function renderPlain(data) {
   P.push("</section>");
 
   P.push("</section>");
-  return P.join("");
+  return despacify(P.join(""));
 }
 
 export function renderGlossary() {
