@@ -55,7 +55,10 @@ NAMES = ["DAY_MASTER", "STRENGTH", "SHISHEN", "ZIWEI_STAR", "SHENSHA",
          "TAOHUA_HEAD", "TAOHUA_CAVEAT",
          "INDUSTRY_ROLES", "ROLE_FALLBACK",
          "ZW_CAREER_ROLE", "ASTRO_CAREER_ROLE",
-         "CAREER_HEAD", "CAREER_CAVEAT"]
+         "CAREER_HEAD", "CAREER_CAVEAT",
+         # 1.8.0：个性版本。DM_DEPTH 与 DAY_MASTER 并联
+         # （不动原表结构，否则连锁破坏现有消费者）。
+         "DM_DEPTH", "PERSONA_HEAD", "PERSONA_CAVEAT", "PERSONA_LABELS"]
 
 
 def sanitize(o):

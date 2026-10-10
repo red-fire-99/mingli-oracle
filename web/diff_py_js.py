@@ -418,6 +418,10 @@ def cases_plain():
         add("plain_career", "career_plain(%s)" % tag,
             dict(common, lat=c["lat"], lon=c["lon"]),
             PL.career_plain(rb, rz, ra))
+        # 个性版本：它跨三个盘取数，任何一边取值不一致都会体现在这
+        add("plain_persona", "persona_plain(%s)" % tag,
+            dict(common, lat=c["lat"], lon=c["lon"]),
+            PL.persona_plain(rb, rz, ra))
         # 渲染层也要逐字比：B 类这块最容易出现「Python 渲染了、
         # JS 整块不渲染」的分叉，而这种分叉在页面上只是「少一块」，
         # 不会报错。
@@ -774,7 +778,8 @@ for (const c of CASES) {
       case "plain_taohua":
       case "plain_taohua_partial":
       case "plain_career":
-      case "plain_career_partial": {
+      case "plain_career_partial":
+      case "plain_persona": {
         // 不要写 `const c = i`：i 已经是 c.in，再声明一个同名 const
         // 会把外层的用例对象遮住，于是 `c.partial` 读的是 inp 上的
         // 属性 —— 症状是「读不到 partial」，而不是「遮蔽了 c」。
@@ -797,7 +802,8 @@ for (const c of CASES) {
                           lat: i.lat, lon: i.lon, leap: false });
         }
         got = c.op.indexOf("taohua") >= 0 ? P.taohuaPlain(rb, rz, ra)
-                                          : P.careerPlain(rb, rz, ra);
+          : c.op.indexOf("persona") >= 0 ? P.personaPlain(rb, rz, ra)
+          : P.careerPlain(rb, rz, ra);
         break;
       }
       case "glossary": got = { g: P.glossaryHtml() }; break;

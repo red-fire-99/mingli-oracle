@@ -74,181 +74,215 @@ def build(solar=None, lunar=None, leap=False, hour=None, shichen=None, sex="男"
 # ---------------------------------------------------------------------------
 
 CSS = """
-:root{--bg:#f7f4ee;--card:#fffdf8;--ink:#2b2621;--sub:#6b6154;--line:#e3dbcd;
---red:#a8322d;--gold:#a8842c;--green:#3f7a52;--blue:#2f5d7c;--purple:#6b4a7a;}
+/* ===================================================================
+   设计令牌。改样式只动这里，不动下面的规则。
+   字阶用 1.25 比率（minor third），中文场景下可读性够又不拖沓。
+   =================================================================== */
+:root{
+  --bg:#f7f4ee; --card:#fffdf8; --ink:#2b2621; --sub:#6b6154;
+  --line:#e3dbcd; --line2:#efe8da;
+  --red:#a8322d; --gold:#a8842c; --green:#3f7a52; --blue:#2f5d7c;
+  --purple:#6b4a7a;
+  /* 字阶 */
+  --t-xs:11px; --t-sm:12px; --t-md:13px; --t-base:14px;
+  --t-lg:16px; --t-xl:19px; --t-2xl:23px; --t-3xl:28px;
+  /* 间距 */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:22px; --s6:30px;
+  /* 圆角与阴影 */
+  --r-sm:8px; --r-md:11px; --r-lg:14px; --r-pill:999px;
+  --sh-1:0 1px 3px rgba(0,0,0,.03);
+  --sh-2:0 2px 10px rgba(0,0,0,.05);
+  --sh-3:0 6px 24px rgba(0,0,0,.08);
+  /* 过渡 */
+  --dur:.18s; --ease:cubic-bezier(.4,0,.2,1);
+}
+@media (prefers-reduced-motion: reduce){
+  :root{--dur:0s}
+  *{animation:none!important;transition:none!important}
+}
+
 *{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
 body{margin:0;padding:28px 18px 60px;background:var(--bg);color:var(--ink);
-font-family:"PingFang SC","Microsoft YaHei","Noto Sans SC",system-ui,sans-serif;line-height:1.65}
+  font-family:"PingFang SC","Microsoft YaHei","Noto Sans SC",system-ui,sans-serif;
+  line-height:1.65;font-size:var(--t-base)}
 .wrap{max-width:1000px;margin:0 auto}
-h1{font-size:26px;text-align:center;margin:0 0 4px;letter-spacing:6px;color:var(--red)}
-.sub{text-align:center;color:var(--sub);font-size:13px;margin-bottom:22px}
-section{background:var(--card);border:1px solid var(--line);border-radius:14px;
-padding:20px 22px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,.03)}
-h2{font-size:17px;margin:0 0 16px;padding-left:11px;border-left:4px solid var(--red);
-letter-spacing:2px}
-.info{display:flex;flex-wrap:wrap;gap:8px 26px;font-size:14px;color:var(--sub);margin-bottom:14px}
+h1{font-size:var(--t-2xl);text-align:center;margin:0 0 var(--s1);
+  letter-spacing:6px;color:var(--red)}
+.sub{text-align:center;color:var(--sub);font-size:var(--t-md);
+  margin-bottom:var(--s5)}
+section{background:var(--card);border:1px solid var(--line);
+  border-radius:var(--r-lg);padding:var(--s5) var(--s5);
+  margin-bottom:var(--s5);box-shadow:var(--sh-1)}
+
+h2{font-size:var(--t-lg);margin:0 0 var(--s4);padding-left:var(--s3);
+  border-left:4px solid var(--red);letter-spacing:2px}
+
+.info{display:flex;flex-wrap:wrap;gap:var(--s2) 26px;font-size:var(--t-base);
+  color:var(--sub);margin-bottom:var(--s4)}
 .info b{color:var(--ink);font-weight:600}
-table{width:100%;border-collapse:collapse;font-size:14px}
+table{width:100%;border-collapse:collapse;font-size:var(--t-base)}
 th,td{border:1px solid var(--line);padding:7px 9px;text-align:center}
-th{background:#f1ece1;font-weight:600;color:var(--sub);font-size:13px}
-.gz{font-size:20px;font-weight:700;letter-spacing:2px}
+th{background:#f1ece1;font-weight:600;color:var(--sub);font-size:var(--t-md)}
+.gz{font-size:var(--t-xl);font-weight:700;letter-spacing:2px}
 .gan{color:var(--red)}.zhi{color:var(--blue)}
-.ss{font-size:12px;color:var(--sub)}
-.cang{font-size:12px;color:var(--sub);line-height:1.5}
-.pill{display:inline-block;padding:1px 8px;border-radius:9px;font-size:12px;
-background:#f0e9db;color:var(--sub);margin:2px 3px 2px 0}
+.ss{font-size:var(--t-sm);color:var(--sub)}
+.cang{font-size:var(--t-sm);color:var(--sub);line-height:1.5}
+.pill{display:inline-block;padding:1px var(--s2);border-radius:var(--r-pill);
+  font-size:var(--t-sm);background:#f0e9db;color:var(--sub);margin:2px 3px 2px 0}
 .pill.ji{background:#e8f2ea;color:var(--green)}
 .pill.xiong{background:#fae9e7;color:var(--red)}
-.bar{display:flex;align-items:center;gap:9px;margin:6px 0;font-size:13px}
-.bar .lb{width:30px;color:var(--sub)}
-.bar .tr{flex:1;height:16px;background:#efe9dd;border-radius:8px;overflow:hidden}
-.bar .fl{height:100%;border-radius:8px}
-.bar .vl{width:52px;text-align:right;color:var(--sub);font-variant-numeric:tabular-nums}
-/* 紫微盘 */
-.pan{display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(4,1fr);
-gap:6px;aspect-ratio:1/1;max-width:680px;margin:0 auto}
-.cell{border:1px solid var(--line);border-radius:9px;padding:7px;background:#fffefb;
-font-size:12px;overflow:hidden;position:relative;min-height:0}
-.cell.ming{border-color:var(--red);background:#fdf6f0;box-shadow:0 0 0 1px var(--red) inset}
+.bar{display:flex;align-items:center;gap:9px;margin:6px 0;font-size:var(--t-md)}
+.bar .lb{width:30px;color:var(--sub);flex:none}
+.bar .tr{flex:1;height:16px;background:#efe9dd;border-radius:var(--s2);overflow:hidden}
+.bar .fl{height:100%;border-radius:var(--s2);transition:width var(--dur) var(--ease)}
+.bar .vl{width:52px;text-align:right;color:var(--sub);
+  font-variant-numeric:tabular-nums;flex:none}
+
+/* ---------- 紫微十二宫盘 ----------
+   保持 4x4 网格，但小屏降级成两列（原来小屏也是 4 列，
+   每格被压到 60px 宽，星曜根本看不全）。 */
+.pan{display:grid;grid-template-columns:repeat(4,1fr);
+  grid-template-rows:repeat(4,1fr);gap:6px;aspect-ratio:1/1;
+  max-width:680px;margin:0 auto}
+.cell{border:1px solid var(--line);border-radius:9px;padding:7px;
+  background:#fffefb;font-size:var(--t-sm);overflow:hidden;
+  position:relative;min-height:0}
+.cell.ming{border-color:var(--red);background:#fdf6f0;
+  box-shadow:0 0 0 1px var(--red) inset}
 .cell.shen{border-style:dashed}
-.cell .pos{font-size:11px;color:var(--sub);display:flex;justify-content:space-between}
+.cell .pos{font-size:var(--t-xs);color:var(--sub);
+  display:flex;justify-content:space-between}
 .cell .gz2{font-size:15px;font-weight:700;margin:2px 0}
 .cell .stars{line-height:1.45}
 .star{color:var(--ink)}
 .star.main{color:var(--red);font-weight:700}
 .star.hua{color:var(--gold)}
 .star.aux{color:var(--blue)}
-.center{grid-column:2/4;grid-row:2/4;border:1px solid var(--line);border-radius:9px;
-background:#faf6ee;display:flex;flex-direction:column;justify-content:center;
-align-items:center;padding:14px;text-align:center;font-size:13px;gap:5px}
-.center .t{font-size:16px;font-weight:700;letter-spacing:3px;color:var(--red)}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
-@media(max-width:720px){.grid2{grid-template-columns:1fr}}
-.liu{display:flex;flex-wrap:wrap;gap:6px;font-size:12px}
-.liu span{padding:3px 9px;background:#f1ece1;border-radius:8px}
-.warn{color:var(--red);font-size:13px;margin-top:8px}
-.foot{text-align:center;color:var(--sub);font-size:12px;margin-top:26px;line-height:1.8}
-/* 白话解读 */
-.headline{background:linear-gradient(135deg,#fdf6ee,#f6eee0);border:1px solid #e8dcc8;
-border-radius:14px;padding:20px 24px;margin-bottom:20px;text-align:center}
-.headline .big{font-size:19px;font-weight:700;color:var(--red);line-height:1.75}
-.headline .tip{font-size:13px;color:var(--sub);margin-top:8px}
-.plain{background:#fbf8f1;border-left:4px solid var(--gold);border-radius:0 10px 10px 0;
-padding:13px 18px;margin:11px 0}
+.center{grid-column:2/4;grid-row:2/4;border:1px solid var(--line);
+  border-radius:9px;background:#faf6ee;display:flex;flex-direction:column;
+  justify-content:center;align-items:center;padding:var(--s4);text-align:center;
+  font-size:var(--t-md);gap:5px}
+.center .t{font-size:var(--t-lg);font-weight:700;letter-spacing:3px;color:var(--red)}
+
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:var(--s5)}
+.liu{display:flex;flex-wrap:wrap;gap:6px;font-size:var(--t-sm)}
+.liu span{padding:3px 9px;background:#f1ece1;border-radius:var(--s2)}
+.warn{color:var(--red);font-size:var(--t-md);margin-top:var(--s2)}
+.foot{text-align:center;color:var(--sub);font-size:var(--t-sm);
+  margin-top:26px;line-height:1.8}
+
+/* ---------- 白话解读区 ---------- */
+.headline{background:linear-gradient(135deg,#fdf6ee,#f6eee0);
+  border:1px solid #e8dcc8;border-radius:var(--r-lg);padding:var(--s5) var(--s5);
+  margin-bottom:var(--s5);text-align:center}
+.headline .big{font-size:var(--t-xl);font-weight:700;color:var(--red);
+  line-height:1.75}
+.headline .tip{font-size:var(--t-md);color:var(--sub);margin-top:var(--s2)}
+
+.plain{background:#fbf8f1;border-left:4px solid var(--gold);
+  border-radius:0 10px 10px 0;padding:var(--s3) var(--s5);margin:var(--s3) 0}
 .plain h3{margin:0 0 7px;font-size:15px;color:var(--red);letter-spacing:1px}
-.plain p{margin:5px 0;font-size:14px;line-height:1.85}
+.plain p{margin:5px 0;font-size:var(--t-base);line-height:1.85}
 .plain .k{color:var(--red);font-weight:600}
-.plain .sub2{color:var(--sub);font-size:13px}
-.tagline{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 2px}
-.tagline .tag{background:#fff;border:1px solid var(--line);border-radius:10px;
-padding:8px 12px;font-size:13px;flex:1 1 250px;min-width:210px;line-height:1.65}
-.tagline .tag b{color:var(--red);display:block;margin-bottom:3px;font-size:14px}
-/* 折叠区块：新增内容默认收起，首屏保持原来的长度。
-   用原生 <details> 而不是 JS 展开 —— 零脚本就能开，合上时浏览器
-   不会渲染里面的内容，页面首屏成本不涨。 */
-details.fold{background:#fbf8f1;border:1px solid var(--line);border-radius:11px;
- margin:12px 0;overflow:hidden}
-details.fold>summary{cursor:pointer;padding:11px 16px;font-size:14px;font-weight:600;
- color:var(--red);list-style:none;display:flex;align-items:center;gap:8px}
+.plain .sub2{color:var(--sub);font-size:var(--t-md)}
+.tagline{display:flex;flex-wrap:wrap;gap:var(--s2);margin:var(--s2) 0 var(--s1)}
+.tagline .tag{background:#fff;border:1px solid var(--line);
+  border-radius:10px;padding:var(--s2) var(--s3);font-size:var(--t-md);
+  flex:1 1 250px;min-width:210px;line-height:1.65}
+.tagline .tag b{color:var(--red);display:block;margin-bottom:3px;
+  font-size:var(--t-base)}
+
+/* ---------- 折叠区块 ----------
+   用原生 <details>：零脚本就能用，合上时浏览器不渲染内部内容，
+   首屏成本不涨。这里补上开合时的过渡与 marker 状态。 */
+details.fold{background:#fbf8f1;border:1px solid var(--line);
+  border-radius:var(--r-md);margin:var(--s3) 0;overflow:hidden;
+  transition:border-color var(--dur) var(--ease)}
+details.fold:hover{border-color:#d9cdb6}
+details.fold>summary{cursor:pointer;padding:var(--s3) var(--s4);
+  font-size:var(--t-base);font-weight:600;color:var(--red);
+  list-style:none;display:flex;align-items:center;gap:var(--s2)}
 details.fold>summary::-webkit-details-marker{display:none}
-details.fold>summary::before{content:"▸";color:var(--gold);font-size:13px;
- transition:transform .15s}
+details.fold>summary::before{content:"\25B8";color:var(--gold);
+  font-size:var(--t-md);transition:transform var(--dur) var(--ease);flex:none}
 details.fold[open]>summary::before{transform:rotate(90deg)}
-details.fold>summary .cnt{margin-left:auto;color:var(--sub);font-weight:400;font-size:12px}
-details.fold .fbody{padding:2px 16px 14px}
-/* 大运 / 流年逐条 */
-.dy{display:grid;grid-template-columns:repeat(auto-fill,minmax(268px,1fr));gap:9px;
- margin-top:4px}
-.dy .it{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 13px;
- line-height:1.7}
-.dy .it.now{border-color:var(--red);background:#fdf6f0;box-shadow:0 0 0 1px var(--red) inset}
-.dy .hd{display:flex;align-items:baseline;gap:7px;margin-bottom:4px;flex-wrap:wrap}
-.dy .no{font-size:12px;color:var(--sub)}
-.dy .gz{font-size:17px;font-weight:700;letter-spacing:1px}
-.dy .ss{font-size:12px;color:var(--blue)}
-.dy .age{margin-left:auto;font-size:12px;color:var(--sub)}
-.dy .now-tag{font-size:11px;background:var(--red);color:#fff;border-radius:8px;
- padding:0 7px;letter-spacing:1px}
-.dy .th{font-size:13px;color:var(--red);font-weight:600;margin-bottom:2px}
-.dy .li{font-size:13px;margin:4px 0 0;color:var(--ink)}
-.dy .li .h{color:var(--sub);margin-right:5px}
-.dy .li.warn{color:#8a4a20}
-.dy .stg{display:inline-block;font-size:11px;background:#f0e9db;color:var(--sub);
- border-radius:8px;padding:0 7px;margin-top:5px}
-/* 流年 */
-.ly{display:flex;flex-direction:column;gap:6px;margin-top:4px}
-.ly .it{display:flex;gap:11px;align-items:flex-start;background:#fff;
- border:1px solid var(--line);border-radius:10px;padding:9px 13px;line-height:1.7}
-.ly .it.now{border-color:var(--red);background:#fdf6f0}
-.ly .yr{font-size:16px;font-weight:700;width:56px;flex:none;font-variant-numeric:tabular-nums}
-.ly .tx{flex:1;font-size:13px}
-/* 五行意象 */
-.wx{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:9px;margin-top:4px}
-.wx .it{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 13px;
- line-height:1.7;font-size:13px}
-.wx .it.top{border-color:var(--gold)}
-.wx .it.lo{border-style:dashed}
-.wx .hd{display:flex;align-items:baseline;gap:8px;margin-bottom:3px;flex-wrap:wrap}
-.wx .wxn{font-size:19px;font-weight:700}
-.wx .xiang{color:var(--red)}
-.wx .pc{margin-left:auto;font-size:13px;color:var(--sub);font-variant-numeric:tabular-nums}
-.wx .tag{font-size:11px;border-radius:8px;padding:0 7px;background:#f0e9db;color:var(--sub)}
-.wx .tag.ji{background:#e8f2ea;color:var(--green)}
-.wx .tag.hi{background:#f6e6e4;color:var(--red)}
-/* 四元素逐项 */
-.el{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:9px;margin-top:4px}
-.el .it{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 13px;
- line-height:1.7;font-size:13px}
-.el .hd{display:flex;align-items:baseline;gap:8px;margin-bottom:3px}
-.el .en{font-size:18px;font-weight:700}
-.el .pc{margin-left:auto;color:var(--sub);font-variant-numeric:tabular-nums}
-/* 紫微：十二宫 / 大限 / 四化 */
-.pl,.dx,.sh{display:grid;grid-template-columns:repeat(auto-fill,minmax(272px,1fr));gap:9px;margin-top:4px}
-.pl .it,.dx .it,.sh .it{background:#fff;border:1px solid var(--line);border-radius:10px;
- padding:10px 13px;line-height:1.7}
-.pl .it.ming{border-color:var(--red)}
-.pl .it.shen{border-style:dashed}
-.dx .it.now,.sh .it.ji{border-color:var(--gold)}
-.pl .hd,.dx .hd,.sh .hd{display:flex;align-items:baseline;gap:7px;margin-bottom:4px;flex-wrap:wrap}
-.pl .pn,.dx .pn,.sh .pn{font-size:15px;font-weight:700;color:var(--red)}
-.pl .gz2,.dx .gz2,.sh .gz2{font-size:15px;font-weight:700;letter-spacing:1px}
-.pl .pc,.dx .pc,.sh .pc{margin-left:auto;font-size:12px;color:var(--sub)}
-.pl .tag,.dx .tag,.sh .tag{font-size:11px;background:#f0e9db;color:var(--sub);
- border-radius:8px;padding:0 7px}
-.pl .tag.hi,.dx .tag.hi{background:var(--red);color:#fff}
-.sh .it.ji .pn{color:#8a6a1f}
-/* 1.5.0：神煞 / 十神 / 轴点 / 性质 / 相位 的卡片容器
-   布局沿用 .pl/.dx/.sh，只是条目长短差得多，用 flex 竖排更好读 */
-.ssx{display:flex;flex-direction:column;gap:8px;margin-top:10px}
-.ssx .it{background:#fff;border:1px solid var(--line);border-radius:10px;
- padding:10px 13px;line-height:1.7}
-.ssx .hd{display:flex;align-items:baseline;gap:7px;margin-bottom:4px;flex-wrap:wrap}
-.ssx .pn{font-size:15px;font-weight:700;color:var(--red)}
-.ssx .pc{margin-left:auto;font-size:12px;color:var(--sub);text-align:right}
-.ssx .li{font-size:13px;margin:4px 0 0;color:var(--ink)}
-.ssx .li .h{color:var(--sub);margin-right:5px}
-.ssx .sub2{color:var(--sub);font-size:12px;margin:3px 0 0}
-.ssx .gz2{font-size:15px;font-weight:700;letter-spacing:1px}
-/* 类别色只加在神煞名这个标签上。整张卡染色会变成
-   「吉=绿卡、凶=红卡」的吉凶断语观感，而这里只想区分标签。 */
-.ssx .pn.ji{color:var(--green)}
-.ssx .pn.xiong{color:#8a4a20}
-/* 两套体系并置的说明条 */
-.note-sys{background:#f3f6f8;border-left:4px solid var(--blue);border-radius:0 8px 8px 0;
- padding:9px 14px;font-size:13px;color:#3c5566;line-height:1.75;margin:9px 0}
-.gloss{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px;font-size:13px}
-.gloss div{background:#fbf8f1;border-radius:8px;padding:8px 11px;line-height:1.65}
-.gloss b{color:var(--red)}
-/* 开运对应表 */
-.luckgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px;margin:9px 0 2px}
-.luckgrid>div{background:#fff;border:1px solid var(--line);border-radius:9px;
-padding:8px 11px;font-size:13px;line-height:1.65}
-.luckgrid b{display:block;color:var(--red);font-size:12px;margin-bottom:3px;font-weight:600}
-.luckgrid .em{color:var(--ink);font-weight:600}
-@media(max-width:480px){.luckgrid{grid-template-columns:1fr 1fr;gap:6px}
-.luckgrid>div{padding:7px 9px;font-size:12px}}
-[title]{cursor:help;border-bottom:1px dotted #cbbfa8}
-.secnote{font-size:12px;color:var(--sub);margin:-8px 0 14px}
+details.fold>summary{transition:background var(--dur) var(--ease)}
+details.fold[open]>summary{background:#f6f0e4}
+/* 展开时内容淡入 —— 用动画而非 transition，因为 details 的内容
+   在打开前不渲染，transition 没有起点可用。 */
+details.fold[open]>*:not(summary){animation:fadeSlide var(--dur) var(--ease)}
+@keyframes fadeSlide{from{opacity:0;transform:translateY(-4px)}
+  to{opacity:1;transform:none}}
+/* summary 被键盘聚焦时的可见性 */
+details.fold>summary:focus-visible{outline:2px solid var(--gold);
+  outline-offset:-2px;border-radius:var(--r-sm)}
+
+/* ---------- 个性版本（1.8.0）----------
+   放最前面、最大字号，是这份解读的「门面」。
+   深色底是为了跟下面所有浅色卡片区分开 ——
+   读者一眼知道「这是总览，下面是展开」。 */
+.persona{background:linear-gradient(140deg,#3a2f26 0%,#4a3b2e 55%,#55432f 100%);
+  color:#f6ece0;border-radius:var(--r-lg);padding:var(--s6) var(--s5);
+  margin-bottom:var(--s5);box-shadow:var(--sh-2);position:relative;
+  overflow:hidden}
+.persona::before{content:"";position:absolute;inset:0;
+  background:radial-gradient(circle at 82% 8%,rgba(255,225,180,.13),transparent 55%);
+  pointer-events:none}
+.persona .p-eyebrow{font-size:var(--t-sm);letter-spacing:4px;
+  color:#c9ab7e;margin-bottom:var(--s3);font-weight:600}
+.persona .p-lead{font-size:var(--t-2xl);font-weight:700;line-height:1.6;
+  margin:0 0 var(--s4);letter-spacing:.5px}
+.persona .p-block{margin:var(--s4) 0 0;padding-top:var(--s4);
+  border-top:1px solid rgba(246,236,224,.14)}
+.persona .p-block:first-of-type{border-top:none;padding-top:0;margin-top:0}
+.persona .p-k{font-size:var(--t-sm);color:#c9ab7e;letter-spacing:2px;
+  margin-bottom:var(--s1);font-weight:600}
+.persona .p-v{font-size:var(--t-base);line-height:1.85;color:#ede0cd}
+.persona .p-src{font-size:var(--t-xs);color:#a98f6c;margin-top:var(--s1)}
+.persona .p-note{font-size:var(--t-sm);color:#b79b76;margin-top:var(--s4);
+  padding-top:var(--s3);border-top:1px solid rgba(246,236,224,.12)}
+
+/* ---------- 响应式 ----------
+   三档：<=720 手机竖屏 / <=900 平板 / 打印。
+   原来只有 720 一档且只管 .grid2，紫微盘在手机上挤成一团。 */
+@media(max-width:900px){
+  body{padding:22px 14px 48px}
+  .wrap{max-width:100%}
+  section{padding:var(--s4)}
+  h1{font-size:var(--t-xl);letter-spacing:4px}
+}
+@media(max-width:720px){
+  .grid2{grid-template-columns:1fr}
+  /* 十二宫盘降两列：4 列时每格约 60px，星曜看不全；
+     两列每格约 160px，可读。中间四格改跨两列占位。 */
+  .pan{grid-template-columns:repeat(2,1fr);grid-template-rows:auto;
+    aspect-ratio:auto;gap:8px}
+  .center{grid-column:1/3;grid-row:auto;padding:var(--s5)}
+  .cell{padding:var(--s3);font-size:var(--t-base);min-height:74px}
+  .cell .gz2{font-size:var(--t-lg)}
+  .cell .pos{font-size:var(--t-sm)}
+  .headline .big{font-size:var(--t-lg)}
+  .persona{padding:var(--s5) var(--s4)}
+  .persona .p-lead{font-size:var(--t-xl)}
+  .persona .p-v{font-size:var(--t-md)}
+  .bar .lb{width:26px}
+  .info{gap:var(--s2) var(--s4);font-size:var(--t-md)}
+}
+@media(max-width:420px){
+  h1{font-size:var(--t-lg);letter-spacing:3px}
+  .persona .p-lead{font-size:var(--t-lg)}
+  .tagline .tag{min-width:100%}
+}
+@media print{
+  body{background:#fff;padding:0}
+  .persona{background:#fff;color:#000;border:1px solid #999}
+  .persona .p-lead,.persona .p-k,.persona .p-eyebrow{color:#000}
+  .persona .p-v{color:#222}
+  .persona::before{display:none}
+  details.fold{border-color:#ccc}
+  details.fold>*:not(summary){animation:none}
+}
 """
 
 WX_COLOR = {"木": "#5b8c5a", "火": "#c0504d", "土": "#b08d4a", "金": "#8a8f98", "水": "#4a6fa5"}
@@ -451,6 +485,31 @@ def render_plain(data):
     P = ['<section><h2>先说人话</h2>',
          '<div class="secnote">这一段不用懂任何术语，看完就知道自己大概是什么样的人。'
          '想研究细节，往下翻「专业排盘数据」。</div>']
+
+    # ---------- 个性版本：总览，放最前面 ----------
+    # 它必须是这份解读的「门面」—— 一段连贯的人，而不是 15 个小块。
+    # 放在三段之后读起来就变成「正文读完了才给总结」。
+    pe = M_plain.persona_plain(data.get("八字"), data.get("紫微"),
+                               data.get("占星"))
+    if pe["块"]:
+        P.append('<div class="persona">')
+        P.append('<div class="p-eyebrow">命 盘 印 象</div>')
+        lead = pe["块"][0]["文"]
+        P.append('<p class="p-lead">%s</p>' % _h(lead))
+        rest = pe["块"][1:]
+        if rest:
+            P.append("<details class=\"fold\"><summary>展开看：内核 / 运转"
+                     " / 关系 / 独处 / 团队 / 压力</summary>")
+            for r in rest:
+                P.append('<div class="p-block"><div class="p-k">%s · %s</div>'
+                         '<div class="p-v">%s</div>'
+                         '<div class="p-src">%s</div></div>'
+                         % (_h(r["块"]), _h(r["问"]), _h(r["文"]),
+                            _h("来自 " + " + ".join(
+                                "%s（%s）" % (s[0], s[1]) for s in r["源"]))))
+            P.append("</details>")
+        P.append('<p class="p-note">%s</p>' % _h(pe["提醒"]))
+        P.append("</div>")
 
     if "八字" in data:
         b = M_plain.bazi_plain(data["八字"])

@@ -13,7 +13,7 @@
 
 import { pyRoundN } from "./kernel.js";
 import { STAR_BRIEF } from "./ziwei.js";
-import { baziPlain, ziweiPlain, astroPlain, headline, GLOSSARY, crossPlain as P_crossPlain, taohuaPlain as P_taohuaPlain, careerPlain as P_careerPlain } from "./plain.js";
+import { baziPlain, ziweiPlain, astroPlain, headline, GLOSSARY, crossPlain as P_crossPlain, taohuaPlain as P_taohuaPlain, careerPlain as P_careerPlain, personaPlain as P_personaPlain } from "./plain.js";
 import { paiPan as baziPaiPan } from "./bazi.js";
 import { paiPan as ziweiPaiPan } from "./ziwei.js";
 import { paiPan as astroPaiPan } from "./astro.js";
@@ -304,6 +304,29 @@ export function renderPlain(data) {
   const P = ['<section><h2>先说人话</h2>',
     '<div class="secnote">这一段不用懂任何术语，看完就知道自己大概是什么样的人。'
     + '想研究细节，往下翻「专业排盘数据」。</div>'];
+
+  // 个性版本：总览，放最前面。必须与 oracle.py 逐字一致（门禁比 HTML）。
+  const pe = P_personaPlain(data["八字"], data["紫微"], data["占星"]);
+  if (pe["块"].length) {
+    P.push('<div class="persona">');
+    P.push('<div class="p-eyebrow">命 盘 印 象</div>');
+    P.push('<p class="p-lead">' + h(pe["块"][0]["文"]) + "</p>");
+    const rest = pe["块"].slice(1);
+    if (rest.length) {
+      P.push('<details class="fold"><summary>展开看：内核 / 运转'
+           + " / 关系 / 独处 / 团队 / 压力</summary>");
+      for (const r of rest) {
+        P.push('<div class="p-block"><div class="p-k">' + h(r["块"]) + " · "
+             + h(r["问"]) + '</div><div class="p-v">' + h(r["文"])
+             + '</div><div class="p-src">来自 '
+             + h(r["源"].map((s) => `${s[0]}（${s[1]}）`).join(" + "))
+             + "</div></div>");
+      }
+      P.push("</details>");
+    }
+    P.push('<p class="p-note">' + h(pe["提醒"]) + "</p>");
+    P.push("</div>");
+  }
 
   if (data.八字) {
     const b = baziPlain(data.八字);

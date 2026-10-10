@@ -39,6 +39,7 @@ const {
   INDUSTRY_ROLES, ROLE_FALLBACK,
   ZW_CAREER_ROLE, ASTRO_CAREER_ROLE,
   CAREER_HEAD, CAREER_CAVEAT,
+  DM_DEPTH, PERSONA_HEAD, PERSONA_CAVEAT, PERSONA_LABELS,
 } = DATA;
 
 /* ------------------------------------------------------------------
@@ -1297,6 +1298,119 @@ export function careerPlain(baziR, ziweiR, astroR) {
          + `占星 ${n("占星")}）。`,
   };
 }
+
+
+/* ===================================================================
+   personaPlain —— 个性版本的 JS 移植（对 plain.py 的 persona_plain）
+
+   与 Python 侧逐字对应：同样的槽位、同样的模板句、
+   同样只取已有查表值、不新增任何判断。
+   对拍（plain 层）会比对输出，两边不一致即失败。
+   =================================================================== */
+
+export function personaPlain(baziR, ziweiR, astroR) {
+  if (!baziR && !ziweiR && !astroR) return { 标题: "", 块: [] };
+
+  const bp = baziR ? baziPlain(baziR) : null;
+  const zp = ziweiR ? ziweiPlain(ziweiR) : null;
+  const ap = astroR ? astroPlain(astroR) : null;
+  const blocks = [];
+
+  // ---- 定位：日主原型一句 ----
+  if (bp) {
+    blocks.push({
+      块: "定位",
+      问: "",
+      文: bp.性格底色.要点,
+      源: [["八字", "日主" + (baziR.日主 ? baziR.日主.干 : "")]],
+    });
+  }
+
+  // ---- 内核：做事方式 + 占星一句话 ----
+  if (bp) {
+    const src = [["八字", "日主" + baziR.日主.干 + " · "
+                  + (baziR.日主强弱 ? baziR.日主强弱.判定 : "")]];
+    let body = (bp.做事方式 || {}).要点 || "";
+    const sup = (bp.做事方式 || {}).补充 || "";
+    if (sup) body += sup;
+    // 占星侧没有「性格底色」这个键（我一开始凭印象调它，永远为空）。
+    // 真实存在的是「一句话」——它本身就是三句合成，
+    // 所以前面写「换占星那一边看」，不再重复「内核」两个字。
+    if (ap && ap.一句话) {
+      body += " 换占星那一边看：" + ap.一句话;
+      src.push(["占星", "太阳" + (astroR.太阳星座 || "")]);
+    }
+    blocks.push({ 块: "内核", 问: "你是谁、怎么想事", 文: body, 源: src });
+  }
+
+  // ---- 运转：十神 + 五行 + 紫微官禄 ----
+  if (bp) {
+    const src = [["八字", "透干十神 + 五行统计"]];
+    const tags = (bp.天生擅长 || {}).标签 || [];
+    const names = tags.slice(0, 3).map((t) => t.名).join("、");
+    const wxp = ((bp.能量分布 || {}).要点) || "";
+    const bits = [];
+    if (names) bits.push(`手上有「${names}」这几样东西可用`);
+    if (wxp) bits.push(wxp);
+    let body = bits.join("。");
+    if (body && body.slice(-1) !== "。") body += "。";
+    if (zp) {
+      const career = (zp.事业方向 || {}).要点;
+      if (career) {
+        body += "事业方向上，" + career;
+        src.push(["紫微", "官禄宫主星"]);
+      }
+    }
+    if (body) {
+      blocks.push({ 块: "运转", 问: "你平时怎么把事往前推", 文: body, 源: src });
+    }
+  }
+
+  // ---- 关系：紫微夫妻 + 占星张力 ----
+  // 字段名必须先确认。rel["列表"][0] 的键名是**文**，不是「答」——
+  // 我照「答」取过一次，拼出「占星那边看，」后面空着的残句。
+  let relBody = "";
+  const relSrc = [];
+  if (zp) {
+    const love = (zp.感情模式 || {}).要点;
+    if (love) {
+      relBody += love;
+      relSrc.push(["紫微", "夫妻宫"]);
+    }
+  }
+  if (ap) {
+    const items = (ap.关系张力 || {}).列表 || [];
+    if (items.length) {
+      const it = items[0];
+      const frag = it.文 || it.答 || it.说明 || "";
+      if (frag) {
+        relBody += " 另外，" + frag;
+        relSrc.push(["占星", "相位与七宫"]);
+      }
+    }
+  }
+  if (relBody) {
+    blocks.push({ 块: "关系", 问: "你在关系里是什么姿态", 文: relBody,
+                  源: relSrc });
+  }
+
+  // ---- 独处 / 团队 / 压力：日主深度 ----
+  if (baziR && baziR.日主 && DM_DEPTH[baziR.日主.干]) {
+    const d = DM_DEPTH[baziR.日主.干];
+    const s = ["八字", "日主" + baziR.日主.干 + "的深度"];
+    blocks.push({ 块: "独处", 问: "没人看着你的时候", 文: d[0], 源: [s] });
+    blocks.push({ 块: "团队", 问: "在一群人里", 文: d[1], 源: [s] });
+    blocks.push({ 块: "压力", 问: "扛事儿的时候", 文: d[2], 源: [s] });
+  }
+
+  return {
+    标题: "个性版本 · 一个完整的人",
+    要点: PERSONA_HEAD,
+    提醒: PERSONA_CAVEAT,
+    块: blocks,
+  };
+}
+
 
 /* ---------------- 汇总 ---------------- */
 

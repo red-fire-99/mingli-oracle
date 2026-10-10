@@ -618,7 +618,8 @@ if (form && form.hasListener("submit")) {
 // 另外检查没有 open 属性：用户明确选了「默认折叠」，
 // 带 open 就等于没折叠。
 {
-  const pp = byId.get("panel-plain");
+  const hl = byId.get("headline");
+const pp = byId.get("panel-plain");
   const html = pp ? pp.innerHTML : "";
   const need = ["你一生十步大运", "未来七年的年度节奏", "你身上五股的劲儿",
                 "四种元素逐项看", "十二长生", "好的一面", "要注意"];
@@ -993,10 +994,55 @@ if (form && form.hasListener("submit")) {
   }
 }
 
-const hl = byId.get("headline");
+// 1.8.0：个性版本（总览）
+//
+// 断言它**真的是总览**：必须在八字/紫微/占星三段之前出现，
+// 且必须有 hero 容器与展开块。放在三段之后就失去意义了。
+{
+  const ppP = byId.get("panel-plain");
+  const htmlP = ppP ? ppP.innerHTML : "";
+  const iPersona = htmlP.indexOf('class="persona"');
+  if (iPersona < 0) {
+    fail("页面上没有个性版本的 hero 容器（.persona）");
+  } else {
+    const iBazi = htmlP.indexOf("八字 · 看你的性格和天赋");
+    if (iBazi < 0) fail("页面上没有八字区块");
+    if (iPersona > iBazi) {
+      fail("个性版本排在八字之后 —— 它必须是总览，放在前面");
+    }
+    // 个性版本内部是嵌套 div，不能只切到第一个 </div> ——
+    // 那样只切到 p-eyebrow 那一行，后面全切没了。
+    // 用「persona 开始 到 </div><!--persona 结束-->」这种深层切片不可靠，
+    // 直接把这一段到下一个 <div class="persona"> 或八字标题为止。
+    const iPersonaEnd = htmlP.indexOf("八字 · 看你的性格和天赋");
+    const pSeg = htmlP.slice(iPersona, iPersonaEnd > iPersona ? iPersonaEnd
+                                                            : htmlP.length);
+    if (pSeg.indexOf("p-lead") < 0) fail("个性版本缺主文案（.p-lead）");
+    for (const k of ["内核", "运转", "关系", "独处", "团队", "压力"]) {
+      if (pSeg.indexOf(k) < 0) fail("个性版本里缺块：" + k);
+    }
+    // 每块都要标来源，否则读者无从判断这话是哪来的
+    if (pSeg.indexOf("来自 ") < 0) {
+      fail("个性版本没有标每块的来源");
+    }
+    // 残句检测：模板拼接最容易漏出「…看，」后面没内容。
+    // 判据要**只取 .p-lead 那一段** —— 之前取 hero 后 400 字符，
+    // 把 <summary> 里的「… / 压力」和后面的正文一起算进来，
+    // 「压力」后面紧跟正文时被误判成以标点结尾。
+    const mLead = pSeg.match(/p-lead">([^<]*)</);
+    const leadTxt = mLead ? mLead[1].trim() : "";
+    if (!leadTxt) {
+      fail("取不到个性版本主文案");
+    } else if (/[，：、]$/.test(leadTxt)) {
+      fail("个性版本主文案以标点结尾 —— 像拼接漏了内容：" + leadTxt.slice(-20));
+    }
+    console.log("  OK   1.8.0 个性版本：hero 在最前 + 六块齐全 + 标来源");
+  }
+}
 const pp = byId.get("panel-plain");
 const pr = byId.get("panel-pro");
 const st = byId.get("status");
+const hl = byId.get("headline");
 
 const gotHl = hl && hl.innerHTML.trim().length > 0;
 const gotPP = pp && pp.innerHTML.length > 500;

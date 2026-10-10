@@ -484,6 +484,41 @@ def test_plain():
     ck("行业-三盘全空时为空不报错",
        PL.career_plain(None, None, None)["列表"], [])
 
+    # ---- 1.8.0：个性版本 ----
+    #
+    # 这个模块跨三个盘取数，最容易出的错是**调了不存在的键**：
+    # 我一开始调 ap["性格底色"]，占星侧根本没有这个键，于是那一句
+    # 永远为空、页面读起来像缺东西，而对拍全绿（两边都取空）。
+    # 所以断言必须是「每块都真的从某个盘取到了值」。
+    pe = PL.persona_plain(d["八字"], d["紫微"], d["占星"])
+    ck("个性-七个块齐全", len(pe["块"]), 7)
+    ck("个性-每块都有正文（没有取空键）",
+       all(b["文"] for b in pe["块"]), True)
+    ck("个性-定位块来自八字日主",
+       pe["块"][0]["源"], [("八字", "日主庚")])
+    ck("个性-内核块跨八字与占星",
+       sorted(set(s[0] for s in pe["块"][1]["源"])), ["八字", "占星"])
+    ck("个性-运转块跨八字与紫微",
+       sorted(set(s[0] for s in pe["块"][2]["源"])), ["八字", "紫微"])
+    ck("个性-每块都标了来源（可追溯到盘面）",
+       all(b["源"] for b in pe["块"]), True)
+    ck("个性-独处/团队/压力来自日主深度",
+       sorted(b["块"] for b in pe["块"][4:]), ["压力", "团队", "独处"])
+    ck("个性-DM_DEPTH 覆盖全部 10 天干", len(PL.DM_DEPTH), 10)
+    ck("个性-DM_DEPTH 每条三个场景",
+       all(len(v) == 3 for v in PL.DM_DEPTH.values()), True)
+    ck("个性-DM_DEPTH 与 DAY_MASTER 键一致",
+       sorted(set(PL.DM_DEPTH) ^ set(PL.DAY_MASTER)), [])
+    # 残句检测：拼接模板最容易漏出「…看，」后面没内容
+    for b in pe["块"]:
+        if b["文"].rstrip().endswith(("，", "：", "、")):
+            ck("个性-%s 块有残句" % b["块"], b["文"][-20:], "不应以标点结尾")
+    # 缺盘：只给八字时也要有内容，且不崩
+    only_b = PL.persona_plain(d["八字"], None, None)
+    ck("个性-只给八字时不空", len(only_b["块"]) >= 5, True)
+    ck("个性-三盘全空时不报错且为空",
+       PL.persona_plain(None, None, None)["块"], [])
+
 
 def test_server():
     print("== 本地服务与交互界面 ==")
