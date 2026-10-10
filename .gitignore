@@ -42,3 +42,9 @@ web/dist/
 # gen_regions.py 的抓取缓存（约 26 MB / 360 个文件）
 # 只为避免重复打数据源站，产物 web/js/regions.json 才是进仓库的东西
 web/.regions_cache/
+
+# 门禁脚本自己生成的临时文件
+# 每次跑都重写，git add -A 会把它们误带进提交
+web/.load_chain_test.cjs
+web/.diff_cases.json
+web/.shichen_cases.json

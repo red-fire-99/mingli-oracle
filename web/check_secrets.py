@@ -191,15 +191,23 @@ HIST_LITERAL = [
     ("本机绝对路径", "C:/Users/"),
     ("本机绝对路径", "C:\\Users\\"),
     ("mac 用户目录", "/Users/"),
-    ("GitHub token", "ghp_"),
-    ("GitHub PAT", "github_pat_"),
     ("私钥", "BEGIN RSA PRIVATE KEY"),
     ("私钥", "BEGIN OPENSSH PRIVATE KEY"),
 ]
 
-# token 的真形态：至少 20 位。扫描器里的假样例是 ghp_ab…0123 这种短的，
-# 但为了不误判，还是把扫描器文件排除掉。
-HIST_TOKEN_RE = re.compile(r"gh[pousr]_[A-Za-z0-9]{20,}")
+# token 必须用正则，不能用裸前缀。
+#
+# 之前这里写的是 ("GitHub token", "ghp_")，结果 CHANGELOG 里一句
+# 「FORBIDDEN 列表里的 ghp_ 这类字面量」被判成「当前文件里也有泄露」。
+# 4 个字符的前缀不是 token —— 它本来就该出现在讲扫描规则的文档里。
+# 裸前缀判 token 只会制造误报；真正形态的 token 由这里抓。
+HIST_TOKEN_RES = [
+    ("GitHub token", re.compile(r"gh[pousr]_[A-Za-z0-9]{20,}")),
+    ("GitHub PAT", re.compile(r"github_pat_[A-Za-z0-9_]{20,}")),
+]
+
+# 兼容旧引用
+HIST_TOKEN_RE = HIST_TOKEN_RES[0][1]
 
 # 判定「这个文件是不是模式清单」的判据，与工作区扫描共用。
 #
@@ -241,34 +249,73 @@ def scan_history(max_commits=200):
         print("（读不到 git 历史，跳过）")
         return [], 0
     shas = shas[:max_commits]
+    if not shas:
+        return [], 0
 
+    # 用 git grep 一次扫全部 commit，不要逐 commit × 逐文件 cat-file。
+    #
+    # 逐个 cat-file 的写法在 27 个 commit / 60 个文件下是 1175 次进程
+    # spawn —— Windows 上每次约 150ms，实测 223 秒。一个门禁跑 4 分钟
+    # 会让人以为它挂了（我确实误判成 hang 两次）。
+    # git grep 接受多个 tree-ish，每个模式只要一次调用。
     found = {}
-    for sha in shas:
+
+    def _grep(label, needle, fixed=True):
+        """在全部 commit 里找含 needle 的文件。返回 (label, needle, {路径: {sha}})。"""
+        flag = "-F" if fixed else "-E"
         try:
-            names = _git("-c", "core.quotepath=false", "ls-tree", "-r",
-                         "--name-only", sha).splitlines()
-        except subprocess.CalledProcessError:
-            continue
-        for n in names:
-            n = n.strip().replace("\\", "/")
-            if not n or not n.endswith(HIST_EXT):
+            # revs 必须放在 -- 之前：git grep 的语法是
+            #   git grep [opts] -e <pat> <tree-ish>... [-- <pathspec>...]
+            # 把 -- 写在 revs 前面，git 会把 revs 当成 pathspec，
+            # 于是去工作树里找 —— 结果永远「没命中」，而且不报错。
+            # 这正是自检抓到的那个回归：扫描从「抓到」变成「抓不到」。
+            # 模式已用 -e 传，不会被当成选项，所以不需要 --。
+            r = subprocess.run(
+                ["git", "-C", ROOT, "grep", "-l", "-I", flag,
+                 "-e", needle] + shas,
+                capture_output=True)
+        except OSError:
+            return None
+        if r.returncode not in (0, 1):        # 1 = 没命中，属正常
+            return None
+        hits = {}
+        for line in r.stdout.decode("utf-8", "replace").splitlines():
+            line = line.strip()
+            if not line or ":" not in line:
                 continue
+            sha, _, path = line.partition(":")
+            path = path.strip().replace("\\", "/")
+            if not path.endswith(HIST_EXT):
+                continue
+            hits.setdefault(path, set()).add(sha[:7])
+        return (label, needle, hits) if hits else None
+
+    greps = [_grep(lab, lit, True) for lab, lit in HIST_LITERAL]
+    greps += [_grep(lab, rx.pattern, False) for lab, rx in HIST_TOKEN_RES]
+    greps = [g for g in greps if g]
+
+    # 一个文件可能命中多个模式。按「字面量在前、正则在后」的顺序归并到
+    # 第一个 —— 与原来 break 的语义一致，报告里每个文件只出现一条。
+    per_file = {}
+    for label, needle, hits in greps:
+        for path, shaset in hits.items():
+            per_file.setdefault(path, []).append((label, needle, shaset))
+
+    for path, lst in sorted(per_file.items()):
+        label, needle, shaset = lst[0]
+        # 规则文件里的命中是「用来拦这些东西的规则」，不是泄露。
+        # 要按该文件**当前**的内容判 —— 规则可能后来才加进来，
+        # 用这个 commit 的快照判会把当时的正常代码误报成规则文件。
+        cur = os.path.join(ROOT, path.replace("/", os.sep))
+        cur_text = ""
+        if os.path.isfile(cur):
             try:
-                blob = _git("cat-file", "blob", "%s:%s" % (sha, n))
-            except (subprocess.CalledProcessError, UnicodeDecodeError):
-                continue
-            for label, lit in HIST_LITERAL:
-                if lit in blob:
-                    # 命中的是不是「规则文本」？要按该文件**当前**的内容判，
-                    # 而不是这个 commit 快照 —— 规则可能后来才加进来。
-                    found.setdefault((n, label, lit), set()).add(sha[:7])
-                    break
-            else:
-                if not _is_rule_file(n, blob):
-                    for m in HIST_TOKEN_RE.finditer(blob):
-                        found.setdefault((n, "真 token 形态",
-                                          m.group(0)[:10] + "…"), set()).add(sha[:7])
-                        break
+                cur_text = io.open(cur, encoding="utf-8").read()
+            except UnicodeDecodeError:
+                cur_text = ""
+        if path in SKIP_FILES or _is_rule_file(path, cur_text):
+            continue
+        found[(path, label, needle)] = shaset
     return sorted(found.items()), len(shas)
 
 
