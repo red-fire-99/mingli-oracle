@@ -50,3 +50,12 @@ web/.diff_cases.json
 web/.shichen_cases.json
 # 临时探针（在 web/js 下直接 import plain.js 调试用）
 web/js/_t.mjs
+web/js/_syn.mjs
+
+# tools/ 下的第三方依赖（交叉验证用）
+# iztro 装在这里只用于本地交叉验证紫微排盘，不属于产物，
+# 也不该进仓库 —— 948 个文件、38k 行会把真实改动淹没。
+# 需要时按 tools/ziwei_ref.js 里的说明自行 npm install iztro。
+tools/node_modules/
+tools/package-lock.json
+tools/package.json

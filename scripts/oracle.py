@@ -1028,62 +1028,92 @@ def render_plain(data):
             P.append("</div></div></details>")
 
     # ---------- B 类：三盘交叉 ----------
-    # 放在三段之后：三盘的数据都齐了才交叉得出来，
-    # 插在任何一段中间都会拿到还没算完的盘。
+    # 放在三段之后：三盘的数据都齐了才交叉得出来。
+    #
+    # 排布上刻意把「一致」放主位、「分歧」折起来。
+    # 用户反馈过「很混乱，好多不同的结果」——技术上每条都有依据，
+    # 但把三段互相矛盾的话平铺开、让读者自己判断信哪个，是设计失职。
+    # 读者默认看到的应该是三边都指向同一头的那一面。
+    # 分歧如实保留，只是不占主位。
     if "八字" in data or "紫微" in data or "占星" in data:
         x = M_plain.cross_plain(data.get("八字"), data.get("紫微"),
                                 data.get("占星"))
-        rows = x["一致"] + x["分歧"] + x["单盘"]
-        if rows:
+        if x["一致"] or x["分歧"] or x["单盘"]:
             P.append('<h2 style="font-size:15px;border-left-color:var(--gold)">'
-                     '三盘交叉 · 三套体系分别怎么说</h2>')
+                     '三盘交叉 · 几套体系一起看</h2>')
             P.append('<div class="plain"><p>%s</p><p class="sub2">%s</p>'
-                     '<p class="sub2">%s</p></div>'
-                     % (_h(x["要点"]), _h(x["说明"]), _h(x["提醒"])))
-            # 先说数据从哪来：交叉的可信度取决于每边各自用了什么
-            P.append('<div class="plain"><h3>这三边分别按什么算的</h3>'
-                     '<div class="tagline">')
+                     '</div>' % (_h(x["要点"]), _h(x["说明"])))
+
+            # 「怎么读」放在最前面：读者需要先知道怎么看，
+            # 再看结论 —— 顺序反过来等于让人先困惑再解释。
+            P.append('<div class="plain"><h3>先说怎么读</h3>'
+                     '<p class="li">三套体系是<em>各自独立</em>算的，'
+                     '彼此之间没有换算、也不互相验证。</p>'
+                     '<p class="li">下面<em>直接显示</em>的，是三边都指向'
+                     '同一头的那几面 —— 这种面可以作为你的倾向来看。</p>'
+                     '<p class="li">折起来的「三边说法不同」不是哪一套错了，'
+                     '而是说明你在这一面本来就比较多 —— '
+                     '不同场景下你本来就会表现得不一样。</p>'
+                     '<p class="li">三套体系衡量的是不同的东西，'
+                     '所以这里不投票、不合成一个「唯一答案」：'
+                     '投出来的那个数字不对应任何一套体系真实的算法。</p>'
+                     '</div>')
+
+            if x["一致"]:
+                P.append('<div class="plain"><h3>三边都指向同一头</h3>'
+                         '<div class="tagline">')
+                for r in x["一致"]:
+                    P.append('<div class="tag"><b>%s</b>%s</div>'
+                             % (_h(r["维度"]), _h(r["同向"])))
+                P.append('</div><p class="sub2">依据：%s</p></div>'
+                         % _h(" / ".join("%s %s" % (g["盘"], g["依据"])
+                                         for g in x["一致"][0]["各家"])))
+
+            rest = x["分歧"] + x["单盘"]
+            if rest:
+                P.append("<details class=\"ssx\"><summary>三边说法不同"
+                         "（%d 个维度，点开看各自怎么说）</summary>"
+                         % len(rest))
+                P.append('<div class="plain">')
+                for r in rest:
+                    P.append('<div class="xsx"><p class="xsx-q">%s：%s</p>'
+                             % (_h(r["维度"]), _h(r["问"])))
+                    for g in r["各家"]:
+                        P.append('<p class="li"><b>%s</b>：%s　'
+                                 '<span class="sub2">%s</span></p>'
+                                 % (_h(g["盘"]), _h(g["端"]), _h(g["依据"])))
+                    if r["一致"]:
+                        P.append('<p class="sub2">只有一盘给了信号，'
+                                 '无从交叉 —— 这里只代表那一套体系怎么看。</p>')
+                    P.append("</div>")
+                P.append("</div></details>")
+
+            P.append("<details class=\"ssx\"><summary>这三边分别按什么算的"
+                     "（想查证时点开）</summary>"
+                     '<div class="plain"><div class="tagline">')
             for s in x["依据"]:
                 P.append('<div class="tag"><b>%s</b>%s</div>'
                          % (_h(s["盘"]), _h(s["源"])))
-            P.append("</div></div>")
-
-            # 默认折叠：这一块是「进阶看」，不是必读
-            P.append("<details class=\"ssx\"><summary>六个维度逐项对照"
-                     "（点开看三边各说了什么）</summary>")
-            P.append('<div class="plain">')
-            for r in rows:
-                # head 里只能放**纯文本**：整段会过一次 _h()，
-                # 若在里面拼 <b> 会被转义成 &lt;b&gt; 显示出来。
-                # 要强调就靠外层的 <b> 包住整句。
-                if r["一致"]:
-                    head = "%s —— 三边都指向「%s」" % (r["维度"], r["同向"])
-                    tag = "同"
-                else:
-                    head = "%s —— 三边说法不一" % r["维度"]
-                    tag = "异"
-                P.append('<div class="xsx"><p class="xsx-q">%s：%s</p>'
-                         % (_h(r["维度"]), _h(r["问"])))
-                P.append('<p class="xsx-h"><b>%s</b>%s</p>'
-                         % (_h(tag), _h(head[len(r["维度"]):])))
-                for g in r["各家"]:
-                    P.append('<p class="li"><b>%s</b>：%s　'
-                             '<span class="sub2">%s</span></p>'
-                             % (_h(g["盘"]), _h(g["端"]), _h(g["依据"])))
-                if r["一致"] and len(r["各家"]) < 2:
-                    P.append('<p class="sub2">只有一盘给了信号，'
-                             '无从交叉 —— 这里只代表那一套体系怎么看。</p>')
-                P.append("</div>")
-            P.append("</div></details>")
+            P.append('</div><p class="sub2">%s</p></div></details>'
+                     % _h(x["提醒"]))
     # ---------- C 类：桃花星 + 行业细分 ----------
-    # 两块都默认折叠：属于「进阶看」，不该挤在结论区里。
+    #
+    # 同样按「减少并列结论」的思路处理：
+    #  - 桃花星补一句「怎么读」，说明三边说的是不同层面
+    #  - 行业按依据分组（同一喜用神下的行业本来就是同一件事的展开，
+    #    铺平了会被读成十几个互相冲突的结论）
     th = M_plain.taohua_plain(data.get("八字"), data.get("紫微"),
                               data.get("占星"))
     if th["列表"]:
         P.append('<h2 style="font-size:15px;border-left-color:var(--gold)">'
                  '%s</h2>' % _h(th["标题"]))
-        P.append('<div class="plain"><p>%s</p><p class="sub2">%s</p></div>'
-                 % (_h(th["要点"]), _h(th["提醒"])))
+        P.append('<div class="plain"><p>%s</p>'
+                 '<p class="li">下面三边说的是<em>不同层面</em>，'
+                 '不是互相矛盾：八字看的是人缘的广度，'
+                 '紫微看的是你在关系里的姿态，'
+                 '占星看的是你被什么样的人吸引、'
+                 '以及你希望怎么被对待。</p></div>'
+                 % _h(th["要点"]))
         P.append('<details class="ssx"><summary>三盘分别怎么说'
                  '（点开逐条对照）</summary><div class="plain">')
         for r in th["列表"]:
@@ -1093,7 +1123,7 @@ def render_plain(data):
                      % (_h(r["答"]), _h(r["依据"])))
             P.append('<p class="sub2">%s</p>' % _h(r["说明"]))
             P.append("</div>")
-        P.append("</div></details>")
+        P.append('<p class="sub2">%s</p></div></details>' % _h(th["提醒"]))
 
     cr = M_plain.career_plain(data.get("八字"), data.get("紫微"),
                               data.get("占星"))
@@ -1102,18 +1132,34 @@ def render_plain(data):
                  '%s</h2>' % _h(cr["标题"]))
         P.append('<div class="plain"><p>%s</p><p class="sub2">%s</p></div>'
                  % (_h(cr["要点"]), _h(cr["提醒"])))
-        P.append('<details class="ssx"><summary>行业与角色类型逐条'
-                 '（点开看每条的依据）</summary><div class="plain">')
+        # 按依据分组：同一依据下的行业是同一件事的展开，
+        # 铺平会被读成十几个并列且互相冲突的结论。
+        groups = []
         for r in cr["列表"]:
-            P.append('<div class="xsx"><p class="xsx-h"><b>%s</b>%s</p>'
-                     % (_h(r["盘"]), _h(r["行业"])))
-            P.append('<p class="li">角色类型：%s</p>'
-                     % _h("、".join(r["角色"])))
-            P.append('<p class="sub2">依据：%s（%s）</p>'
-                     % (_h(r["依据"]), _h(r["角色来源"])))
+            k = (r["盘"], r["依据"])
+            if groups and groups[-1][0] == k:
+                groups[-1][1].append(r)
+            else:
+                groups.append((k, [r]))
+        if len(groups) > 1:
+            P.append('<details class="ssx"><summary>%d 组方向'
+                     '（点开看每组有哪些行业）</summary><div class="plain">'
+                     % len(groups))
+        else:
+            P.append('<div class="plain">')
+        for (pan, why), items in groups:
+            P.append('<p class="xsx-h"><b>%s</b>%s</p>'
+                     % (_h(pan), _h(why)))
+            P.append('<div class="tagline">')
+            for r in items:
+                P.append('<div class="tag"><b>%s</b>%s</div>'
+                         % (_h(r["行业"]), _h("、".join(r["角色"]))))
+            P.append('</div><p class="sub2">角色类型是行业内的通用分类，'
+                     '不是「你应该去当的职位」。</p>')
+        if len(groups) > 1:
+            P.append("</div></details>")
+        else:
             P.append("</div>")
-        P.append("</div></details>")
-
     P.append("</section>")
 
     P.append("</section>")

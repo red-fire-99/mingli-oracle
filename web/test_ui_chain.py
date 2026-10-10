@@ -883,20 +883,44 @@ if (form && form.hasListener("submit")) {
     if (!/透干十神|命宫主星|太阳星座/.test(seg)) {
       fail("B 类块没有写清各边的判据来源");
     }
-    // 必须明说「三套不换算」—— 不加这句就成了伪交叉
-    if (seg.indexOf("没有换算关系") < 0) {
+    // 必须明说「三套不换算」—— 不加这句就成了伪交叉。
+    // 搜索范围要覆盖后面的折叠块：新布局把「不换算」那句放在
+    // 「这三边分别按什么算的」那个 details 里，只看到第一个
+    // </section> 会漏掉它 —— 之前断言就是这样误报的。
+    const tailX = htmlX.slice(cx);
+    if (tailX.indexOf("没有换算关系") < 0) {
       fail("B 类块没说明三套体系之间没有换算关系");
     }
     // 折叠标签不能被转义出来
-    if (seg.indexOf("&lt;b&gt;") >= 0) {
+    if (tailX.indexOf("&lt;b&gt;") >= 0) {
       fail("B 类块把 HTML 标签转义成文字显示了");
     }
-    // 每个维度都要有一致或分歧的判词，不能只有裸数据
-    if (!/三边都指向|三边说法不一/.test(seg)) {
-      fail("B 类块没有对每个维度给出一致/分歧的判词");
+    // 一致的当主结论（不折叠）、分歧的折起来 —— 这是 v1.7.1 的排布改动
+    const idxSame = tailX.indexOf("三边都指向同一头");
+    const idxDiff = tailX.indexOf("三边说法不同");
+    if (idxSame < 0) fail("B 类块没有「三边都指向同一头」的主结论区");
+    if (idxDiff < 0) fail("B 类块没有「三边说法不同」的折叠区");
+    if (idxSame > idxDiff) {
+      fail("B 类块把分歧放在一致之前 —— 默认先看到的应该是三边一致的面");
     }
-    console.log("  OK   1.7.0 B 类三盘交叉：六维度齐全 + 三边来源标出 + "
-      + "明说无换算关系 + 默认折叠");
+    // 「三边说法不同」这行字有两处：summary 里一处、折叠体里一处。
+    // indexOf 命中的是 summary —— 它前面当然不会有 <details>。
+    // 要判「是否折叠」，得看第二个出现处的前面有没有 <details>。
+    const idxDiff2 = tailX.indexOf("三边说法不同", idxDiff + 1);
+    if (idxDiff2 < 0) {
+      fail("「三边说法不同」折叠体里没有标题 —— 可能只渲染了 summary");
+    } else if (tailX.slice(idxDiff, idxDiff2).indexOf("<details") < 0) {
+      fail("「三边说法不同」没有默认折叠 —— 它会挤在主结论位置");
+    }
+    // 必须告诉读者怎么读，否则就是一堆互相矛盾的句子
+    if (tailX.indexOf("先说怎么读") < 0) {
+      fail("B 类块没有「先说怎么读」这一层");
+    }
+    if (tailX.indexOf("不投票") < 0) {
+      fail("B 类块没有说明不做加权合成/投票");
+    }
+    console.log("  OK   1.7.0 B 类三盘交叉：一致的当主结论 + 分歧折叠 + "
+      + "先说怎么读 + 明说无换算关系");
   }
 }
 
@@ -924,6 +948,11 @@ if (form && form.hasListener("submit")) {
     if (seg.indexOf("不预测") < 0) {
       fail("桃花星块缺少「不预测具体事件」的口径说明");
     }
+    // 必须说清三边是「不同层面」而不是互相矛盾 ——
+    // 三条各说各话摆在一起，读者只会以为其中一条是错的。
+    if (seg.indexOf("不同层面") < 0) {
+      fail("桃花星块没有说明三边说的是不同层面、不是互相矛盾");
+    }
     // 措辞纪律：不得出现吉凶断语
     for (const w of ["注定", "必然", "艳福", "桃花运旺", "容易出轨"]) {
       if (seg.indexOf(w) >= 0) fail("桃花星块出现禁用表述：" + w);
@@ -938,7 +967,16 @@ if (form && form.hasListener("submit")) {
     const seg = htmlC.slice(cr, htmlC.indexOf("</section>", cr));
     // 行业 + 角色类型两层都要在
     if (seg.indexOf("角色类型") < 0) fail("行业细分块没有角色类型这一层");
-    if (!/依据：/.test(seg)) fail("行业细分块没有标出每条的依据");
+    // 依据改成按组渲染（新布局），所以搜「依据：」会搜不到 ——
+    // 搜组标题上的依据（如「喜用神金」）。判据跟着实际结构走。
+    if (!/喜用神|命宫主星|宫主星|上升/.test(seg)) {
+      fail("行业细分块没有标出每组的判据依据");
+    }
+    // 必须按组折叠：一组喜用神下有 7 个行业，铺平会被读成
+    // 7 个互相冲突的结论。分组是这版排布的重点。
+    if (seg.indexOf("组方向") < 0) {
+      fail("行业细分没有按依据分组（一次铺十几个行业会读成互相冲突）");
+    }
     // 明说不做加权合成
     if (seg.indexOf("不做加权合成") < 0) {
       fail("行业细分块没有说明三盘不做加权合成");
@@ -951,7 +989,7 @@ if (form && form.hasListener("submit")) {
     if (seg.indexOf("兜底分类") >= 0) {
       fail("行业细分出现了兜底分类 —— 说明 INDUSTRY_ROLES 缺了键，内容被削平");
     }
-    console.log("  OK   1.7.0 行业细分：行业+角色两层 + 标依据 + 无兜底退化");
+    console.log("  OK   1.7.0 行业细分：按依据分组 + 行业/角色两层 + 无兜底退化");
   }
 }
 
