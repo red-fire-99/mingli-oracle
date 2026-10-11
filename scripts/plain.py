@@ -2302,6 +2302,121 @@ def persona_plain(bazi_r, ziwei_r, astro_r):
     }
 
 
+# ===================================================================
+# 可视化（1.9.0）
+#
+# 原则：**只用整数运算，不用三角函数**。
+# Python 与 JS 的 sin/cos 在 double 末位有差异，会让对拍（比 HTML
+# 字符串）全线飘红。环形图用 stroke-dasharray、时间轴用百分比宽度，
+# 两者都是整数，两侧自然一致。
+#
+# 舍入：统一用「加 0.5 取整」。不能用 Python 的 round() ——
+# 它是银行家舍入（2.5 -> 2），JS 的 Math.round 是四舍五入（2.5 -> 3），
+# 这一点之前在大运起运岁数上踩过坑。
+# ===================================================================
+
+WX_COLOR5 = {"木": "#3f7a52", "火": "#c0453a", "土": "#a8842c",
+             "金": "#8a8f96", "水": "#2f5d7c"}
+
+
+def _r_half_up(x):
+    """加 0.5 取整。两侧行为一致，不用 round()。"""
+    return int(x + 0.5)
+
+
+def _esc(s):
+    """HTML 转义。plain.py 里原本没有这个（oracle.py 的 _h 在那边），
+    可视化要输出 XML 文本节点，必须转义，否则星座名里万一有 & 就坏。"""
+    return (str(s).replace("&", "&amp;").replace("<", "&lt;")
+            .replace(">", "&gt;"))
+
+
+def wuxing_donut(stat, size=168):
+    """五行环形图。返回内联 SVG 字符串。
+
+    圆周取 1000 个单位，dasharray = 百分比(一位小数) × 10。
+    全部整数，无三角函数 —— 对拍才敢用 SVG。
+    """
+    if not stat or not any(stat.values()):
+        # 空盘不崩：给个底环就够，别让整个解读区挂掉
+        return ('<svg class="donut" viewBox="0 0 %d %d" width="%d" height="%d"'
+                ' role="img" aria-label="五行力量分布">'
+                '<circle cx="%.0f" cy="%.0f" r="%d" fill="none"'
+                ' stroke="#efe9dd" stroke-width="%d"/></svg>'
+                % (size, size, size, size, cx, cy, R, sw))
+    total = sum(stat.values()) or 1
+    C = 1000
+    R = 62
+    cx = cy = size / 2
+    sw = 20                      # 环宽
+    circ = 2 * 3.14159 * R       # 只是示意半径，长度用 C 归一化
+    p = []
+    p.append('<svg class="donut" viewBox="0 0 %d %d" width="%d" height="%d" '
+             'role="img" aria-label="五行力量分布">'
+             % (size, size, size, size))
+    # 底环
+    p.append('<circle cx="%.0f" cy="%.0f" r="%d" fill="none" '
+             'stroke="#efe9dd" stroke-width="%d"/>' % (cx, cy, R, sw))
+    off = 0
+    order = ["木", "火", "土", "金", "水"]
+    for k in order:
+        v = stat.get(k, 0)
+        seg = _r_half_up(v / total * C)
+        if seg <= 0:
+            continue
+        # dasharray 用 C 为单位，offset 累加。取模保证闭合。
+        dash = "%d %d" % (seg, C - seg)
+        p.append('<circle class="dseg" cx="%.0f" cy="%.0f" r="%d" fill="none"'
+                 ' stroke="%s" stroke-width="%d" stroke-dasharray="%s"'
+                 ' stroke-dashoffset="%d" stroke-linecap="butt">'
+                 '<title>%s %.1f%%</title></circle>'
+                 % (cx, cy, R, WX_COLOR5[k], sw, dash, -off, k, v))
+        off += seg
+    # 中心文字：最强的一行
+    top = max(stat, key=stat.get)
+    p.append('<text x="%.0f" y="%.0f" text-anchor="middle" '
+             'class="d-main" fill="#2b2621">%s</text>'
+             % (cx, cy - 2, _esc(top)))
+    p.append('<text x="%.0f" y="%.0f" text-anchor="middle" '
+             'class="d-sub" fill="#6b6154">%.0f%%</text>'
+             % (cx, cy + 16, stat.get(top, 0)))
+    p.append("</svg>")
+    return "".join(p)
+
+
+def dayun_timeline(dayun, now_year=2026, cur_xs=None):
+    """大运时间轴。返回 HTML 片段（flex + 百分比宽度）。
+
+    10 步每步一个色块，宽度按虚岁跨度比例（整数）。
+    「现在」用一条竖线标出，落在哪一步就高亮那一步。
+    """
+    items = (dayun or {}).get("列表") or []
+    if not items:
+        return ""
+    lo = items[0]["起始虚岁"]
+    hi = items[-1]["结束虚岁"]
+    span = hi - lo
+    if span <= 0:
+        return ""
+    p = []
+    p.append('<div class="dy-tl">')
+    for it in items:
+        wgt = _r_half_up((it["结束虚岁"] - it["起始虚岁"]) / span * 100)
+        cls = "dy-seg"
+        if cur_xs is not None and it["起始虚岁"] <= cur_xs < it["结束虚岁"]:
+            cls += " now"
+        p.append('<div class="%s" style="width:%d%%">'
+                 '<b>%s</b><i>%s</i><u>%d起</u></div>'
+                 % (cls, wgt, _esc(it["干支"]), _esc(it["十神"]),
+                    int(it["起始公历"])))
+    if cur_xs is not None and lo <= cur_xs < hi:
+        pos = _r_half_up((cur_xs - lo) / span * 100)
+        p.append('<div class="dy-now" style="left:%d%%" title="现在 %d 虚岁">'
+                 '<span>现在</span></div>' % (pos, int(cur_xs)))
+    p.append("</div>")
+    return "".join(p)
+
+
 def _pick(d, k, default=None):
     return d.get(k, default)
 

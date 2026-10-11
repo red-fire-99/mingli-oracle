@@ -1413,6 +1413,104 @@ export function personaPlain(baziR, ziweiR, astroR) {
 }
 
 
+
+/* ===================================================================
+   wuxingDonut / dayunTimeline —— 可视化的 JS 移植
+
+   与 Python 侧 wuxing_donut / dayun_timeline 逐字对应
+   （render 层对拍比 HTML 字符串）。
+
+   舍入统一用「加 0.5 取整」—— 不能用 Math.round：
+   Python 的 round() 在 .5 归偶，JS 的 Math.round 四舍五入，
+   这一点之前在大运起运岁数上导致过两侧分叉。
+   =================================================================== */
+const WX_COLOR5 = { "木": "#3f7a52", "火": "#c0453a", "土": "#a8842c",
+                    "金": "#8a8f96", "水": "#2f5d7c" };
+
+function rHalfUp(x) { return Math.floor(x + 0.5); }
+
+function escSvg(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+export function wuxingDonut(stat, size) {
+  if (size === undefined || size === null) size = 168;
+  if (!stat) return "";
+  const vals = Object.keys(stat).map(function (k) { return stat[k]; });
+  if (!vals.length || vals.every(function (v) { return v <= 0; })) {
+    return '<svg class="donut" viewBox="0 0 ' + size + " " + size + '" width="'
+      + size + '" height="' + size
+      + '" role="img" aria-label="五行力量分布"><circle cx="'
+      + (size / 2) + '" cy="' + (size / 2) + '" r="62" fill="none"'
+      + ' stroke="#efe9dd" stroke-width="20"/></svg>';
+  }
+  const total = vals.reduce(function (a, b) { return a + b; }, 0) || 1;
+  const C = 1000;
+  const R = 62;
+  const cx = size / 2, cy = size / 2;
+  const sw = 20;
+  const p = [];
+  p.push('<svg class="donut" viewBox="0 0 ' + size + " " + size + '" width="'
+         + size + '" height="' + size
+         + '" role="img" aria-label="五行力量分布">');
+  p.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + R
+         + '" fill="none" stroke="#efe9dd" stroke-width="' + sw + '"/>');
+  let off = 0;
+  const order = ["木", "火", "土", "金", "水"];
+  for (const k of order) {
+    const v = stat[k] === undefined ? 0 : stat[k];
+    const seg = rHalfUp(v / total * C);
+    if (seg <= 0) continue;
+    p.push('<circle class="dseg" cx="' + cx + '" cy="' + cy + '" r="' + R
+           + '" fill="none" stroke="' + WX_COLOR5[k] + '" stroke-width="'
+           + sw + '" stroke-dasharray="' + seg + " " + (C - seg)
+           + '" stroke-dashoffset="' + (-off)
+           + '" stroke-linecap="butt"><title>' + escSvg(k) + " "
+           + v.toFixed(1) + "%</title></circle>");
+    off += seg;
+  }
+  let top = order[0];
+  for (const k of order) if ((stat[k] || 0) > (stat[top] || 0)) top = k;
+  p.push('<text x="' + cx + '" y="' + (cy - 2)
+         + '" text-anchor="middle" class="d-main" fill="#2b2621">'
+         + escSvg(top) + "</text>");
+  p.push('<text x="' + cx + '" y="' + (cy + 16)
+         + '" text-anchor="middle" class="d-sub" fill="#6b6154">'
+         + rHalfUp(stat[top] || 0) + "%</text>");
+  p.push("</svg>");
+  return p.join("");
+}
+
+export function dayunTimeline(dayun, curXs) {
+  const items = (dayun && dayun.列表) || [];
+  if (!items.length) return "";
+  const lo = items[0]["起始虚岁"];
+  const hi = items[items.length - 1]["结束虚岁"];
+  const span = hi - lo;
+  if (!(span > 0)) return "";
+  const p = ['<div class="dy-tl">'];
+  for (const it of items) {
+    const wgt = rHalfUp((it["结束虚岁"] - it["起始虚岁"]) / span * 100);
+    let cls = "dy-seg";
+    if (curXs !== null && curXs !== undefined
+        && it["起始虚岁"] <= curXs && curXs < it["结束虚岁"]) {
+      cls += " now";
+    }
+    p.push('<div class="' + cls + '" style="width:' + wgt + '%"><b>'
+           + escSvg(it["干支"]) + "</b><i>" + escSvg(it["十神"]) + "</i><u>"
+           + Math.floor(it["起始公历"]) + "起</u></div>");
+  }
+  if (curXs !== null && curXs !== undefined && lo <= curXs && curXs < hi) {
+    p.push('<div class="dy-now" style="left:'
+           + rHalfUp((curXs - lo) / span * 100)
+           + '%" title="现在 ' + Math.floor(curXs) + ' 虚岁"><span>现在</span></div>');
+  }
+  p.push("</div>");
+  return p.join("");
+}
+
+
 /* ---------------- 汇总 ---------------- */
 
 export function headline(data) {

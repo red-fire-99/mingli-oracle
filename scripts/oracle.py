@@ -246,6 +246,42 @@ details.fold>summary:focus-visible{outline:2px solid var(--gold);
 .persona .p-note{font-size:var(--t-sm);color:#b79b76;margin-top:var(--s4);
   padding-top:var(--s3);border-top:1px solid rgba(246,236,224,.12)}
 
+/* ---------- 可视化（1.9.0）：五行环 + 大运时间轴 ----------
+   环形图用 SVG stroke-dasharray（整数），不用三角函数 ——
+   Python 与 JS 的 sin/cos 末位有差异，会让对拍全线飘红。 */
+.donut{display:block;margin:0 auto}
+.donut .dseg{transition:stroke-dasharray var(--dur) var(--ease)}
+.donut .d-main{font-size:26px;font-weight:700}
+.donut .d-sub{font-size:12px}
+.donut-wrap{display:flex;align-items:center;gap:var(--s5);flex-wrap:wrap}
+.donut-legend{flex:1;min-width:180px;font-size:var(--t-md);color:var(--sub)}
+.donut-legend div{display:flex;align-items:center;gap:7px;margin:4px 0}
+.donut-legend i{width:9px;height:9px;border-radius:2px;flex:none}
+.donut-legend b{color:var(--ink);font-weight:600}
+
+.dy-tl{display:flex;position:relative;margin:var(--s4) 0 var(--s3);
+  border-radius:var(--r-sm);overflow:hidden;background:#efe9dd}
+.dy-seg{padding:var(--s2) 4px;text-align:center;font-size:var(--t-xs);
+  color:var(--sub);border-right:1px solid rgba(255,255,255,.6);
+  display:flex;flex-direction:column;gap:1px;min-width:0;
+  transition:background var(--dur) var(--ease)}
+.dy-seg:last-child{border-right:none}
+.dy-seg b{font-size:var(--t-md);color:var(--ink);letter-spacing:.5px}
+.dy-seg i{font-style:normal;color:#9a8f7e}
+.dy-seg u{text-decoration:none;color:#b3a693;font-size:10px}
+.dy-seg.now{background:linear-gradient(180deg,#fdf6ee,#f7ead6);
+  color:var(--red);box-shadow:inset 0 0 0 1px var(--gold)}
+.dy-seg.now b{color:var(--red);font-weight:700}
+.dy-now{position:absolute;top:-6px;bottom:-6px;width:0;
+  border-left:2px solid var(--red);pointer-events:none}
+.dy-now span{position:absolute;top:-16px;left:50%;transform:translateX(-50%);
+  background:var(--red);color:#fff;font-size:10px;padding:1px 6px;
+  border-radius:var(--r-pill);white-space:nowrap}
+@media(max-width:720px){
+  .dy-seg u{display:none}
+  .dy-seg b{font-size:var(--t-sm)}
+}
+
 /* ---------- 响应式 ----------
    三档：<=720 手机竖屏 / <=900 平板 / 打印。
    原来只有 720 一档且只管 .grid2，紫微盘在手机上挤成一团。 */
@@ -419,12 +455,15 @@ def render_bazi(r):
              '<span>喜用 <b>%s</b></span></div>'
              % (r["日主"]["干"], r["日主"]["五行"], r["日主"]["阴阳"], s["判定"], s["同党占比"],
                 r["格局"]["名"], r["旬空"], "、".join(s["喜用神"])))
-    # 五行
+    # 五行：环形图 + 图例（替代原来的小 bar）
     p.append("<h2 style='margin-top:20px'>五行力量</h2>")
+    p.append('<div class="donut-wrap">')
+    p.append(M_plain.wuxing_donut(r["五行统计"]))
+    p.append('<div class="donut-legend">')
     for w, v in r["五行统计"].items():
-        p.append('<div class="bar"><div class="lb">%s</div><div class="tr">'
-                 '<div class="fl" style="width:%.1f%%;background:%s"></div></div>'
-                 '<div class="vl">%.1f%%</div></div>' % (w, max(v, 0), WX_COLOR[w], v))
+        p.append('<div><i style="background:%s"></i><b>%s</b>%.1f%%</div>'
+                 % (WX_COLOR[w], w, v))
+    p.append("</div></div>")
     # 神煞
     if r["神煞"]:
         p.append("<h2 style='margin-top:20px'>神煞</h2><div>")
@@ -677,8 +716,34 @@ def render_plain(data):
                         _h(lk["行业"]), _h(lk["饰品"]), _h(lk["日常"])))
         if b["当前阶段"]:
             P.append('<div class="plain"><h3>你现在这段时期</h3>'
-                     '<p>当前走在「<span class="k">%s</span>」大运（%s），主题是<span class="k">%s</span>。</p></div>'
+                     '<p>当前走在「<span class="k">%s</span>」大运（%s），主题是<span class="k">%s</span>。</p>'
+                     '下面这条线是你一生的十步大运，现在的位置标出来了。</p></div>'
                      % (_h(b["当前阶段"]["干支"]), _h(b["当前阶段"]["十神"]), _h(b["当前阶段"]["主题"])))
+        # 大运时间轴：把十步画成一条线，标出「现在」在哪。
+        # 注意它**不在** `if b["当前阶段"]` 里面：
+        # 「当前阶段」在大运还没起（生年较晚或起运未到）时是 None，
+        # 那时整块会被跳过 —— 但时间轴照样该画，
+        # 因为它讲的是十步的分布，不是「现在在哪一步」。
+        # （1900/2100 两个边界盘就是这种情况，两侧都为空。）
+        # 大运时间轴：把十步画成一条线，标出「现在」在哪。
+        # 当前虚岁算法：本步起始公历 <= 今年 < 本步 + 10 年即落在这一步，
+        # 取该步的起始虚岁作为标记位置（不必精确到年，标出区间就够）。
+        _bz = data.get("八字") or {}
+        _dz = _bz.get("大运") or {}
+        _cur_xs = None
+        if _dz.get("列表"):
+            try:
+                _ny = int(_bz.get("当前时间") or 2026)
+            except (TypeError, ValueError):
+                _ny = 2026
+            for _it in _dz["列表"]:
+                _y0 = _it.get("起始公历") or 0
+                if _y0 and _y0 <= _ny < _y0 + 10:
+                    _cur_xs = _it.get("起始虚岁")
+                    break
+        _tl = M_plain.dayun_timeline(_dz, cur_xs=_cur_xs)
+        if _tl:
+            P.append(_tl)
 
         # ---- 1.3.1 新增：大运逐段（折叠）----
         if b.get("大运详批") and b["大运详批"]["列表"]:

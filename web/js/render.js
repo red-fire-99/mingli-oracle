@@ -13,7 +13,7 @@
 
 import { pyRoundN } from "./kernel.js";
 import { STAR_BRIEF } from "./ziwei.js";
-import { baziPlain, ziweiPlain, astroPlain, headline, GLOSSARY, crossPlain as P_crossPlain, taohuaPlain as P_taohuaPlain, careerPlain as P_careerPlain, personaPlain as P_personaPlain } from "./plain.js";
+import { baziPlain, ziweiPlain, astroPlain, headline, GLOSSARY, crossPlain as P_crossPlain, taohuaPlain as P_taohuaPlain, careerPlain as P_careerPlain, personaPlain as P_personaPlain, wuxingDonut as P_wuxingDonut, dayunTimeline as P_dayunTimeline } from "./plain.js";
 import { paiPan as baziPaiPan } from "./bazi.js";
 import { paiPan as ziweiPaiPan } from "./ziwei.js";
 import { paiPan as astroPaiPan } from "./astro.js";
@@ -152,12 +152,15 @@ export function renderBazi(r) {
     + '<span>喜用 <b>' + s.喜用神.join("、") + '</b></span></div>');
 
   p.push("<h2 style='margin-top:20px'>五行力量</h2>");
+  p.push('<div class="donut-wrap">');
+  p.push(P_wuxingDonut(r.五行统计));
+  p.push('<div class="donut-legend">');
   for (const w in r.五行统计) {
     const v = r.五行统计[w];
-    p.push('<div class="bar"><div class="lb">' + w + '</div><div class="tr">'
-      + '<div class="fl" style="width:' + f1(Math.max(v, 0)) + '%;background:' + WX_COLOR[w]
-      + '"></div></div><div class="vl">' + f1(v) + '%</div></div>');
+    p.push('<div><i style="background:' + WX_COLOR[w] + '"></i><b>' + w
+      + "</b>" + f1(v) + "%</div>");
   }
+  p.push("</div></div>");
 
   if (r.神煞.length) {
     p.push("<h2 style='margin-top:20px'>神煞</h2><div>");
@@ -450,8 +453,31 @@ export function renderPlain(data) {
     if (b.当前阶段) {
       P.push('<div class="plain"><h3>你现在这段时期</h3>'
         + '<p>当前走在「<span class="k">' + h(b.当前阶段.干支) + "</span>」大运（"
-        + h(b.当前阶段.十神) + '），主题是<span class="k">' + h(b.当前阶段.主题) + "</span>。</p></div>");
+        + h(b.当前阶段.十神) + '），主题是<span class="k">' + h(b.当前阶段.主题) + "</span>。</p>"
+        + "下面这条线是你一生的十步大运，现在的位置标出来了。" + "</p></div>");
+
     }
+    // 大运时间轴：把十步画成一条线，标出「现在」在哪。
+    // 不在 if (b.当前阶段) 里面 —— 当前阶段为 null 时那一块
+    // 会整体跳过，但时间轴照样该画（它讲的是十步的分布）。
+    // Python 侧同一位置；1900/2100 两个边界盘之前就是因此分叉。
+    const _dz = (data.八字 || {}).大运 || {};
+    const _dl = _dz.列表 || [];
+    let _cxs = null;
+    if (_dl.length) {
+      let _ny = parseInt((data.八字 || {}).当前时间, 10);
+      if (!isFinite(_ny)) _ny = 2026;
+      for (const _it of _dl) {
+        const _y0 = _it.起始公历 || 0;
+        if (_y0 && _y0 <= _ny && _ny < _y0 + 10) {
+          _cxs = _it.起始虚岁;
+          break;
+        }
+      }
+    }
+    const _tl = P_dayunTimeline(_dz, _cxs);
+    if (_tl) P.push(_tl);
+
 
     // ---- 1.3.1 新增：大运逐段（折叠）----
     if (b["大运详批"] && b["大运详批"]["列表"].length) {
