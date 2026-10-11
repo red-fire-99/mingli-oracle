@@ -378,6 +378,95 @@ a.cell.ming:hover{border-color:var(--red)}
   details.fold{border-color:#ccc}
   details.fold>*:not(summary){animation:none}
 }
+
+/* ===================================================================
+   折叠块内部样式（1.9.2）
+
+   之前加折叠内容只写了 .fold 容器与 .fbody，里面的 .li/.hd/.cnt/
+   .ssx/.xsx 一个都没定义 —— 34 个 class、300 多处裸奔，
+   浏览器只能按 <p>/<div> 默认值渲染，于是「顶格、太窄、颜色浅」。
+   =================================================================== */
+
+/* 折叠内容主体 */
+.fbody{padding:var(--s4) var(--s5) var(--s5);font-size:var(--t-base);
+  line-height:1.85;color:var(--ink)}
+.fbody p{margin:6px 0;max-width:40em}
+
+/* 摘要右侧计数 */
+details.fold>summary .cnt{margin-left:auto;font-size:var(--t-sm);
+  font-weight:400;color:var(--sub);letter-spacing:0}
+
+/* 通用行：缩进 + 行距 */
+.li{padding-left:var(--s4);position:relative;max-width:40em;
+  line-height:1.85;margin:6px 0}
+.li::before{content:"";position:absolute;left:0;top:.62em;
+  width:5px;height:5px;border-radius:50%;background:var(--gold)}
+.li.warn{color:#8a4a44}
+.li.warn::before{background:var(--red)}
+.li>span.h{color:var(--sub);font-size:var(--t-md);margin-right:var(--s2)}
+
+/* 小标题行（如「好的一面 / 要留意的」） */
+.hd{font-size:var(--t-md);font-weight:600;color:var(--red);
+  margin:var(--s4) 0 var(--s2);letter-spacing:1px}
+.hd:first-child{margin-top:0}
+
+/* 星/宫名标签 */
+.pn{font-weight:700;color:var(--ink);margin-right:var(--s2)}
+.pc{color:var(--sub);font-size:var(--t-sm)}
+.age,.th,.stg,.tx,.yn,.wx,.wxn,.xiang,.lo,.el,.en,.sh,.dx,.yr{
+  font-size:var(--t-sm);color:var(--sub)}
+.age b,.th b,.tx b,.yn b,.wx b,.el b,.en b,.sh b,.dx b,.yr b{
+  color:var(--ink);font-weight:600}
+
+/* 卡片里的统计小格 */
+.cnt{font-variant-numeric:tabular-nums}
+
+/* 折叠内的「同类项」容器：列表式，不占满宽 */
+.ssx{margin:var(--s3) 0;display:flex;flex-direction:column;gap:var(--s2)}
+.xsx{background:#fff;border:1px solid var(--line);
+  border-radius:var(--r-sm);padding:var(--s3) var(--s4);
+  line-height:1.8}
+.xsx-q{font-size:var(--t-xs);color:var(--sub);margin:0 0 var(--s1);
+  letter-spacing:.5px}
+.xsx-h{font-size:var(--t-base);margin:0 0 var(--s2);color:var(--ink)}
+.luckgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));
+  gap:var(--s2) var(--s4);font-size:var(--t-md);margin:var(--s2) 0}
+.luckgrid>div{line-height:1.7}
+.luckgrid b{display:block;color:var(--sub);font-size:var(--t-xs);
+  font-weight:400;letter-spacing:1px;margin-bottom:1px}
+.hi{background:#fdf6ee;color:var(--red);font-weight:600;
+  padding:1px 7px;border-radius:var(--r-pill);font-size:var(--t-sm)}
+.no{color:var(--sub);font-style:normal}
+.now-tag{background:var(--red);color:#fff;font-size:10px;
+  padding:1px 6px;border-radius:var(--r-pill);margin-left:var(--s2)}
+.note-sys{font-size:var(--t-xs);color:#9a8f7e}
+.gloss{padding:var(--s2) 0}
+.gloss>div{padding:var(--s2) 0;border-bottom:1px dashed var(--line2);
+  line-height:1.8}
+.gloss>div:last-child{border-bottom:none}
+.gloss b{color:var(--red);margin-right:var(--s2)}
+.secnote{font-size:var(--t-md);color:var(--sub);line-height:1.8;
+  margin:var(--s3) 0 var(--s4);max-width:42em}
+
+/* 折叠内的时间轴也要有左右留白（它们自带 margin） */
+.fbody .dy-tl,.fbody .ln-tl{margin:var(--s3) 0}
+/* 折叠内的星盘/环图居中 */
+.fbody .astro,.fbody .donut{display:block;margin:var(--s3) auto}
+
+/* 小屏：折叠内容内边距收一点 */
+@media(max-width:720px){
+  .fbody{padding:var(--s3) var(--s4) var(--s4)}
+  .li{padding-left:var(--s3)}
+  .xsx{padding:var(--s2) var(--s3)}
+  .luckgrid{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
+}
+
+/* 大运/流年的逐项容器（专业区） */
+.dy,.ly{margin:var(--s3) 0;display:flex;flex-direction:column;gap:var(--s2)}
+.dy .it,.ly .it{background:#fff;border:1px solid var(--line);
+  border-radius:var(--r-sm);padding:var(--s3) var(--s4);line-height:1.8}
+.dy .it.now,.ly .it.now{border-color:var(--gold);
+  box-shadow:0 0 0 1px var(--gold) inset;background:#fdf9f1}
 """
 
 WX_COLOR = {"木": "#5b8c5a", "火": "#c0504d", "土": "#b08d4a", "金": "#8a8f98", "水": "#4a6fa5"}
