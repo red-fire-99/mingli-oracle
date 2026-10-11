@@ -422,6 +422,60 @@ def test_plain():
     ck("交叉-三盘全空时不渲染 B 类块",
        "三盘交叉" in O.render_plain({}), False)
 
+    # ---- 1.9.0：三个可视化 ----
+    #
+    # 星盘断言重点是「坐标必须是整数」—— 这是对拍能过的前提。
+    # 实测 Python 与 JS 的 cos/sin 有 88/360 个角度末位差（8.9e-16），
+    # 但 round 到千位后 0 个分叉。所以可以直接用三角函数，只要取整。
+    import re as _re
+
+    def _chart_all_int(svg):
+        """SVG 里所有坐标属性都得是整数（对拍逐字比的前提）。"""
+        for m in _re.finditer(r'\b(?:x|y|cx|cy|r|x1|y1|x2|y2)="([^"]*)"',
+                              svg):
+            v = m.group(1)
+            if "." in v:
+                return False
+        return True
+
+    ch = PL.astro_chart(d["占星"])
+    ck("星盘-十个行星都在", ch.count('class="a-pl"'), 10)
+    ck("星盘-有相位连线", ch.count('class="a-asp') > 0, True)
+    ck("星盘-所有坐标都是整数", _chart_all_int(ch), True)
+    ck("星盘-标记了十二宫", ch.count('class="a-sign"'), 12)
+    ck("星盘-空盘返回空串", PL.astro_chart(None), "")
+    n_asp = len(d["占星"].get("相位") or [])
+    # 相位线不能用 class="a-asp 数 —— 它会连 a-asp-t
+    # （相位符号标注的文字）一起算。用 line 总数减 12 条刻度线。
+    # 期望值取该盘真实相位数，不是固定 23。
+    ck("星盘-宫刻度与相位线总数", ch.count("<line") - 12, n_asp)
+    # 时间轴
+    tl = PL.dayun_timeline(d["八字"]["大运"], cur_xs=34)
+    # class="dy-seg now" 精确匹配漏掉当前步，用前缀
+    ck("大运轴-十步齐全", tl.count('class="dy-seg'), 10)
+    ck("大运轴-当前步有高亮", tl.count("dy-seg now"), 1)
+    ck("大运轴-有现在标记", tl.count('class="dy-now"'), 1)
+    ck("大运轴-空盘不崩", PL.dayun_timeline({}), "")
+    ln = PL.liunian_timeline(d["八字"]["流年"], now_year=2026)
+    ck("流年轴-七年齐全", ln.count('class="ln-seg'), 7)
+    ck("流年轴-当前年高亮", ln.count("ln-seg now"), 1)
+    ck("流年轴-空盘不崩", PL.liunian_timeline(None), "")
+    # 紫微盘格子：href 与解读卡 id 必须一一对应，否则点命宫跳别人家。
+    # href 在专业区的盘里（render_ziwei），id 在白话区的逐宫解读里
+    # （render_plain）—— 我一开始在 render_ziwei 里找 id，什么都找不到。
+    hp = O.render_ziwei(d["紫微"])
+    pp = O.render_plain(d)
+    hrefs = _re.findall(r'href="#pl-(\d+)"', hp)
+    ids = _re.findall(r'id="pl-(\d+)"', pp)
+    # 遍历顺序是 PAN_LAYOUT（不是 0..11），所以两边都要 sorted
+    ck("紫微盘-格子锚点与解读卡一一对应",
+       sorted(int(x) for x in hrefs), sorted(int(x) for x in ids))
+    ck("紫微盘-锚点是连续整数",
+       sorted(int(x) for x in hrefs), list(range(len(hrefs))))
+    ck("紫微盘-格子有 hover 提示", 'title="' in hp, True)
+    ck("紫微盘-十二个格子都是链接", hp.count('<a class="cell'), 12)
+    ck("紫微盘-解读卡有 id 可被跳到", pp.count('id="pl-'), 12)
+
     # ---- 1.7.0：C 类桃花星 + 行业细分 ----
     #
     # 这一类最危险的错是「缺键静默退化」：表里少一个键，

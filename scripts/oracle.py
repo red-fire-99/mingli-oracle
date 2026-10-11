@@ -282,6 +282,62 @@ details.fold>summary:focus-visible{outline:2px solid var(--gold);
   .dy-seg b{font-size:var(--t-sm)}
 }
 
+/* ---------- 紫微盘格子可点 ----------
+   格子是 <a href="#pl-N">，点击滚到下面逐宫解读对应的那一块。
+   不在格内套 <details> —— 会撑坏 4x4 网格，
+   而且「宫位含义+主星+辅星+煞星」很长，塞不进一格。 */
+a.cell{text-decoration:none;color:inherit;cursor:pointer;
+  transition:box-shadow var(--dur) var(--ease),
+  transform var(--dur) var(--ease)}
+a.cell:hover{box-shadow:var(--sh-2);transform:translateY(-1px);
+  border-color:var(--gold);z-index:2}
+a.cell:focus-visible{outline:2px solid var(--gold);outline-offset:1px}
+a.cell.ming:hover{border-color:var(--red)}
+/* 逐宫解读卡片：被锚点跳过来时高亮一下 */
+.pl .it:target{animation:plHi 1.2s var(--ease)}
+@keyframes plHi{0%{background:#fdf6ee;box-shadow:0 0 0 2px var(--gold)}
+  100%{background:#fbf8f1;box-shadow:none}}
+.pl .it{scroll-margin-top:12px}
+
+/* 流年时间轴：七年一格，比大运轴更紧凑 */
+.ln-tl{display:flex;gap:4px;margin:var(--s3) 0}
+.ln-seg{flex:1;text-align:center;padding:var(--s2) 2px;
+  background:#f6f0e4;border:1px solid var(--line);border-radius:var(--r-sm);
+  font-size:var(--t-sm);color:var(--sub);min-width:0;
+  transition:background var(--dur) var(--ease)}
+.ln-seg i{display:block;font-style:normal;font-size:10px;color:#b3a693}
+.ln-seg b{display:block;font-size:var(--t-md);color:var(--ink);
+  letter-spacing:.5px;margin-top:1px}
+.ln-seg.now{background:var(--red);border-color:var(--red);color:#fff}
+.ln-seg.now i{color:rgba(255,255,255,.7)}
+.ln-seg.now b{color:#fff;font-weight:700}
+@media(max-width:420px){
+  .ln-seg i{display:none}
+  .ln-seg b{font-size:var(--t-sm)}
+}
+
+/* ---------- 占星星盘 ---------- */
+.astro-wrap{display:flex;align-items:center;gap:var(--s5);
+  flex-wrap:wrap;margin:var(--s3) 0}
+.astro{display:block;margin:0 auto;background:#fffefb;
+  border-radius:50%;box-shadow:var(--sh-1)}
+.astro-note{flex:1;min-width:200px}
+.astro .a-sign{font-size:9px;letter-spacing:1px}
+.astro .a-num{font-size:8px}
+.astro .a-sym{font-size:13px;fill:#7a6f5f;font-weight:600}
+.astro .a-sym.main{font-size:15px;fill:var(--red);font-weight:700}
+.astro .a-core{font-size:15px;font-weight:700;letter-spacing:2px}
+.astro .a-core-sub{font-size:10px;letter-spacing:2px}
+.astro .a-asp-t{font-size:8px}
+.astro .a-dot{stroke:#e3dbcd;stroke-width:1}
+.astro .a-dot.main{stroke:var(--gold);stroke-width:1.5}
+.astro .a-pl{cursor:default}
+.astro .a-asp{opacity:.55}
+@media(max-width:720px){
+  .astro-wrap{justify-content:center}
+  .astro-note{flex:1 1 100%}
+}
+
 /* ---------- 响应式 ----------
    三档：<=720 手机竖屏 / <=900 平板 / 打印。
    原来只有 720 一档且只管 .grid2，紫微盘在手机上挤成一团。 */
@@ -494,6 +550,7 @@ def render_bazi(r):
 def render_ziwei(r):
     i = r["输入"]
     by_zhi = {p["地支"]: p for p in r["十二宫"]}
+    _pl_i = 0
     p = ['<section><h2>紫微斗数</h2>']
     p.append('<div class="info"><span>农历 <b>%s</b></span><span>时辰 <b>%s</b></span>'
              '<span>年干支 <b>%s</b></span><span>五行局 <b>%s</b></span>'
@@ -529,11 +586,21 @@ def render_ziwei(r):
                 tag.append("命")
             if pal["是否身宫"]:
                 tag.append("身")
-            p.append('<div class="%s"><div class="pos"><span>%s</span><span>%s</span></div>'
-                     '<div class="gz2"><span class="gan">%s</span><span class="zhi">%s</span></div>'
-                     '<div class="stars">%s</div></div>'
-                     % (cls, _h(pal["宫名"]), "".join(tag), pal["天干"], pal["地支"],
+            # 格子做成可点的：外裹 <a href="#pl-N">，hover 出这一宫
+            # 管什么，点击滚到下面逐宫解读里对应的那一块。
+            # 不在格内套 <details> —— 会撑坏 4x4 网格，
+            # 而且「宫位含义+主星+辅星+煞星」很长，塞不进一格。
+            _meaning = M_plain.PALACE_MEANING.get(pal["宫名"], "")
+            _tip = ("%s：%s" % (pal["宫名"], _meaning)) if _meaning else pal["宫名"]
+            p.append('<a class="%s" href="#pl-%d" title="%s">'
+                     '<div class="pos"><span>%s</span><span>%s</span></div>'
+                     '<div class="gz2"><span class="gan">%s</span>'
+                     '<span class="zhi">%s</span></div>'
+                     '<div class="stars">%s</div></a>'
+                     % (cls, _pl_i, _h(_tip), _h(pal["宫名"]), "".join(tag),
+                        pal["天干"], pal["地支"],
                         " ".join(stars) if stars else '<span class="ss">空宫</span>'))
+            _pl_i += 1
     p.append('<div class="center"><div class="t">命盘</div>'
              '<div>紫微 %s</div><div>天府 %s</div><div>%s</div>'
              '<div class="ss">大限%s · 起运%d岁</div></div>'
@@ -570,6 +637,11 @@ def render_astro(r):
         for nm, v in r["轴点"].items():
             p.append("<span>%s <b>%s %s</b></span>" % (_h(nm), _h(v["星座"]), _h(v["星座内度"])))
         p.append("</div>")
+    p.append('<div class="astro-wrap">')
+    p.append(M_plain.astro_chart(r))
+    p.append('<div class="astro-note"><p class="sub2">外圈是黄道十二宫，'
+             '行星按真实黄经落在盘上，两点之间的线是相位。'
+             '实线是和谐相，细线是张力相。</p></div></div>')
     p.append("<h2 style='margin-top:20px'>主要相位</h2><div>")
     for a in sorted(r["相位"], key=lambda x: -x["强度"])[:14]:
         cls = "ji" if a["相位"] in ("三分相", "六分相") else "xiong"
@@ -784,8 +856,13 @@ def render_plain(data):
         # ---- 1.3.1 新增：流年逐年（折叠）----
         if b.get("流年详批") and b["流年详批"]["列表"]:
             ll = b["流年详批"]["列表"]
-            P.append('<details class="fold"><summary>未来七年的年度节奏'
-                     '<span class="cnt">%d–%d</span></summary><div class="fbody">'
+            # 流年时间轴：七年一格，先给个形状再看逐年
+            _lnt = M_plain.liunian_timeline(
+                (data.get("八字") or {}).get("流年"),
+                now_year=int((data.get("八字") or {}).get("当前时间", 2026)))
+            if _lnt:
+                P.append(_lnt)
+            P.append('<details class="fold"><summary>未来七年的年度节奏<span class="cnt">%d–%d</span></summary><div class="fbody">'
                      '<p class="sub2">大运是十年的大背景，流年是这一年的具体调子。'
                      '大运管方向，流年管「今年什么事儿容易发生」。</p><div class="ly">'
                      % (ll[0]["年"], ll[-1]["年"]))
@@ -954,7 +1031,7 @@ def render_plain(data):
                      '<p class="sub2">十二宫代表人生十二个领域。'
                      '「主星」决定这个领域的底色；宫里没有主星很常见，'
                      '要借对宫的星来看，那不是缺陷。</p><div class="pl">')
-            for p2 in pl:
+            for pl_i, p2 in enumerate(pl):
                 cls = ""
                 marks = []
                 if p2["是命宫"]:
@@ -963,9 +1040,9 @@ def render_plain(data):
                 if p2["是身宫"]:
                     cls += " shen"
                     marks.append("身宫")
-                P.append('<div class="it%s"><div class="hd">'
+                P.append('<div class="it%s" id="pl-%d"><div class="hd">'
                          '<span class="pn">%s</span><span class="gz2">%s</span>'
-                         % (cls, _h(p2["宫名"]), _h(p2["干支"])))
+                         % (cls, pl_i, _h(p2["宫名"]), _h(p2["干支"])))
                 if marks:
                     P.append('<span class="tag hi">%s</span>' % _h("、".join(marks)))
                 P.append('<span class="pc">主星 %s</span></div>'

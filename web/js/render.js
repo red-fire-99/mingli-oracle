@@ -13,7 +13,8 @@
 
 import { pyRoundN } from "./kernel.js";
 import { STAR_BRIEF } from "./ziwei.js";
-import { baziPlain, ziweiPlain, astroPlain, headline, GLOSSARY, crossPlain as P_crossPlain, taohuaPlain as P_taohuaPlain, careerPlain as P_careerPlain, personaPlain as P_personaPlain, wuxingDonut as P_wuxingDonut, dayunTimeline as P_dayunTimeline } from "./plain.js";
+import { baziPlain, ziweiPlain, astroPlain, headline, GLOSSARY, crossPlain as P_crossPlain, taohuaPlain as P_taohuaPlain, careerPlain as P_careerPlain, personaPlain as P_personaPlain, wuxingDonut as P_wuxingDonut, dayunTimeline as P_dayunTimeline,
+         astroChart as P_astroChart, PALACE_MEANING as P_MEANING, liunianTimeline as P_liunianTimeline } from "./plain.js";
 import { paiPan as baziPaiPan } from "./bazi.js";
 import { paiPan as ziweiPaiPan } from "./ziwei.js";
 import { paiPan as astroPaiPan } from "./astro.js";
@@ -202,6 +203,7 @@ export function renderBazi(r) {
 export function renderZiwei(r) {
   const i = r.输入;
   const byZhi = {};
+  let palIdx = 0;
   for (const pp of r.十二宫) byZhi[pp.地支] = pp;
   const p = ['<section><h2>紫微斗数</h2>'];
   p.push('<div class="info"><span>农历 <b>' + h(i.农历) + '</b></span><span>时辰 <b>'
@@ -231,11 +233,17 @@ export function renderZiwei(r) {
       const tag = [];
       if (pal.是否命宫) tag.push("命");
       if (pal.是否身宫) tag.push("身");
-      p.push('<div class="' + cls + '"><div class="pos"><span>' + h(pal.宫名)
+      // 格子做成可点的：外裹 <a href="#pl-N">，hover 出这一宫管什么，
+      // 点击滚到下面逐宫解读里对应的那一块。
+      const _meaning = P_MEANING[pal.宫名] || "";
+      const _tip = _meaning ? pal.宫名 + "：" + _meaning : pal.宫名;
+      p.push('<a class="' + cls + '" href="#pl-' + palIdx
+        + '" title="' + h(_tip) + '"><div class="pos"><span>' + h(pal.宫名)
         + '</span><span>' + tag.join("") + '</span></div>'
         + '<div class="gz2"><span class="gan">' + pal.天干 + '</span><span class="zhi">'
         + pal.地支 + '</span></div><div class="stars">'
-        + (stars.length ? stars.join(" ") : '<span class="ss">空宫</span>') + "</div></div>");
+        + (stars.length ? stars.join(" ") : '<span class="ss">空宫</span>') + "</div></a>");
+      palIdx++;
     }
   }
   p.push('<div class="center"><div class="t">命盘</div>'
@@ -284,6 +292,11 @@ export function renderAstro(r) {
     }
     p.push("</div>");
   }
+  p.push('<div class="astro-wrap">');
+  p.push(P_astroChart(r));
+  p.push('<div class="astro-note"><p class="sub2">外圈是黄道十二宫，'
+    + "行星按真实黄经落在盘上，两点之间的线是相位。"
+    + "实线是和谐相，细线是张力相。</p></div></div>");
   p.push("<h2 style='margin-top:20px'>主要相位</h2><div>");
   for (const a of r.相位.slice().sort((x, y) => y.强度 - x.强度).slice(0, 14)) {
     const cls = (a.相位 === "三分相" || a.相位 === "六分相") ? "ji" : "xiong";
@@ -522,6 +535,12 @@ export function renderPlain(data) {
       P.push("</div></div></details>");
     }
 
+    // 流年时间轴：七年一格，先给形状再看逐年
+    const _lnt = P_liunianTimeline(
+      (data.八字 || {}).流年,
+      parseInt((data.八字 || {}).当前时间, 10) || 2026);
+    if (_lnt) P.push(_lnt);
+
     // ---- 1.3.1 新增：流年逐年（折叠）----
     if (b["流年详批"] && b["流年详批"]["列表"].length) {
       const ll = b["流年详批"]["列表"];
@@ -713,14 +732,17 @@ export function renderPlain(data) {
         + "「主星」决定这个领域的底色；宫里没有主星很常见，"
         + "要借对宫的星来看，那不是缺陷。</p>"
         + '<div class="pl">');
+      let plIdx2 = 0;
       for (const p2 of pl) {
         let cls = "";
         const marks = [];
         if (p2["是命宫"]) { cls += " ming"; marks.push("命宫"); }
         if (p2["是身宫"]) { cls += " shen"; marks.push("身宫"); }
-        P.push('<div class="it' + cls + '"><div class="hd">'
+        P.push('<div class="it' + cls + '" id="pl-' + plIdx2
+          + '"><div class="hd">'
           + '<span class="pn">' + h(p2["宫名"]) + "</span>"
           + '<span class="gz2">' + h(p2["干支"]) + "</span>");
+        plIdx2++;
         if (marks.length) {
           P.push('<span class="tag hi">' + h(marks.join("、")) + "</span>");
         }

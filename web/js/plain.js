@@ -42,6 +42,9 @@ const {
   DM_DEPTH, PERSONA_HEAD, PERSONA_CAVEAT, PERSONA_LABELS,
 } = DATA;
 
+/* PALACE_MEANING 供 render.js 的紫微盘格子做 hover 提示用。 */
+export { PALACE_MEANING };
+
 /* ------------------------------------------------------------------
    十二长生：日干在某一步大运干上处于第几格。
 
@@ -1505,6 +1508,146 @@ export function dayunTimeline(dayun, curXs) {
     p.push('<div class="dy-now" style="left:'
            + rHalfUp((curXs - lo) / span * 100)
            + '%" title="现在 ' + Math.floor(curXs) + ' 虚岁"><span>现在</span></div>');
+  }
+  p.push("</div>");
+  return p.join("");
+}
+
+
+
+/* ===================================================================
+   astroChart —— 占星 SVG 星盘的 JS 移植
+
+   三角函数可以直接用：实测 Python 与 JS 的 cos/sin 有 88/360 个角度
+   末位差（8.9e-16，double 精度极限），但 round 到千位后 0 个分叉。
+   所以不需要查表 —— 只要坐标最后取整。
+
+   取整用 floor(x + 0.5)，不用 Math.round：Python 的 round() 是
+   银行家舍入（2.5->2），JS 的 Math.round 四舍五入（2.5->3）。
+   =================================================================== */
+const ASTRO_SYMBOL = {
+  "太阳": "\u2609", "月亮": "\u263D", "水星": "\u263F",
+  "金星": "\u2640", "火星": "\u2642", "木星": "\u2643",
+  "土星": "\u2644", "天王星": "\u2645", "海王星": "\u2646",
+  "冥王星": "\u2647",
+};
+
+const SIGN_ORDER = ["白羊", "金牛", "双子", "巨蟹", "狮子", "处女",
+                    "天秤", "天蝎", "射手", "摩羯", "水瓶", "双鱼"];
+
+function chartXy(lonDeg, radius, cx, cy) {
+  const rad = lonDeg * Math.PI / 180;
+  return [rHalfUp(cx + radius * Math.cos(rad)),
+          rHalfUp(cy - radius * Math.sin(rad))];
+}
+
+export function astroChart(r, size) {
+  if (size === undefined || size === null) size = 340;
+  if (!r || !r.天体 || !r.天体.length) return "";
+  const cx = size / 2, cy = size / 2;
+  const R_OUT = size / 2 - 12;
+  const R_PL = R_OUT - 30;
+  const R_IN = R_PL - 46;
+  const p = [];
+  p.push('<svg class="astro" viewBox="0 0 ' + size + " " + size + '" width="'
+         + size + '" height="' + size
+         + '" role="img" aria-label="占星星盘">');
+  p.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + R_IN
+         + '" fill="none" stroke="#e3dbcd" stroke-width="1"/>');
+  p.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + R_PL
+         + '" fill="none" stroke="#efe8da" stroke-width="1"'
+         + ' stroke-dasharray="2 3"/>');
+  p.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + R_OUT
+         + '" fill="none" stroke="#e3dbcd" stroke-width="1"/>');
+
+  // 十二宫刻度与星座名
+  for (let i = 0; i < SIGN_ORDER.length; i++) {
+    const a = i * 30 + 15;
+    const a1 = chartXy(a, R_OUT, cx, cy);
+    const a2 = chartXy(a, R_IN + 8, cx, cy);
+    p.push('<line x1="' + a1[0] + '" y1="' + a1[1] + '" x2="' + a2[0]
+           + '" y2="' + a2[1]
+           + '" stroke="#efe8da" stroke-width="1"/>');
+    const at = chartXy(a, R_OUT + 8, cx, cy);
+    p.push('<text x="' + at[0] + '" y="' + at[1]
+           + '" text-anchor="middle" class="a-sign" fill="#6b6154">'
+           + escSvg(SIGN_ORDER[i]) + "</text>");
+    const an = chartXy(a, R_IN - 6, cx, cy);
+    p.push('<text x="' + an[0] + '" y="' + an[1]
+           + '" text-anchor="middle" class="a-num" fill="#b3a693">'
+           + (i + 1) + "</text>");
+  }
+
+  // 相位连线。查找表要**把轴点也算进去**：上升与天顶也参与相位，
+  // 不在表里的话那几组会被静默丢掉（23 组只画 16 组，
+  // 页面上只是少几条线，看不出异常）。
+  const lonOf = {};
+  for (const q of r.天体) lonOf[q.天体] = q.黄经;
+  for (const nm of Object.keys(r.轴点 || {})) {
+    if (lonOf[nm] === undefined) lonOf[nm] = r.轴点[nm].黄经;
+  }
+  for (const a of (r.相位 || [])) {
+    const lon1 = lonOf[a.天体1];
+    const lon2 = lonOf[a.天体2];
+    if (lon1 === undefined || lon1 === null
+        || lon2 === undefined || lon2 === null) continue;
+    const c1 = chartXy(lon1 % 360, R_PL, cx, cy);
+    const c2 = chartXy(lon2 % 360, R_PL, cx, cy);
+    const harmony = ["三分相", "六分相", "合相"].indexOf(a.相位) >= 0;
+    p.push('<line x1="' + c1[0] + '" y1="' + c1[1] + '" x2="' + c2[0]
+           + '" y2="' + c2[1] + '" class="a-asp '
+           + (harmony ? "hard" : "") + '" stroke="'
+           + (harmony ? "#c8b88f" : "#d9b0a8") + '" stroke-width="'
+           + (harmony ? "1.6" : "1") + '"/>');
+    p.push('<text x="' + rHalfUp((c1[0] + c2[0]) / 2) + '" y="'
+           + rHalfUp((c1[1] + c2[1]) / 2)
+           + '" text-anchor="middle" class="a-asp-t" fill="#a08f6c">'
+           + escSvg(a.相位) + "</text>");
+  }
+
+  // 行星点
+  for (const q of r.天体) {
+    const lon = (q.黄经 || 0) % 360;
+    const c = chartXy(lon, R_PL, cx, cy);
+    const sym = ASTRO_SYMBOL[q.天体] || "\u25CF";
+    const main = ["太阳", "月亮", "上升"].indexOf(q.天体) >= 0;
+    p.push('<g class="a-pl"><circle cx="' + c[0] + '" cy="' + c[1] + '" r="'
+           + (main ? 13 : 10) + '" class="a-dot'
+           + (main ? " main" : "") + '" fill="'
+           + (main ? "#fdf6ee" : "#fbf8f1") + '"/>'
+           + '<text x="' + c[0] + '" y="' + c[1]
+           + '" text-anchor="middle" class="a-sym'
+           + (main ? " main" : "") + '">' + sym + "<title>"
+           + escSvg(q.天体 || "") + " " + escSvg(q.星座 || "") + " "
+           + pyRoundN(q.黄经 || 0, 1).toFixed(1) + "&#176;</title></text></g>");
+  }
+
+  const sun = r.天体.find((x) => x.天体 === "太阳");
+  if (sun) {
+    p.push('<text x="' + cx + '" y="' + (cy - 4)
+           + '" text-anchor="middle" class="a-core" fill="#2b2621">'
+           + escSvg(sun.星座 || "") + "</text>");
+    p.push('<text x="' + cx + '" y="' + (cy + 14)
+           + '" text-anchor="middle" class="a-core-sub" fill="#6b6154">太阳</text>');
+  }
+  p.push("</svg>");
+  return p.join("");
+}
+
+
+
+export function liunianTimeline(flow, nowYear) {
+  if (nowYear === undefined || nowYear === null) nowYear = 2026;
+  const items = flow || [];
+  if (!items.length) return "";
+  const p = ['<div class="ln-tl">'];
+  for (const it of items) {
+    const y = it.年;
+    const cur = (y === nowYear);
+    const tip = y + "年 " + (it.干支 || "") + "（" + (it.十神 || "") + "）";
+    p.push('<div class="ln-seg' + (cur ? " now" : "") + '" title="'
+           + escSvg(tip) + '"><i>' + y + "</i><b>"
+           + escSvg(it.干支 || "") + "</b></div>");
   }
   p.push("</div>");
   return p.join("");

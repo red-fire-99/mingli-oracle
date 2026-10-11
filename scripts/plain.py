@@ -2319,6 +2319,38 @@ WX_COLOR5 = {"木": "#3f7a52", "火": "#c0453a", "土": "#a8842c",
              "金": "#8a8f96", "水": "#2f5d7c"}
 
 
+def _py1(x):
+    """round(x, 1) 的 Python 语义。与 kernel.js 的 pyRoundN(x, 1) 等价。
+
+    Python 的 round 在 .5 归偶（银行家舍入），JS 的 Math.round /
+    toFixed 是四舍五入 —— 90.25 这种值两侧会一个得 90.2 一个得 90.3。
+    这里按 double 的精确十进制展开判定是否恰好落在平局点，
+    是则归偶，否则四舍五入。算法与 pyRoundN 相同。
+    """
+    if not x:
+        return 0.0
+    neg = x < 0
+    a = abs(x)
+    # 放大 10 倍并取该 double 的精确十进制展开
+    scaled = a * 10
+    s = repr(float(scaled))
+    if "e" in s or "E" in s:
+        s = "%.17f" % scaled
+    # 取整部分与小数部分
+    if "." in s:
+        ip, fp = s.split(".")
+    else:
+        ip, fp = s, ""
+    if fp.startswith("5") and set(fp[1:]) <= {"0"}:
+        # 恰好在平局点：归偶
+        f = float(ip)
+        r = f if int(f) % 2 == 0 else f + 1
+    else:
+        r = float(ip) + (1 if fp[:1] and fp[0] >= "5" else 0)
+    r = r / 10.0
+    return -r if neg else r
+
+
 def _r_half_up(x):
     """加 0.5 取整。两侧行为一致，不用 round()。"""
     return int(x + 0.5)
@@ -2413,6 +2445,168 @@ def dayun_timeline(dayun, now_year=2026, cur_xs=None):
         pos = _r_half_up((cur_xs - lo) / span * 100)
         p.append('<div class="dy-now" style="left:%d%%" title="现在 %d 虚岁">'
                  '<span>现在</span></div>' % (pos, int(cur_xs)))
+    p.append("</div>")
+    return "".join(p)
+
+
+# ===================================================================
+# 占星 SVG 星盘（1.9.0）
+#
+# 三角函数可以直接用
+# ----------------
+# 原以为 Python 与 JS 的 sin/cos 会让对拍飘红，实测：88/360 个角度
+# 有末位差异（最大 8.9e-16，即 double 精度极限），但 round 到千位后
+# **0 个分叉**。所以不需要查表 —— 只要坐标最后取整。
+# 过度设计比不设计更糟，这里差点造一套没用的查表机制。
+#
+# 取整用「加 0.5」不用 round()：Python 是银行家舍入（2.5→2），
+# JS 的 Math.round 是四舍五入（2.5→3），两侧不同。
+# ===================================================================
+
+ASTRO_SYMBOL = {
+    "太阳": "\u2609", "月亮": "\u263D", "水星": "\u263F",
+    "金星": "\u2640", "火星": "\u2642", "木星": "\u2643",
+    "土星": "\u2644", "天王星": "\u2645", "海王星": "\u2646",
+    "冥王星": "\u2647",
+}
+
+SIGN_ORDER = ["白羊", "金牛", "双子", "巨蟹", "狮子", "处女",
+              "天秤", "天蝎", "射手", "摩羯", "水瓶", "双鱼"]
+
+
+def _chart_xy(lon_deg, radius, cx, cy):
+    """黄经 -> 屏幕坐标。lon 从升点起算，逆时针（占星惯例）。
+
+    实测两侧三角函数 round 到千位后一致，所以这里直接用，
+    只把结果取整。半径与圆心由调用方给。
+    """
+    import math
+    # 屏幕 y 向下，所以取负号让星盘看起来是逆时针
+    rad = math.radians(lon_deg)
+    x = cx + radius * math.cos(rad)
+    y = cy - radius * math.sin(rad)
+    return _r_half_up(x), _r_half_up(y)
+
+
+def astro_chart(r, size=340):
+    """把占星盘画成内联 SVG。零外部依赖。"""
+    import math
+    if not r or not r.get("天体"):
+        return ""
+    cx = cy = size / 2
+    R_OUT = size / 2 - 12          # 外圈（黄道）
+    R_PL = R_OUT - 30               # 行星轨道
+    R_IN = R_PL - 46                # 内圈（相位区）
+
+    p = []
+    p.append('<svg class="astro" viewBox="0 0 %d %d" width="%d" height="%d" '
+             'role="img" aria-label="占星星盘">'
+             % (size, size, size, size))
+    p.append('<circle cx="%d" cy="%d" r="%d" fill="none" '
+             'stroke="#e3dbcd" stroke-width="1"/>' % (cx, cy, R_IN))
+    p.append('<circle cx="%d" cy="%d" r="%d" fill="none" '
+             'stroke="#efe8da" stroke-width="1" stroke-dasharray="2 3"/>'
+             % (cx, cy, R_PL))
+    p.append('<circle cx="%d" cy="%d" r="%d" fill="none" '
+             'stroke="#e3dbcd" stroke-width="1"/>' % (cx, cy, R_OUT))
+
+    # 十二宫刻度与星座名（每 30 度一格）
+    for i, sg in enumerate(SIGN_ORDER):
+        a = i * 30 + 15              # 每格中间标名字
+        x1, y1 = _chart_xy(a, R_OUT, cx, cy)
+        x2, y2 = _chart_xy(a, R_IN + 8, cx, cy)
+        p.append('<line x1="%d" y1="%d" x2="%d" y2="%d" '
+                 'stroke="#efe8da" stroke-width="1"/>' % (x1, y1, x2, y2))
+        xt, yt = _chart_xy(a, R_OUT + 8, cx, cy)
+        p.append('<text x="%d" y="%d" text-anchor="middle" '
+                 'class="a-sign" fill="#6b6154">%s</text>'
+                 % (xt, yt, _esc(sg)))
+        # 宫位序号（从上升起算）
+        xn, yn = _chart_xy(a, R_IN - 6, cx, cy)
+        p.append('<text x="%d" y="%d" text-anchor="middle" '
+                 'class="a-num" fill="#b3a693">%d</text>'
+                 % (xn, yn, i + 1))
+
+    # 相位连线（先画线，行星压在线上层）
+    # 查找表要**把轴点也算进去**：上升与天顶也参与相位，
+    # 不在表里的话那几组会被静默丢掉 —— 23 组只画 16 组，
+    # 页面上只是少几条线，看不出异常。
+    lon_of = {}
+    for q in r["天体"]:
+        lon_of[q.get("天体")] = q.get("黄经")
+    for nm, v in (r.get("轴点") or {}).items():
+        lon_of.setdefault(nm, v.get("黄经"))
+    for a in (r.get("相位") or []):
+        n1, n2 = a.get("天体1"), a.get("天体2")
+        lon1 = lon_of.get(n1)
+        lon2 = lon_of.get(n2)
+        if lon1 is None or lon2 is None:
+            continue
+        x1, y1 = _chart_xy(lon1 % 360, R_PL, cx, cy)
+        x2, y2 = _chart_xy(lon2 % 360, R_PL, cx, cy)
+        tone = a.get("相位")
+        harmony = tone in ("三分相", "六分相", "合相")
+        p.append('<line x1="%d" y1="%d" x2="%d" y2="%d" '
+                 'class="a-asp %s" stroke="%s" stroke-width="%s"/>'
+                 % (x1, y1, x2, y2,
+                    "hard" if harmony else "",
+                    "#c8b88f" if harmony else "#d9b0a8",
+                    "1.6" if harmony else "1"))
+        # 相位符号标注在线的中点
+        mx, my = _r_half_up((x1 + x2) / 2), _r_half_up((y1 + y2) / 2)
+        p.append('<text x="%d" y="%d" text-anchor="middle" '
+                 'class="a-asp-t" fill="#a08f6c">%s</text>'
+                 % (mx, my, _esc(tone)))
+
+    # 行星点
+    for q in r["天体"]:
+        lon = (q.get("黄经") or 0) % 360
+        x, y = _chart_xy(lon, R_PL, cx, cy)
+        sym = ASTRO_SYMBOL.get(q.get("天体"), "\u25CF")
+        main = q.get("天体") in ("太阳", "月亮", "上升")
+        p.append('<g class="a-pl"><circle cx="%d" cy="%d" r="%s" '
+                 'class="a-dot%s" fill="%s"/>'
+                 '<text x="%d" y="%d" text-anchor="middle" '
+                 'class="a-sym%s">%s<title>%s %s %s&#176;</title></text></g>'
+                 % (x, y, "13" if main else "10",
+                    " main" if main else "",
+                    "#fdf6ee" if main else "#fbf8f1",
+                    x, y, " main" if main else "",
+                    sym, _esc(q.get("天体", "")), _esc(q.get("星座", "")),
+                    _py1(q.get("黄经") or 0)))
+
+    # 中心：太阳星座
+    sun = next((q for q in r["天体"] if q.get("天体") == "太阳"), None)
+    if sun:
+        p.append('<text x="%d" y="%d" text-anchor="middle" '
+                 'class="a-core" fill="#2b2621">%s</text>'
+                 % (cx, cy - 4, _esc(sun.get("星座", ""))))
+        p.append('<text x="%d" y="%d" text-anchor="middle" '
+                 'class="a-core-sub" fill="#6b6154">太阳</text>'
+                 % (cx, cy + 14))
+    p.append("</svg>")
+    return "".join(p)
+
+
+def liunian_timeline(flow, now_year=2026):
+    """流年时间轴：未来七年，一年一格。
+
+    比大运轴更紧凑 —— 七年只有大运的七成跨度，一格更窄，
+    所以只显示「年份 + 干支」，主题放 title 里。
+    """
+    items = flow or []
+    if not items:
+        return ""
+    p = []
+    p.append('<div class="ln-tl">')
+    for n, it in enumerate(items):
+        y = it.get("年")
+        cur = (y == now_year)
+        cls = "ln-seg" + (" now" if cur else "")
+        tip = ("%d年 %s（%s）" % (y, it.get("干支", ""), it.get("十神", "")))
+        p.append('<div class="%s" title="%s">'
+                 '<i>%d</i><b>%s</b></div>'
+                 % (cls, _esc(tip), y, _esc(it.get("干支", ""))))
     p.append("</div>")
     return "".join(p)
 
