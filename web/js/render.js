@@ -334,59 +334,70 @@ function _pTag(cls, body) {
 
 function despacify(html, maxLen) {
   if (maxLen === undefined || maxLen === null) maxLen = 36;
-  return html.replace(/<p(?: class="(li|sub2)")?>([\s\S]*?)<\/p>/g,
-    function (m, cls, body) {
-      cls = cls || "";
-      // 有块级标签就不碰
-      if (/<(div|ul|ol|table|tr|td|th|h[1-6]|section|details)\b/.test(body)) {
-        return _pTag(cls, body);
-      }
-      const plain = body.replace(/<[^>]+>/g, "");
-      if (plain.length <= maxLen) return _pTag(cls, body);
-      // JS 不用后向断言：按句末标点切开
-      const parts = body.split(/(?<=[。！？])/).filter(function (s) {
-        return s.trim() !== "";
-      });
-      if (parts.length < 2) return _pTag(cls, body);
-      // 短句合并，避免孤句（与 Python 一致）
-      const merged = [];
-      for (const p of parts) {
-        const pl = p.replace(/<[^>]+>/g, "");
-        const last = merged.length
-          ? merged[merged.length - 1].replace(/<[^>]+>/g, "") : "";
-        if (merged.length && pl.length < 8
-            && last.length + pl.length <= maxLen * 2) {
-          merged[merged.length - 1] += p;
-          continue;
-        }
-        merged.push(p);
-      }
-      // 补未闭合的行内标签
-      const out = [];
-      for (let p of merged) {
-        const opens = [];
-        const reO = /<(b|em|i|strong|span|a)\b[^>]*>/g;
-        let mm;
-        while ((mm = reO.exec(p)) !== null) opens.push(mm[1]);
-        const clo = [];
-        const reC = /<\/([a-z]+)>/g;
-        while ((mm = reC.exec(p)) !== null) clo.push(mm[1]);
-        const need = opens.slice();
-        for (const c of clo) {
-          const i = need.indexOf(c);
-          if (i >= 0) need.splice(i, 1);
-        }
-        const known = need.filter(function (x) {
-          return ["b", "em", "i", "strong", "span", "a"].indexOf(x) >= 0;
-        });
-        for (let i = known.length - 1; i >= 0; i--) {
-          p += "</" + known[i] + ">";
-        }
-        out.push(_pTag(cls, p));
-      }
-      return out.join("");
+
+  // 把一段过长正文按句末标点切成多个 <p>。
+  // 提成命名函数是因为 .p-v 与 <p> 两条正则都要用它 ——
+  // 上一版在 .p-v 分支里调 repl(...)，而 repl 是匿名回调，
+  // 直接 ReferenceError。
+  function _splitP(cls, body) {
+    cls = cls || "";
+    // 有块级标签就不碰
+    if (/<(div|ul|ol|table|tr|td|th|h[1-6]|section|details)\b/.test(body)) {
+      return _pTag(cls, body);
+    }
+    const plain = body.replace(/<[^>]+>/g, "");
+    if (plain.length <= maxLen) return _pTag(cls, body);
+    const parts = body.split(/(?<=[。！？])/).filter(function (s) {
+      return s.trim() !== "";
     });
+    if (parts.length < 2) return _pTag(cls, body);
+    // 短句合并，避免孤句（与 Python 一致）
+    const merged = [];
+    for (const p of parts) {
+      const pl = p.replace(/<[^>]+>/g, "");
+      const last = merged.length
+        ? merged[merged.length - 1].replace(/<[^>]+>/g, "") : "";
+      if (merged.length && pl.length < 8
+          && last.length + pl.length <= maxLen * 2) {
+        merged[merged.length - 1] += p;
+        continue;
+      }
+      merged.push(p);
+    }
+    // 补未闭合的行内标签
+    const out = [];
+    for (let p of merged) {
+      const opens = [];
+      const reO = /<(b|em|i|strong|span|a)\b[^>]*>/g;
+      let mm;
+      while ((mm = reO.exec(p)) !== null) opens.push(mm[1]);
+      const clo = [];
+      const reC = /<\/([a-z]+)>/g;
+      while ((mm = reC.exec(p)) !== null) clo.push(mm[1]);
+      const need = opens.slice();
+      for (const c of clo) {
+        const i = need.indexOf(c);
+        if (i >= 0) need.splice(i, 1);
+      }
+      const known = need.filter(function (x) {
+        return ["b", "em", "i", "strong", "span", "a"].indexOf(x) >= 0;
+      });
+      for (let i = known.length - 1; i >= 0; i--) {
+        p += "</" + known[i] + ">";
+      }
+      out.push(_pTag(cls, p));
+    }
+    return out.join("");
+  }
+
+  // persona 的 .p-v 是 <div>，<p> 那条正则不碰它 ——
+  // 于是每个 persona 块是五六句话挤成一段，而它是读者第一眼看的门面。
+  html = html.replace(/<div class="p-v">([\s\S]*?)<\/div>/g,
+    function (m, body) { return _splitP("p-v", body); });
+  return html.replace(/<p(?: class="(li|sub2)")?>([\s\S]*?)<\/p>/g,
+    function (m, cls, body) { return _splitP(cls, body); });
 }
+
 
 export function _despacifyForTest(html) { return despacify(html); }
 

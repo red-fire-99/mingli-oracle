@@ -2223,7 +2223,7 @@ def persona_plain(bazi_r, ziwei_r, astro_r):
         # 它本身就是「内核/情感/别人眼中的你」三句合成，
         # 所以前面不用再写「你内核是个…的人」，否则同一个词出现两次。
         if ap and ap.get("一句话"):
-            body += " 换占星那一边看：%s" % ap["一句话"]
+            body += "换占星那一边看：%s" % ap["一句话"]
             src.append(("占星", "太阳%s" % astro_r.get("太阳星座", "")))
         blocks.append({"块": "内核", "问": PERSONA_LABELS["内核"],
                        "文": body, "源": src})
@@ -2274,7 +2274,7 @@ def persona_plain(bazi_r, ziwei_r, astro_r):
             frag = (items[0].get("文") or items[0].get("答")
                     or items[0].get("说明") or "")
             if frag:
-                body += " 另外，%s" % frag
+                body += "另外，%s" % frag
                 src.append(("占星", "相位与七宫"))
     if body:
         blocks.append({"块": "关系", "问": PERSONA_LABELS["关系"],

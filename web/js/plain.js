@@ -1341,7 +1341,7 @@ export function personaPlain(baziR, ziweiR, astroR) {
     // 真实存在的是「一句话」——它本身就是三句合成，
     // 所以前面写「换占星那一边看」，不再重复「内核」两个字。
     if (ap && ap.一句话) {
-      body += " 换占星那一边看：" + ap.一句话;
+      body += "换占星那一边看：" + ap.一句话;
       src.push(["占星", "太阳" + (astroR.太阳星座 || "")]);
     }
     blocks.push({ 块: "内核", 问: "你是谁、怎么想事", 文: body, 源: src });
@@ -1388,7 +1388,7 @@ export function personaPlain(baziR, ziweiR, astroR) {
       const it = items[0];
       const frag = it.文 || it.答 || it.说明 || "";
       if (frag) {
-        relBody += " 另外，" + frag;
+        relBody += "另外，" + frag;
         relSrc.push(["占星", "相位与七宫"]);
       }
     }

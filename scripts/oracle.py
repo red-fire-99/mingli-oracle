@@ -245,7 +245,10 @@ details.fold>summary:focus-visible{outline:2px solid var(--gold);
    --t-lg(17px)×44em=748px 超出卡片可用 716px。
    680px ≈ 40 个汉字，仍在舒适读宽内。 */
 .persona .p-v{font-size:var(--t-lg);line-height:1.9;color:#f2e6d4;
-  max-width:680px;text-wrap:pretty}
+  max-width:680px;text-wrap:pretty;
+  margin:0 0 var(--s2)}
+/* 切段后 .p-v 是多个 <p>，最后一段不要再留空隙 */
+.persona .p-v:last-child{margin-bottom:0}
 .persona .p-src{font-size:var(--t-xs);color:#e4c191;margin-top:var(--s1)}
 .persona .p-note{font-size:var(--t-sm);color:#e4c193;margin-top:var(--s4);
   padding-top:var(--s3);border-top:1px solid rgba(246,236,224,.12)}
@@ -802,9 +805,15 @@ def _despacify(html, max_len=36):
             out.append(_tag(cls, p))
         return "".join(out)
 
-    return _re.sub(r'<p(?: class="(li|sub2)")?>(.*?)</p>',
-                   lambda m: repl(m.group(1) or "", m.group(2)),
-                   html, flags=_re.S)
+    out_html = _re.sub(r'<p(?: class="(li|sub2)")?>(.*?)</p>',
+                       lambda m: repl(m.group(1) or "", m.group(2)),
+                       html, flags=_re.S)
+    # persona 的 .p-v 是 <div>，上面那条正则不碰它 ——
+    # 于是每个 persona 块是五六句话挤成一段，而它是读者第一眼看的门面。
+    out_html = _re.sub(r'<div class="p-v">(.*?)</div>',
+                       lambda m: repl("p-v", m.group(1)),
+                       out_html, flags=_re.S)
+    return out_html
 
 
 def render_plain(data):
