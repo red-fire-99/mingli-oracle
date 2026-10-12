@@ -232,18 +232,22 @@ details.fold>summary:focus-visible{outline:2px solid var(--gold);
   background:radial-gradient(circle at 82% 8%,rgba(255,225,180,.13),transparent 55%);
   pointer-events:none}
 .persona .p-eyebrow{font-size:var(--t-sm);letter-spacing:4px;
-  color:#c9ab7e;margin-bottom:var(--s3);font-weight:600}
-.persona .p-lead{font-size:var(--t-2xl);font-weight:700;line-height:1.6;
+  color:#e3c18e;margin-bottom:var(--s3);font-weight:600}
+.persona .p-lead{font-size:var(--t-2xl);font-weight:700;line-height:1.65;
+  max-width:34em;color:#fdf8f0;
   margin:0 0 var(--s4);letter-spacing:.5px}
 .persona .p-block{margin:var(--s4) 0 0;padding-top:var(--s4);
   border-top:1px solid rgba(246,236,224,.14)}
 .persona .p-block:first-of-type{border-top:none;padding-top:0;margin-top:0}
-.persona .p-k{font-size:var(--t-sm);color:#c9ab7e;letter-spacing:2px;
+.persona .p-k{font-size:var(--t-md);color:#e3c18e;letter-spacing:2px;
   margin-bottom:var(--s1);font-weight:600}
-.persona .p-v{font-size:var(--t-base);line-height:1.9;color:#ede0cd;
-  max-width:38em;text-wrap:pretty}
-.persona .p-src{font-size:var(--t-xs);color:#a98f6c;margin-top:var(--s1)}
-.persona .p-note{font-size:var(--t-sm);color:#b79b76;margin-top:var(--s4);
+/* max-width 用 px 而不是 em：em 随字号缩放，
+   --t-lg(17px)×44em=748px 超出卡片可用 716px。
+   680px ≈ 40 个汉字，仍在舒适读宽内。 */
+.persona .p-v{font-size:var(--t-lg);line-height:1.9;color:#f2e6d4;
+  max-width:680px;text-wrap:pretty}
+.persona .p-src{font-size:var(--t-xs);color:#e4c191;margin-top:var(--s1)}
+.persona .p-note{font-size:var(--t-sm);color:#e4c193;margin-top:var(--s4);
   padding-top:var(--s3);border-top:1px solid rgba(246,236,224,.12)}
 
 /* ---------- 可视化（1.9.0）：五行环 + 大运时间轴 ----------
@@ -359,8 +363,8 @@ a.cell.ming:hover{border-color:var(--red)}
   .cell .pos{font-size:var(--t-sm)}
   .headline .big{font-size:var(--t-lg)}
   .persona{padding:var(--s5) var(--s4)}
-  .persona .p-lead{font-size:var(--t-xl)}
-  .persona .p-v{font-size:var(--t-md)}
+  .persona .p-lead{font-size:var(--t-xl);max-width:100%}
+  .persona .p-v{font-size:var(--t-base);max-width:100%}
   .bar .lb{width:26px}
   .info{gap:var(--s2) var(--s4);font-size:var(--t-md)}
 }
