@@ -211,16 +211,6 @@ details.fold>summary::before{content:"\25B8";color:var(--gold);
 details.fold[open]>summary::before{transform:rotate(90deg)}
 details.fold>summary{transition:background var(--dur) var(--ease)}
 details.fold[open]>summary{background:#f6f0e4}
-/* persona 是深色卡，内嵌的 fold 不能再沿用浅底 ——
-   否则为深背景调的浅色文字落在浅底上（实测 p-v 正文仅 1.16:1，
-   基本看不见）。改成深色半透明，让人看到渐变透出来。 */
-.persona details.fold{background:rgba(255,255,255,.08);
-  border-color:rgba(246,236,224,.18)}
-.persona details.fold>summary{color:#fdf8f0}
-.persona details.fold>summary::before{color:#f5d099}
-.persona details.fold[open]>summary{background:rgba(255,255,255,.09)}
-.persona details.fold:hover{border-color:rgba(246,236,224,.3)}
-.persona .p-block{border-top-color:rgba(246,236,224,.18)}
 /* 展开时内容淡入 —— 用动画而非 transition，因为 details 的内容
    在打开前不渲染，transition 没有起点可用。 */
 details.fold[open]>*:not(summary){animation:fadeSlide var(--dur) var(--ease)}
@@ -232,8 +222,8 @@ details.fold>summary:focus-visible{outline:2px solid var(--gold);
 
 /* ---------- 个性版本（1.8.0）----------
    放最前面、最大字号，是这份解读的「门面」。
-   深色底是为了跟下面所有浅色卡片区分开 ——
-   读者一眼知道「这是总览，下面是展开」。 */
+   左上一道金边 + 全站统一的浅色卡，跟下面的卡片同一套底色，
+   靠字级和金边区分总览与展开，不再靠深底撞色。 */
 /* 个性版本 hero 卡。
 
    浅色卡 + 深色文字。之前用深色渐变卡，每加一层嵌套容器
