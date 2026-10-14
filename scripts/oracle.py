@@ -211,6 +211,16 @@ details.fold>summary::before{content:"\25B8";color:var(--gold);
 details.fold[open]>summary::before{transform:rotate(90deg)}
 details.fold>summary{transition:background var(--dur) var(--ease)}
 details.fold[open]>summary{background:#f6f0e4}
+/* persona 是深色卡，内嵌的 fold 不能再沿用浅底 ——
+   否则为深背景调的浅色文字落在浅底上（实测 p-v 正文仅 1.16:1，
+   基本看不见）。改成深色半透明，让人看到渐变透出来。 */
+.persona details.fold{background:rgba(255,255,255,.08);
+  border-color:rgba(246,236,224,.18)}
+.persona details.fold>summary{color:#fdf8f0}
+.persona details.fold>summary::before{color:#f5d099}
+.persona details.fold[open]>summary{background:rgba(255,255,255,.09)}
+.persona details.fold:hover{border-color:rgba(246,236,224,.3)}
+.persona .p-block{border-top-color:rgba(246,236,224,.18)}
 /* 展开时内容淡入 —— 用动画而非 transition，因为 details 的内容
    在打开前不渲染，transition 没有起点可用。 */
 details.fold[open]>*:not(summary){animation:fadeSlide var(--dur) var(--ease)}
@@ -232,14 +242,14 @@ details.fold>summary:focus-visible{outline:2px solid var(--gold);
   background:radial-gradient(circle at 82% 8%,rgba(255,225,180,.13),transparent 55%);
   pointer-events:none}
 .persona .p-eyebrow{font-size:var(--t-sm);letter-spacing:4px;
-  color:#e3c18e;margin-bottom:var(--s3);font-weight:600}
+  color:#f5d099;margin-bottom:var(--s3);font-weight:600}
 .persona .p-lead{font-size:var(--t-2xl);font-weight:700;line-height:1.65;
   max-width:34em;color:#fdf8f0;
   margin:0 0 var(--s4);letter-spacing:.5px}
 .persona .p-block{margin:var(--s4) 0 0;padding-top:var(--s4);
   border-top:1px solid rgba(246,236,224,.14)}
 .persona .p-block:first-of-type{border-top:none;padding-top:0;margin-top:0}
-.persona .p-k{font-size:var(--t-md);color:#e3c18e;letter-spacing:2px;
+.persona .p-k{font-size:var(--t-md);color:#f5d099;letter-spacing:2px;
   margin-bottom:var(--s1);font-weight:600}
 /* max-width 用 px 而不是 em：em 随字号缩放，
    --t-lg(17px)×44em=748px 超出卡片可用 716px。
@@ -249,8 +259,8 @@ details.fold>summary:focus-visible{outline:2px solid var(--gold);
   margin:0 0 var(--s2)}
 /* 切段后 .p-v 是多个 <p>，最后一段不要再留空隙 */
 .persona .p-v:last-child{margin-bottom:0}
-.persona .p-src{font-size:var(--t-xs);color:#e4c191;margin-top:var(--s1)}
-.persona .p-note{font-size:var(--t-sm);color:#e4c193;margin-top:var(--s4);
+.persona .p-src{font-size:var(--t-xs);color:#f3ce9b;margin-top:var(--s1)}
+.persona .p-note{font-size:var(--t-sm);color:#f3ce9d;margin-top:var(--s4);
   padding-top:var(--s3);border-top:1px solid rgba(246,236,224,.12)}
 
 /* ---------- 可视化（1.9.0）：五行环 + 大运时间轴 ----------
