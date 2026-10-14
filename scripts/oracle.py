@@ -1537,19 +1537,35 @@ def render_plain(data):
                          % _h(" / ".join("%s %s" % (g["盘"], g["依据"])
                                          for g in x["一致"][0]["各家"])))
 
-            rest = x["分歧"] + x["单盘"]
+            rest = x["分歧"] + x["单盘"] + x["一致"]
             if rest:
-                P.append("<details class=\"ssx\"><summary>三边说法不同"
-                         "（%d 个维度，点开看各自怎么说）</summary>"
+                P.append("<details class=\"ssx\"><summary>六个维度逐项对照"
+                         "（%d 个，点开看三边各说了什么）</summary>"
                          % len(rest))
                 P.append('<div class="plain">')
                 for r in rest:
                     P.append('<div class="xsx"><p class="xsx-q">%s：%s</p>'
                              % (_h(r["维度"]), _h(r["问"])))
+                    if r["一致"]:
+                        P.append('<p class="xsx-h"><b>· %s</b>　三边都指向'
+                                 '「%s」</p>' % (_h(r["维度"]), _h(r["同向"])))
+                    else:
+                        P.append('<p class="xsx-h"><b>%s</b>　三边说法不一</p>'
+                                 % _h(r["维度"]))
+                    if r["一致"] and r.get("表现"):
+                        P.append('<p class="li">%s</p>' % _h(r["表现"]))
                     for g in r["各家"]:
                         P.append('<p class="li"><b>%s</b>：%s　'
                                  '<span class="sub2">%s</span></p>'
                                  % (_h(g["盘"]), _h(g["端"]), _h(g["依据"])))
+                    if not r["一致"] and r.get("场景"):
+                        P.append('<p class="hd">两边各自什么时候出现</p>')
+                        for sc in r["场景"]:
+                            P.append('<p class="li"><b>%s</b>：%s'
+                                     '<span class="sub2">（多在%s）</span></p>'
+                                     % (_h(sc["端"]),
+                                        _h(sc["说明"] or ""),
+                                        _h(sc["场景"] or "各种场景")))
                     if r["一致"]:
                         P.append('<p class="sub2">只有一盘给了信号，'
                                  '无从交叉 —— 这里只代表那一套体系怎么看。</p>')
@@ -1590,6 +1606,8 @@ def render_plain(data):
             P.append('<p class="li">→ %s　<span class="sub2">%s</span></p>'
                      % (_h(r["答"]), _h(r["依据"])))
             P.append('<p class="sub2">%s</p>' % _h(r["说明"]))
+            if r.get("提示"):
+                P.append('<p class="li">%s</p>' % _h(r["提示"]))
             P.append("</div>")
         P.append('<p class="sub2">%s</p></div></details>' % _h(th["提醒"]))
 

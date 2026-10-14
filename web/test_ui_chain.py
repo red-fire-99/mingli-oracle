@@ -907,11 +907,26 @@ const pp = byId.get("panel-plain");
     // 「三边说法不同」这行字有两处：summary 里一处、折叠体里一处。
     // indexOf 命中的是 summary —— 它前面当然不会有 <details>。
     // 要判「是否折叠」，得看第二个出现处的前面有没有 <details>。
-    const idxDiff2 = tailX.indexOf("三边说法不同", idxDiff + 1);
+    // 逐项对照的 summary 文案改过（原来叫「三边说法不同」）。
+    // 断言要跟着改，但不能只改字 —— 要验它**该有的东西**：
+    // 一致与分歧两类维度都必须在折叠体里。之前 rest 漏了「一致」，
+    // 加了「具体表现」字段也看不见，所以这里专门钉住。
+    const idxDiff2 = tailX.indexOf("六个维度逐项对照", idxDiff + 1);
     if (idxDiff2 < 0) {
-      fail("「三边说法不同」折叠体里没有标题 —— 可能只渲染了 summary");
+      fail("「六个维度逐项对照」折叠体里没有标题 —— 可能只渲染了 summary");
     } else if (tailX.slice(idxDiff, idxDiff2).indexOf("<details") < 0) {
-      fail("「三边说法不同」没有默认折叠 —— 它会挤在主结论位置");
+      fail("「六个维度逐项对照」没有默认折叠 —— 它会挤在主结论位置");
+    } else {
+      const inFold = tailX.slice(idxDiff2);
+      if (inFold.indexOf("三边都指向") < 0) {
+        fail("逐项对照里没有「一致」维度 —— 被漏在折叠体外面了");
+      }
+      if (inFold.indexOf("三边说法不一") < 0) {
+        fail("逐项对照里没有「分歧」维度");
+      }
+      if (inFold.indexOf("（多在") < 0) {
+        fail("分歧维度没带场景提示（字段加了却没渲染）");
+      }
     }
     // 必须告诉读者怎么读，否则就是一堆互相矛盾的句子
     if (tailX.indexOf("先说怎么读") < 0) {
@@ -944,6 +959,26 @@ const pp = byId.get("panel-plain");
     // 每条都要有依据（是按什么算出来的）
     if (!/金星落在|月亮落在|夫妻宫主星|咸池/.test(seg)) {
       fail("桃花星块没有写清各条的判据来源");
+    }
+    // 每条还要带一句相处提示（TAOHUA_TIP）。
+    // 只查「有条目」不够 —— 提示是后加的字段，
+    // 表里少键或渲染漏挂都会让页面看着完整其实少了东西。
+    // 用例固定，提示文案是确定的。
+    const tips = [
+      "人缘广不等于感情深",
+      "模式是倾向，不是命运",
+      "被吸引和合不合适是两件事",
+      "这一条值得直接说给对方听",
+    ];
+    const tipHit = tips.filter((s) => seg.indexOf(s) >= 0).length;
+    if (tipHit === 0) {
+      fail("桃花星一条提示都没有 —— TAOHUA_TIP 没挂上或没渲染");
+    } else if (tipHit < tips.length) {
+      fail("桃花星只渲染出 " + tipHit + "/" + tips.length
+           + " 条提示，某条被静默漏掉了");
+    } else {
+      console.log("  OK   桃花星每条都带相处提示（" + tipHit
+        + " 条）");
     }
     // 必须有免责：只讲倾向、不预测
     if (seg.indexOf("不预测") < 0) {

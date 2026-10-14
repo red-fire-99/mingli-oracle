@@ -50,9 +50,12 @@ NAMES = ["DAY_MASTER", "STRENGTH", "SHISHEN", "ZIWEI_STAR", "SHENSHA",
          # 两边保持一致才不会在 diff 里分叉。
          "CROSS_AXES", "CROSS_SHORT", "ZW_CROSS", "ASTRO_CROSS",
          "CROSS_HEAD", "CROSS_CAVEAT",
+         # 1.10.3：B 类交叉富化 — 一致的表现 / 分歧的场景
+         "CROSS_SAME", "CROSS_DIFF_SCENE",
          # 1.7.0：C 类桃花星 + 行业细分
          "VENUS_ATTRACT", "MOON_RELATION", "VENUS_MOON_ASPECT",
          "TAOHUA_HEAD", "TAOHUA_CAVEAT",
+         "TAOHUA_TIP",
          "INDUSTRY_ROLES", "ROLE_FALLBACK",
          "ZW_CAREER_ROLE", "ASTRO_CAREER_ROLE",
          "CAREER_HEAD", "CAREER_CAVEAT",

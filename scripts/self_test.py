@@ -503,6 +503,32 @@ def test_plain():
     ck("紫微盘-格子有 hover 提示", 'title="' in hp, True)
     ck("紫微盘-十二个格子都是链接", hp.count('<a class="cell'), 12)
     ck("紫微盘-解读卡有 id 可被跳到", pp.count('id="pl-'), 12)
+    ck("交叉-一致维度都有具体表现（不是空串）",
+       all(r.get("表现") for r in x["一致"] if r["一致"]), True)
+    ck("交叉-CROSS_SAME 覆盖全部 维度×端点",
+       sorted((a["名"], e) for a in PL.CROSS_AXES for e in a["两端"]),
+       sorted(PL.CROSS_SAME.keys()))
+    ck("交叉-CROSS_DIFF_SCENE 覆盖全部 维度×端点",
+       sorted((a["名"], e) for a in PL.CROSS_AXES for e in a["两端"]),
+       sorted(PL.CROSS_DIFF_SCENE.keys()))
+    ck("交叉-分歧场景按端去重（同端不出现两次）",
+       all(len({s["端"] for s in r.get("场景", [])})
+           == len(r.get("场景", []))
+           for r in x["分歧"]), True)
+    ck("交叉-场景都带说明",
+       all(s.get("说明") for r in x["分歧"] for s in r.get("场景", [])), True)
+    # 交叉块在 render_plain 里，不在 render_ziwei ——
+    # 上一版拿 pp（render_ziwei 的输出）去查，永远查不到。
+    _ppn = O.render_plain(d)
+    ck("交叉-渲染出具体表现",
+       ("三边都指向" in _ppn and any(
+           r.get("表现") and O._h(r["表现"]) in _ppn
+           for r in x["一致"])), True)
+    ck("交叉-渲染出分歧场景",
+       (not x["分歧"]) or ("两边各自什么时候出现" in _ppn
+                        and any(s.get("场景") and s["场景"] in _ppn
+                                for r in x["分歧"]
+                                for s in r.get("场景", []))), True)
 
     # ---- 1.7.0：C 类桃花星 + 行业细分 ----
     #
@@ -543,6 +569,26 @@ def test_plain():
            for a in ((d["八字"], None, None), (None, d["紫微"], None),
                      (None, None, d["占星"]))), True)
     ck("桃花-三盘全空时为空不报错", PL.taohua_plain(None, None, None)["列表"], [])
+    ck("桃花-每条都带相处提示（不是空串）",
+       all(r.get("提示") for r in th["列表"]), True)
+    ck("桃花-TAOHUA_TIP 的键与项完全对齐（无缺键静默退化）",
+       sorted({r["项"] for r in th["列表"] if r.get("提示")}),
+       sorted({r["项"] for r in th["列表"]}))
+    ck("桃花-提示与项一一对应（不是所有项共用一句）",
+       len({(r["项"], r["提示"]) for r in th["列表"]}),
+       len({r["项"] for r in th["列表"]}))
+    ck("桃花-提示里没有吉凶断语",
+       not any(w in r["提示"] for r in th["列表"]
+               for w in ("必能", "一定", "保证", "注定", "必然")), True)
+    # li 段会按句切开（一案一段，句子不挤在一行），
+    # 所以整段提示在 HTML 里是断开的 —— 逐句查。
+    _thh = O.render_plain(d)
+    _sents = lambda s: [x for x in O._despacify(s) if x]
+    ck("桃花-提示渲染进了 HTML（逐句）",
+       (not th["列表"]) or all(
+           all(O._h(x) in _thh for x in _sents(r["提示"]))
+           for r in th["列表"]), True)
+
 
     cr = PL.career_plain(d["八字"], d["紫微"], d["占星"])
     ck("行业-三盘都给了线索",

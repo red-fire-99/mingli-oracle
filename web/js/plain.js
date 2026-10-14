@@ -34,8 +34,10 @@ const {
   HOUSE_REL, HOUSE_REL_PLANET, HOUSE_REL_EMPTY, KIN_CAVEAT,
   CROSS_AXES, CROSS_SHORT, ZW_CROSS, ASTRO_CROSS,
   CROSS_HEAD, CROSS_CAVEAT,
+  CROSS_SAME, CROSS_DIFF_SCENE,
   VENUS_ATTRACT, MOON_RELATION, VENUS_MOON_ASPECT,
   TAOHUA_HEAD, TAOHUA_CAVEAT,
+  TAOHUA_TIP,
   INDUSTRY_ROLES, ROLE_FALLBACK,
   ZW_CAREER_ROLE, ASTRO_CAREER_ROLE,
   CAREER_HEAD, CAREER_CAVEAT,
@@ -1008,6 +1010,12 @@ function zwMingStar(ziweiR) {
   return cand.length ? cand[0] : null;
 }
 
+/* tuple 键在 JSON 里长这样：('表达方式', '往外说')
+   必须按同样形式拼，写成 [a, b] 得到 "a,b" 查不到。 */
+function crossKey(a, b) {
+  return "('" + a + "', '" + b + "')";
+}
+
 export function crossPlain(baziR, ziweiR, astroR) {
   baziR = baziR || {};
   ziweiR = ziweiR || {};
@@ -1049,7 +1057,7 @@ export function crossPlain(baziR, ziweiR, astroR) {
     if (!got.length) continue;
     const hits = got.map((g) => g.端);
     const agree = new Set(hits).size === 1;
-    rows.push({
+    const row = {
       维度: name,
       问: axis.问,
       两端: ends.slice(),
@@ -1057,7 +1065,24 @@ export function crossPlain(baziR, ziweiR, astroR) {
       一致: agree,
       同向: agree ? hits[0] : null,
       参与: got.map((g) => g.盘),
-    });
+    };
+    if (agree) {
+      row.表现 = CROSS_SAME[crossKey(name, hits[0])] || "";
+    } else {
+      // 按端去重：两盘都判同一端时只列一次
+      const seen = [];
+      for (const g of got) {
+        if (seen.some((s) => s.端 === g.端)) continue;
+        seen.push({
+          端: g.端,
+          场景: CROSS_DIFF_SCENE[crossKey(name, g.端)] || "",
+          说明: got.filter((gg) => gg.端 === g.端)
+            .map((gg) => gg.依据).join("；"),
+        });
+      }
+      row.场景 = seen;
+    }
+    rows.push(row);
   }
 
   const same = rows.filter((r) => r.一致 && r.各家.length >= 2);
@@ -1210,6 +1235,7 @@ function taohuaBazi(baziR) {
 export function taohuaPlain(baziR, ziweiR, astroR) {
   const rows = taohuaBazi(baziR)
     .concat(taohuaZiwei(ziweiR), taohuaAstro(astroR));
+  for (const r of rows) r["提示"] = TAOHUA_TIP[r["项"]] || "";
   const n = (p) => rows.filter((r) => r.盘 === p).length;
   return {
     标题: "桃花星 · 感情里你是怎么被吸引的",

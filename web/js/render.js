@@ -1177,17 +1177,37 @@ export function renderPlain(data) {
                   .join(" / ")) + "</p></div>");
       }
 
-      const rest = x["分歧"].concat(x["单盘"]);
+      // rest 必须含 x["一致"] —— 否则「一致」的维度只出现在上面的
+      // 摘要卡片里，逐项对照里看不到它们的具体表现。
+      const rest = x["分歧"].concat(x["单盘"], x["一致"]);
       if (rest.length) {
-        P.push('<details class="ssx"><summary>三边说法不同（'
-             + rest.length + " 个维度，点开看各自怎么说）</summary>"
+        P.push('<details class="ssx"><summary>六个维度逐项对照（'
+             + rest.length + " 个，点开看三边各说了什么）</summary>"
              + '<div class="plain">');
         for (const r of rest) {
           P.push('<div class="xsx"><p class="xsx-q">' + h(r["维度"]) + "："
                + h(r["问"]) + "</p>");
+          if (r["一致"]) {
+            P.push('<p class="xsx-h"><b>· ' + h(r["维度"]) + "</b>　三边都指向"
+                 + "「" + h(r["同向"]) + "」</p>");
+          } else {
+            P.push('<p class="xsx-h"><b>' + h(r["维度"])
+                 + "</b>　三边说法不一</p>");
+          }
+          if (r["一致"] && r["表现"]) {
+            P.push('<p class="li">' + h(r["表现"]) + "</p>");
+          }
           for (const g of r["各家"]) {
             P.push('<p class="li"><b>' + h(g["盘"]) + "</b>：" + h(g["端"])
                  + '　<span class="sub2">' + h(g["依据"]) + "</span></p>");
+          }
+          if (!r["一致"] && r["场景"]) {
+            P.push('<p class="hd">两边各自什么时候出现</p>');
+            for (const sc of r["场景"]) {
+              P.push('<p class="li"><b>' + h(sc["端"]) + "</b>：" + h(sc["说明"])
+                   + '<span class="sub2">（多在' + h(sc["场景"] || "各种场景")
+                   + "）</span></p>");
+            }
           }
           if (r["一致"]) {
             P.push('<p class="sub2">只有一盘给了信号，'
@@ -1231,6 +1251,9 @@ export function renderPlain(data) {
       P.push('<p class="li">→ ' + h(r["答"]) + '　<span class="sub2">'
            + h(r["依据"]) + "</span></p>");
       P.push('<p class="sub2">' + h(r["说明"]) + "</p>");
+      if (r["提示"]) {
+        P.push('<p class="li">' + h(r["提示"]) + "</p>");
+      }
       P.push("</div>");
     }
     P.push('<p class="sub2">' + h(th["提醒"]) + "</p></div></details>");
