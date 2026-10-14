@@ -340,6 +340,34 @@ def test_plain():
     ck("占星-档案含守护星/幸运色/宝石/职业",
        all(all(k in x["档案"] for k in ("守护星", "幸运色", "宝石", "职业"))
            for x in a["实用档案"]["列表"]), True)
+    # ---- 1.10.0：未来适合方位与推荐城市 ----
+    # 断言重点是钉住方位带阈值。这次分岐根因是 plain.py 里
+    # WUXING_FANGWEI / BAND_DLON 各定义两次，后一个把阈值从
+    # 6.0/4.0 覆盖成 2.0/2.0，9 个城市方位带判错。
+    import io as _io
+    ck("方位-五行对应表覆盖 5 行", len(PL.WUXING_FANGWEI), 5)
+    ck("方位-每行都有 方位/地理/理由",
+       all(all(k in v for k in ("方位", "地理", "理由"))
+           for v in PL.WUXING_FANGWEI.values()), True)
+    ck("方位-阈值是 6.0/4.0（没被重复定义覆盖）",
+       (PL.BAND_DLON, PL.BAND_DLAT), (6.0, 4.0))
+    ck("方位-_band_of 只有一个定义",
+       sum(1 for l in _io.open(PL.__file__, encoding="utf-8").read()
+           .split("\n") if l.startswith("def _band_of(")), 1)
+    lp = PL.lucky_places(d["八字"]["日主强弱"]["喜用神"], "北京")
+    ck("方位-有方位结论", len(lp["方位"]) > 0, True)
+    ck("方位-有推荐城市", len(lp["城市"]) > 0, True)
+    ck("方位-城市不重复",
+       len({c["城市"] for c in lp["城市"]}), len(lp["城市"]))
+    ck("方位-文案说明了参考点是省会", "省会" in lp["说明"], True)
+    ck("方位-每条城市都有省与方位名",
+       all(c["省"] and c["方位名"] for c in lp["城市"]), True)
+    ck("方位-无出生地时不崩",
+       PL.lucky_places(["金"], None)["标题"] != "", True)
+    ck("方位-能从地名取到参考点",
+       PL._place_ref("浙江省/杭州市/西湖区")[0] is not None, True)
+    ck("方位-直辖市能取到", PL._place_ref("北京")[0] is not None, True)
+    ck("方位-空地名不崩", PL._place_ref(""), (None, None, ""))
     # 没填出生地时要优雅降级，不能崩
     d3 = O.build(solar=(1985, 11, 20), hour=(20, 0), sex="男")
     a3 = PL.astro_plain(d3["占星"])

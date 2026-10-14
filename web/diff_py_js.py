@@ -419,6 +419,10 @@ def cases_plain():
             dict(common, lat=c["lat"], lon=c["lon"]),
             PL.career_plain(rb, rz, ra))
         # 个性版本：它跨三个盘取数，任何一边取值不一致都会体现在这
+        add("plain_lucky", "lucky_places(%s)" % tag,
+            dict(common, lat=c["lat"], lon=c["lon"]),
+            PL.lucky_places(rb["日主强弱"]["喜用神"],
+                            (rb.get("输入") or {}).get("出生地")))
         add("plain_persona", "persona_plain(%s)" % tag,
             dict(common, lat=c["lat"], lon=c["lon"]),
             PL.persona_plain(rb, rz, ra))
@@ -773,6 +777,46 @@ for (const c of CASES) {
         if (rz) d.紫微 = rz;
         if (ra) d.占星 = ra;
         got = { html: RD.renderPlain(d) };
+        break;
+      }
+      case "plain_taohua":
+      case "plain_taohua_partial":
+      case "plain_career":
+      case "plain_career_partial":
+      case "plain_persona": {
+        // 不要写 `const c = i`：i 已经是 c.in，再声明一个同名 const
+        // 会把外层的用例对象遮住，于是 `c.partial` 读的是 inp 上的
+        // 属性 —— 症状是「读不到 partial」，而不是「遮蔽了 c」。
+        // 直接用外层的 c（用例）与 i（输入），各司其职。
+        let rb = null, rz = null, ra = null;
+        const want = i.partial;
+        if (!want || want === "只八字" || want === "八字+紫微" || want === "全盘") {
+          rb = B.paiPan({ solar: i.solar || null, hour: i.hour || null,
+                          shichen: null, sex: i.sex, place: i.place || null,
+                          longitude: i.lon, leap: false, nowYear: 2026 });
+        }
+        if (!want || want === "只紫微" || want === "八字+紫微" || want === "全盘") {
+          rz = ZW.paiPan({ solar: i.solar || null, hour: i.hour || null,
+                           shichen: null, sex: i.sex, place: i.place || null,
+                           leap: false, year: 2026 });
+        }
+        if (!want || want === "只占星" || want === "全盘") {
+          ra = A.paiPan({ solar: i.solar || null, hour: i.hour || null,
+                          shichen: null, sex: i.sex, place: i.place || null,
+                          lat: i.lat, lon: i.lon, leap: false });
+        }
+        got = c.op.indexOf("taohua") >= 0 ? P.taohuaPlain(rb, rz, ra)
+          : c.op.indexOf("persona") >= 0 ? P.personaPlain(rb, rz, ra)
+          : P.careerPlain(rb, rz, ra);
+        break;
+      }
+      case "plain_lucky": {
+        // 未来适合方位与推荐城市：只需要八字盘面，不需要紫微/占星
+        const rb = B.paiPan({ solar: i.solar || null, hour: i.hour || null,
+                              shichen: null, sex: i.sex, place: i.place || null,
+                              longitude: i.lon, leap: false, nowYear: 2026 });
+        const inp = (rb || {}).输入 || {};
+        got = P.luckyPlaces(rb.日主强弱.喜用神, inp.出生地);
         break;
       }
       case "plain_taohua":

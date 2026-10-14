@@ -919,6 +919,36 @@ def render_plain(data):
         if _tl:
             P.append(_tl)
 
+        # ---- 1.10.0：未来适合方位与推荐城市 ----
+        # 紧跟开运指南之后（两者都是「未来往哪走」），默认折叠。
+        _lp = M_plain.lucky_places(
+            b["能量分布"].get("喜用") or [],
+            (data.get("八字") or {}).get("输入", {}).get("出生地"))
+        if _lp["方位"]:
+            P.append('<details class="fold"><summary>未来适合方位与推荐城市'
+                     '<span class="cnt">%d 个方位</span></summary>'
+                     '<div class="fbody">' % len(_lp["方位"]))
+            P.append('<p class="sub2">%s</p>' % _h(_lp["说明"]))
+            for d in _lp["方位"]:
+                P.append('<div class="xsx"><p class="xsx-h">'
+                         '<b>宜向%s</b>（喜用 %s）</p>'
+                         '<p class="li">%s</p>'
+                         '<p class="sub2">%s</p></div>'
+                         % (_h(d["方位"]), _h(d["五行"]),
+                            _h(d["地理"]), _h(d["理由"])))
+            if _lp["城市"]:
+                P.append('<p class="hd">这些城市落在喜用方位上</p>')
+                P.append('<div class="tagline">')
+                for c in _lp["城市"]:
+                    dist = ("距出生地约 %d 公里" % c["距离"]) if c["有距离"]                         else "距离未知（没填出生地）"
+                    P.append('<div class="tag"><b>%s</b>%s · %s<br>'
+                             '<span class="sub2">%s</span></div>'
+                             % (_h(c["城市"]), _h(c["省"]),
+                                _h(c["方位名"]), _h(dist)))
+                P.append("</div>")
+            P.append('<p class="sub2">%s</p></div></details>'
+                     % _h(_lp["提醒"]))
+
         # ---- 1.3.1 新增：大运逐段（折叠）----
         if b.get("大运详批") and b["大运详批"]["列表"]:
             dl = b["大运详批"]["列表"]

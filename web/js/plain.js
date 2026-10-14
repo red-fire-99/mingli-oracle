@@ -40,10 +40,13 @@ const {
   ZW_CAREER_ROLE, ASTRO_CAREER_ROLE,
   CAREER_HEAD, CAREER_CAVEAT,
   DM_DEPTH, PERSONA_HEAD, PERSONA_CAVEAT, PERSONA_LABELS,
+  WUXING_FANGWEI, LUCKY_CITIES,
 } = DATA;
 
 /* PALACE_MEANING 供 render.js 的紫微盘格子做 hover 提示用。 */
 export { PALACE_MEANING };
+/* 供 render.js 的紫微盘格子 hover 提示与推荐城市用 */
+export { LUCKY_CITIES, WUXING_FANGWEI };
 
 /* ------------------------------------------------------------------
    十二长生：日干在某一步大运干上处于第几格。
@@ -1651,6 +1654,150 @@ export function liunianTimeline(flow, nowYear) {
   }
   p.push("</div>");
   return p.join("");
+}
+
+
+
+/* ===================================================================
+   luckyPlaces —— 未来适合方位与推荐城市（对 plain.py 的 lucky_places）
+
+   与 Python 侧逐字对应（render 层对拍比 HTML 字符串）。
+
+   不用三角函数
+   ----------
+   距离用平面近似（1 纬度 111km / 1 经度 85km），方位用**阈值分带**
+   而不是 atan2 方位角 —— 阈值分带是纯整数运算，两侧逐位一致。
+   =================================================================== */
+const CN_CENTER_LON = 105.0;
+const CN_CENTER_LAT = 35.0;
+const BAND_DLON = 6.0;
+const BAND_DLAT = 4.0;
+
+function bandOf(dlon, dlat, narrow) {
+  const tLon = narrow ? 3.0 : BAND_DLON;
+  const tLat = narrow ? 2.5 : BAND_DLAT;
+  if (Math.abs(dlon) <= tLon && Math.abs(dlat) <= tLat) return "中";
+  if (dlon > tLon) return "东";
+  if (dlon < -tLon) return "西";
+  if (dlat > tLat) return "北";
+  return "南";
+}
+
+function kmOf(dlon, dlat) {
+  const dx = dlon * 85.0;
+  const dy = dlat * 111.0;
+  return Math.floor(Math.sqrt(dx * dx + dy * dy) + 0.5);
+}
+
+export function placeRef(place) {
+  if (!place) return [null, null, ""];
+  const prov = String(place).split("/")[0].trim();
+  if (!prov) return [null, null, ""];
+  // 省名兼容两种写法：出生地给「浙江省/杭州市/…」（全称），
+  // LUCKY_CITIES 里存的是清洗后的「浙江」。
+  const sfx = ["特别行政区", "壮族自治区", "回族自治区",
+               "维吾尔自治区", "自治区", "省", "市"];
+  let pc = prov;
+  for (const s of sfx) {
+    if (pc.length > s.length && pc.slice(-s.length) === s) {
+      pc = pc.slice(0, -s.length);
+      break;
+    }
+  }
+  for (const row of LUCKY_CITIES) {
+    if (row[1] === pc || row[1] === prov) return [row[2], row[3], row[0]];
+  }
+  for (const row of LUCKY_CITIES) {
+    if (row[0] === pc || row[0] === prov) return [row[2], row[3], row[0]];
+  }
+  return [null, null, ""];
+}
+
+export function luckyPlaces(xiyong, birthPlace, maxn) {
+  if (maxn === undefined || maxn === null) maxn = 4;
+  if (!xiyong || !xiyong.length) {
+    return { "标题": "", "方位": [], "城市": [], "有出生地": false,
+             "说明": "", "提醒": "" };
+  }
+  // 距离参考点是出生地省会 —— 引擎的「输入」只有地名、没有经纬度
+  const ref = placeRef(birthPlace);
+  const refLon = ref[0], refLat = ref[1], refName = ref[2];
+  const hasGeo = refLon !== null && refLon !== undefined;
+
+  const dirs = [];
+  const want = [];
+  for (const wx of xiyong) {
+    const f = WUXING_FANGWEI[wx];
+    if (!f) continue;
+    dirs.push({ "五行": wx, "方位": f["方位"], "地理": f["地理"],
+                "理由": f["理由"] });
+    want.push(f["方位"][0]);
+  }
+
+  // 「土」按出生地周边筛（稳守本地），其余按绝对方位。
+  const picked = [];
+  const taken = {};
+  for (let i = 0; i < xiyong.length; i++) {
+    const wx = xiyong[i];
+    const band = want[i];
+    if (!band) continue;
+    const homeBand = (wx === "土" && hasGeo);
+    const cands = [];
+    for (const row of LUCKY_CITIES) {
+      const name = row[0], prov = row[1], lon = row[2], lat = row[3];
+      let b;
+      if (homeBand) b = bandOf(lon - refLon, lat - refLat, true);
+      else b = bandOf(lon - CN_CENTER_LON, lat - CN_CENTER_LAT);
+      if (b !== band) continue;
+      if (taken[name]) continue;
+      let dist, geo;
+      if (hasGeo) { dist = kmOf(lon - refLon, lat - refLat); geo = true; }
+      else { dist = 0; geo = false; }
+      cands.push({ "城市": name, "省": prov, "方位带": b,
+                   "方位名": WUXING_FANGWEI[wx]["方位"],
+                   "距离": dist, "有距离": geo });
+    }
+    cands.sort(function (a, b) {
+      return a["距离"] - b["距离"] || (a["城市"] < b["城市"] ? -1 : 1);
+    });
+    let got = 0;
+    for (const c of cands) {
+      if (got >= maxn) break;
+      if (taken[c["城市"]]) continue;
+      picked.push(c);
+      taken[c["城市"]] = 1;
+      got++;
+    }
+    // 无坐标时「土」筛不出东西，按全国中部兜底一个
+    if (homeBand && got === 0) {
+      for (const row of LUCKY_CITIES) {
+        const name = row[0];
+        if (taken[name]) continue;
+        if (bandOf(row[2] - CN_CENTER_LON, row[3] - CN_CENTER_LAT) !== "中")
+          continue;
+        picked.push({ "城市": name, "省": row[1], "方位带": "中",
+                      "方位名": WUXING_FANGWEI[wx]["方位"],
+                      "距离": 0, "有距离": false });
+        taken[name] = 1;
+        got++;
+        break;
+      }
+    }
+  }
+
+  return {
+    "标题": "未来适合方位与推荐城市",
+    "方位": dirs,
+    "城市": picked,
+    "有出生地": hasGeo,
+    "说明": ("方位按喜用神五行推，是地理上的绝对方向。"
+             + "城市按距离由近到远排 —— 近的容易落脚，"
+             + "远的需要更多准备。距离以 "
+             + (hasGeo ? ("出生地省会「" + refName + "」") : "未填出生地")
+             + " 为参照。"),
+    "提醒": ("这里说的是「方向上的助力」，不是「去了就一定成」。"
+             + "同一座城市，不同的人待下来结果完全不同。"),
+  };
 }
 
 

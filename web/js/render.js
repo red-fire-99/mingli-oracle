@@ -14,7 +14,8 @@
 import { pyRoundN } from "./kernel.js";
 import { STAR_BRIEF } from "./ziwei.js";
 import { baziPlain, ziweiPlain, astroPlain, headline, GLOSSARY, crossPlain as P_crossPlain, taohuaPlain as P_taohuaPlain, careerPlain as P_careerPlain, personaPlain as P_personaPlain, wuxingDonut as P_wuxingDonut, dayunTimeline as P_dayunTimeline,
-         astroChart as P_astroChart, PALACE_MEANING as P_MEANING, liunianTimeline as P_liunianTimeline } from "./plain.js";
+         astroChart as P_astroChart, PALACE_MEANING as P_MEANING, liunianTimeline as P_liunianTimeline,
+         luckyPlaces as P_luckyPlaces } from "./plain.js";
 import { paiPan as baziPaiPan } from "./bazi.js";
 import { paiPan as ziweiPaiPan } from "./ziwei.js";
 import { paiPan as astroPaiPan } from "./astro.js";
@@ -501,6 +502,39 @@ export function renderPlain(data) {
     }
     const _tl = P_dayunTimeline(_dz, _cxs);
     if (_tl) P.push(_tl);
+
+    // ---- 1.10.0：未来适合方位与推荐城市 ----
+    // 紧跟开运指南（两者都是「未来往哪走」），默认折叠。
+    const _lp = P_luckyPlaces(
+      (b["能量分布"] || {}).喜用 || [],
+      (data["八字"] || {}).输入 ? (data["八字"].输入.出生地 || null) : null);
+    if (_lp["方位"].length) {
+      P.push('<details class="fold"><summary>未来适合方位与推荐城市'
+        + '<span class="cnt">' + _lp["方位"].length
+        + " 个方位</span></summary>"
+        + '<div class="fbody">');
+      P.push('<p class="sub2">' + h(_lp["说明"]) + "</p>");
+      for (const d of _lp["方位"]) {
+        P.push('<div class="xsx"><p class="xsx-h"><b>宜向' + h(d["方位"])
+          + "</b>（喜用 " + h(d["五行"]) + "）</p>"
+          + '<p class="li">' + h(d["地理"]) + "</p>"
+          + '<p class="sub2">' + h(d["理由"]) + "</p></div>");
+      }
+      if (_lp["城市"].length) {
+        P.push('<p class="hd">这些城市落在喜用方位上</p>');
+        P.push('<div class="tagline">');
+        for (const c of _lp["城市"]) {
+          const dist = c["有距离"]
+            ? ("距出生地约 " + c["距离"] + " 公里")
+            : "距离未知（没填出生地）";
+          P.push('<div class="tag"><b>' + h(c["城市"]) + "</b>" + h(c["省"])
+            + " · " + h(c["方位名"]) + "<br>"
+            + '<span class="sub2">' + h(dist) + "</span></div>");
+        }
+        P.push("</div>");
+      }
+      P.push('<p class="sub2">' + h(_lp["提醒"]) + "</p></div></details>");
+    }
 
 
     // ---- 1.3.1 新增：大运逐段（折叠）----
