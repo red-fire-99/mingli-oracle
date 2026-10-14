@@ -119,6 +119,8 @@ def color_of(body):
 
 # (容器链, 文字选择器, 需要的最小对比度)
 # 容器链从外到内；底色逐层叠加。
+# persona 已改成浅色卡（1.10.1），所以和全站其他卡片同一套底色，
+# 不再需要为深背景单维护一套检查项。
 CHECKS = [
     ([".persona"], ".persona .p-v", 4.5),
     ([".persona"], ".persona .p-lead", 4.5),
@@ -126,12 +128,19 @@ CHECKS = [
     ([".persona"], ".persona .p-src", 4.5),
     ([".persona"], ".persona .p-note", 4.5),
     ([".persona"], ".persona .p-eyebrow", 4.5),
-    # persona 内嵌 fold（深色半透明底）
+    # persona 内嵌 fold
     ([".persona", ".persona details.fold"], ".persona .p-v", 4.5),
     ([".persona", ".persona details.fold"], ".persona .p-k", 4.5),
     ([".persona", ".persona details.fold"], ".persona .p-src", 4.5),
     ([".persona", ".persona details.fold"],
      ".persona details.fold>summary", 4.5),
+    # 浅色区
+    (["body"], ".plain .sub2", 4.5),
+    (["body"], ".fbody p", 4.5),
+    (["body"], ".li", 4.5),
+    (["body"], ".hd", 4.5),
+    (["body"], ".xsx-h", 4.5),
+    (["body"], ".sub2", 4.5),
 ]
 
 
@@ -203,7 +212,9 @@ def main():
         if cands:
             fg, fa, raw = max(cands, key=lambda t: ratio(t[0], bg))
         else:
-            fg, fa, raw = None, None, body_color
+            # 没有自己的 color 规则 —— 继承父级。这里简化为继承 body，
+            # 因为要验的这些都在浅色区，body 就是最深的字色。
+            fg, fa, raw = parse_hexa(body_color) + (body_color,)
         if not fg:
             fails.append("%s：取不到 color" % text_sel)
             continue

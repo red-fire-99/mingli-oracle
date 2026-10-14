@@ -234,34 +234,39 @@ details.fold>summary:focus-visible{outline:2px solid var(--gold);
    放最前面、最大字号，是这份解读的「门面」。
    深色底是为了跟下面所有浅色卡片区分开 ——
    读者一眼知道「这是总览，下面是展开」。 */
-.persona{background:linear-gradient(140deg,#3a2f26 0%,#4a3b2e 55%,#55432f 100%);
-  color:#f6ece0;border-radius:var(--r-lg);padding:var(--s6) var(--s5);
-  margin-bottom:var(--s5);box-shadow:var(--sh-2);position:relative;
-  overflow:hidden}
-.persona::before{content:"";position:absolute;inset:0;
-  background:radial-gradient(circle at 82% 8%,rgba(255,225,180,.13),transparent 55%);
-  pointer-events:none}
+/* 个性版本 hero 卡。
+
+   浅色卡 + 深色文字。之前用深色渐变卡，每加一层嵌套容器
+   （fold / xsx / li）底色就变一次，就得重算一遍对比度，
+   连续四轮都没修干净。浅色卡只有一层底色，和全站其他卡片一致，
+   既有 class 直接复用，不需要为深背景单维护一套色。
+*/
+.persona{background:var(--card);border:1px solid var(--line);
+  border-left:4px solid var(--gold);border-radius:var(--r-lg);
+  padding:var(--s5) var(--s5);margin-bottom:var(--s5);box-shadow:var(--sh-1)}
 .persona .p-eyebrow{font-size:var(--t-sm);letter-spacing:4px;
-  color:#f5d099;margin-bottom:var(--s3);font-weight:600}
+  color:var(--sub);margin-bottom:var(--s3);font-weight:600}
 .persona .p-lead{font-size:var(--t-2xl);font-weight:700;line-height:1.65;
-  max-width:34em;color:#fdf8f0;
-  margin:0 0 var(--s4);letter-spacing:.5px}
+  max-width:34em;color:var(--ink);margin:0 0 var(--s4);letter-spacing:.5px}
 .persona .p-block{margin:var(--s4) 0 0;padding-top:var(--s4);
-  border-top:1px solid rgba(246,236,224,.14)}
+  border-top:1px solid var(--line)}
 .persona .p-block:first-of-type{border-top:none;padding-top:0;margin-top:0}
-.persona .p-k{font-size:var(--t-md);color:#f5d099;letter-spacing:2px;
+.persona .p-k{font-size:var(--t-md);color:var(--red);letter-spacing:2px;
   margin-bottom:var(--s1);font-weight:600}
-/* max-width 用 px 而不是 em：em 随字号缩放，
-   --t-lg(17px)×44em=748px 超出卡片可用 716px。
-   680px ≈ 40 个汉字，仍在舒适读宽内。 */
-.persona .p-v{font-size:var(--t-lg);line-height:1.9;color:#f2e6d4;
-  max-width:680px;text-wrap:pretty;
-  margin:0 0 var(--s2)}
-/* 切段后 .p-v 是多个 <p>，最后一段不要再留空隙 */
+/* 复刻 .plain p 的行距与 measure，字号大一档 ——
+   hero 卡该比正文更易读 */
+.persona .p-v{font-size:var(--t-lg);line-height:1.9;color:var(--ink);
+  max-width:680px;text-wrap:pretty;margin:0 0 var(--s2)}
 .persona .p-v:last-child{margin-bottom:0}
-.persona .p-src{font-size:var(--t-xs);color:#f3ce9b;margin-top:var(--s1)}
-.persona .p-note{font-size:var(--t-sm);color:#f3ce9d;margin-top:var(--s4);
-  padding-top:var(--s3);border-top:1px solid rgba(246,236,224,.12)}
+.persona .p-src{font-size:var(--t-xs);color:var(--sub);margin-top:var(--s1)}
+.persona .p-note{font-size:var(--t-sm);color:var(--sub);margin-top:var(--s4);
+  padding-top:var(--s3);border-top:1px solid var(--line2)}
+/* 内嵌 fold 回到全站统一的浅底 */
+.persona details.fold{background:#fbf8f1;border:1px solid var(--line)}
+.persona details.fold>summary{color:var(--red)}
+.persona details.fold>summary::before{color:var(--gold)}
+.persona details.fold[open]>summary{background:#f6f0e4}
+.persona details.fold:hover{border-color:#d9cdb6}
 
 /* ---------- 可视化（1.9.0）：五行环 + 大运时间轴 ----------
    环形图用 SVG stroke-dasharray（整数），不用三角函数 ——
@@ -388,10 +393,7 @@ a.cell.ming:hover{border-color:var(--red)}
 }
 @media print{
   body{background:#fff;padding:0}
-  .persona{background:#fff;color:#000;border:1px solid #999}
-  .persona .p-lead,.persona .p-k,.persona .p-eyebrow{color:#000}
-  .persona .p-v{color:#222}
-  .persona::before{display:none}
+  .persona{background:#fff;border:1px solid #999;box-shadow:none}
   details.fold{border-color:#ccc}
   details.fold>*:not(summary){animation:none}
 }
