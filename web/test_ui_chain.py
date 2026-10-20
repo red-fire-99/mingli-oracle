@@ -1197,6 +1197,30 @@ if (/error/i.test(errMsg)) {
   }
 }
 
+// ---------- 一分钟速览 + 小节导语 ----------
+// 整页二十多屏，读者最缺的是「先看到结论」：
+// 速览卡必须在最前面，每条都要有内容。
+{
+  const html = byId.get("panel-plain") ? byId.get("panel-plain").innerHTML : "";
+  const quick = (html.match(/<div class="quick">[\s\S]*?<\/div><\/div><\/div>/) || [])[0];
+  const cells = quick ? (quick.match(/<div class="q">/g) || []).length : 0;
+  const emptyCell = quick
+    ? (quick.match(/<div class="q"><b>[\s\S]*?<\/b><span><\/span>/g) || []).length : 0;
+  if (cells < 3) {
+    fail("一分钟速览卡缺失或条目太少（" + cells + " 条）");
+  } else if (emptyCell) {
+    fail("速览卡里有 " + emptyCell + " 条是空的");
+  } else {
+    console.log("  OK   一分钟速览 " + cells + " 条结论");
+  }
+  const leads = (html.match(/class="sec-lead"/g) || []).length;
+  if (leads < 3) {
+    fail("三大体系小节缺导语（只有 " + leads + " 条）");
+  } else {
+    console.log("  OK   三大体系小节都有「这一节讲什么」的导语");
+  }
+}
+
 if (bad) { console.error("\nUI 端到端验证失败 " + bad + " 项"); process.exit(1); }
 console.log("\nPASS: 页面表单交互全通（填表→提交→出结果）");
 """

@@ -439,7 +439,11 @@ function prev(text) {
 export function renderPlain(data) {
   const P = ['<section><h2 id="s-plain" data-t="先说人话">先说人话</h2>',
     '<div class="secnote">这一段不用懂任何术语，看完就知道自己大概是什么样的人。'
-    + '想研究细节，往下翻「专业排盘数据」。</div>'];
+    + '想研究细节，往下翻「专业排盘数据」。</div>',
+    "@@QUICK@@"];
+  let gBazi = null, gZiwei = null, gAstro = null;
+  // 这里先占位，块没跑到就是 null（对应那一套体系没数据）。
+  // 速览卡要各体系的白话结果，但它们在各自的 if 块里才赋值。
 
   // 个性版本：总览，放最前面。必须与 oracle.py 逐字一致（门禁比 HTML）。
   const pe = P_personaPlain(data["八字"], data["紫微"], data["占星"]);
@@ -466,8 +470,10 @@ export function renderPlain(data) {
   }
 
   if (data.八字) {
-    const b = baziPlain(data.八字);
+    const b = gBazi = baziPlain(data.八字);
     P.push('<h2 id="s-bazi" data-t="八字 · 性格天赋" style="font-size:15px;border-left-color:var(--gold)">八字 · 看你的性格和天赋</h2>');
+    P.push('<div class="sec-lead">这一节讲你是什么样的人、怎么做事、'
+      + '力气往哪儿使。</div>');
     P.push('<div class="plain"><h3>' + h(b.性格底色.标题) + '</h3><p>' + h(b.性格底色.要点)
       + '</p><p class="sub2">' + h(b.性格底色.补充) + "</p></div>");
     P.push('<div class="plain"><h3>' + h(b.做事方式.标题) + '</h3><p>' + h(b.做事方式.要点)
@@ -797,9 +803,11 @@ export function renderPlain(data) {
   }   // <- 收尾 if (data.八字)
 
   if (data.紫微) {
-    const z = ziweiPlain(data.紫微);
+    const z = gZiwei = ziweiPlain(data.紫微);
     P.push('<h2 id="s-ziwei" data-t="紫微 · 事业财运" style="font-size:15px;border-left-color:var(--gold);margin-top:22px">'
       + "紫微斗数 · 看事业、财运、感情</h2>");
+    P.push('<div class="sec-lead">这一节讲事业、财运、感情，'
+      + '还有眼前这一段的重心落在哪儿。</div>');
     P.push('<div class="plain"><h3>命宫主星</h3><p>' + h(z.一句话) + "</p></div>");
     for (const k of ["事业方向", "财运模式", "感情模式", "四化提醒"]) {
       const blk = z[k];
@@ -1023,9 +1031,11 @@ export function renderPlain(data) {
   }
 
   if (data.占星) {
-    const a = astroPlain(data.占星);
+    const a = gAstro = astroPlain(data.占星);
     P.push('<h2 id="s-astro" data-t="占星 · 性格另一面" style="font-size:15px;border-left-color:var(--gold);margin-top:22px">'
       + "西洋占星 · 看性格的另一面</h2>");
+    P.push('<div class="sec-lead">这一节从另一个角度看性格：别人看到的你、'
+      + '情绪的来处、关系里的张力。</div>');
     P.push('<div class="plain"><h3>一句话</h3><p>' + h(a.一句话) + "</p></div>");
     P.push('<div class="plain"><h3>' + h(a.三支柱.标题) + "</h3>");
     for (const x of a.三支柱.列表) {
@@ -1393,6 +1403,34 @@ export function renderPlain(data) {
   P.push("</section>");
 
   P.push("</section>");
+  // ---- 一分钟速览：全篇结论的四句话 ----
+  // 文案全部取自引擎已有的结论（不是另写一句话），
+  // 所以速览和正文不会打架。
+  const qItems = [];
+  if (pe["块"].length) qItems.push(["像什么", pe["块"][0]["文"]]);
+  if (gBazi && gBazi["做事方式"]) {
+    qItems.push(["怎么做事", gBazi["做事方式"]["要点"]]);
+  }
+  if (gZiwei && gZiwei["感情模式"]) {
+    qItems.push(["关系里", gZiwei["感情模式"]["要点"]]);
+  }
+  if (gBazi && gBazi["当前阶段"]) {
+    const cs = gBazi["当前阶段"];
+    qItems.push(["眼前这段", (cs["干支"] || "") + " 大运 · "
+                 + (cs["主题"] || "")]);
+  }
+  let quick = "";
+  if (qItems.length) {
+    const cells = qItems.map((q) => '<div class="q"><b>' + h(q[0])
+                             + "</b><span>" + h(q[1]) + "</span></div>").join("");
+    quick = '<div class="quick"><div class="quick-h">一分钟速览</div>'
+      + '<div class="quick-t">下面这几句就是全篇的结论，'
+      + "想细看再往下。</div>"
+      + '<div class="quick-grid">' + cells + "</div></div>";
+  }
+  const qi = P.indexOf("@@QUICK@@");
+  if (qi >= 0) P[qi] = quick;
+
   return despacify(P.join(""));
 }
 

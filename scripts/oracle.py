@@ -485,6 +485,23 @@ details.fold>summary .cnt{margin-left:auto;font-size:var(--t-sm);
 .dy .it.now,.ly .it.now{border-color:var(--gold);
   box-shadow:0 0 0 1px var(--gold) inset;background:#fdf9f1}
 
+/* ---------- 一分钟速览 + 小节导语 ---------- */
+.quick{margin:0 0 var(--s4);padding:var(--s3) var(--s4);
+  background:#fdf9f2;border:1px solid var(--line);
+  border-left:3px solid var(--gold);border-radius:var(--r-md)}
+.quick-h{font-size:var(--t-md);font-weight:700;color:var(--ink);
+  margin-bottom:2px}
+.quick-t{font-size:var(--t-sm);color:var(--sub);margin-bottom:10px}
+.quick-grid{display:grid;gap:var(--s3) var(--s4);
+  grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.q{min-width:0;padding-left:10px;border-left:2px solid var(--line2)}
+.quick-grid b{display:block;font-size:var(--t-sm);color:var(--red);
+  margin-bottom:3px;letter-spacing:.5px}
+.quick-grid span{font-size:var(--t-sm);color:var(--ink);line-height:1.75}
+/* 每一节开头一句话：这一节讲什么，读者不用点开才知道 */
+.sec-lead{font-size:var(--t-sm);color:var(--sub);margin:0 0 var(--s3);
+  padding-left:10px;border-left:2px solid var(--line2);line-height:1.7}
+
 /* ---------- 页首目录 + 吸顶进度条 + 返回顶部 ---------- */
 .toc{margin:0 0 var(--s4);padding:var(--s3) var(--s4);
   background:var(--card);border:1px solid var(--line);
@@ -994,7 +1011,11 @@ def render_plain(data):
     """白话解读区：先给结论，再给依据，全部用日常语言。"""
     P = ['<section><h2 id="s-plain" data-t="先说人话">先说人话</h2>',
          '<div class="secnote">这一段不用懂任何术语，看完就知道自己大概是什么样的人。'
-         '想研究细节，往下翻「专业排盘数据」。</div>']
+         '想研究细节，往下翻「专业排盘数据」。</div>',
+         "@@QUICK@@"]
+    # 下面要用到各体系的白话结果，但它们在各自的 if 块里才赋值。
+    # 这里先占位，块没跑到就是 None（对应那一套体系没数据）。
+    b = z = a = None
 
     # ---------- 个性版本：总览，放最前面 ----------
     # 它必须是这份解读的「门面」—— 一段连贯的人，而不是 15 个小块。
@@ -1028,6 +1049,8 @@ def render_plain(data):
     if "八字" in data:
         b = M_plain.bazi_plain(data["八字"])
         P.append('<h2 id="s-bazi" data-t="八字 · 性格天赋" style="font-size:15px;border-left-color:var(--gold)">八字 · 看你的性格和天赋</h2>')
+        P.append('<div class="sec-lead">这一节讲你是什么样的人、怎么做事、'
+                 '力气往哪儿使。</div>')
         P.append('<div class="plain"><h3>%s</h3><p>%s</p><p class="sub2">%s</p></div>'
                  % (_h(b["性格底色"]["标题"]), _h(b["性格底色"]["要点"]), _h(b["性格底色"]["补充"])))
         P.append('<div class="plain"><h3>%s</h3><p>%s</p><p class="sub2">%s</p></div>'
@@ -1328,6 +1351,8 @@ def render_plain(data):
     if "紫微" in data:
         z = M_plain.ziwei_plain(data["紫微"])
         P.append('<h2 id="s-ziwei" data-t="紫微 · 事业财运" style="font-size:15px;border-left-color:var(--gold);margin-top:22px">紫微斗数 · 看事业、财运、感情</h2>')
+        P.append('<div class="sec-lead">这一节讲事业、财运、感情，'
+                 '还有眼前这一段的重心落在哪儿。</div>')
         P.append('<div class="plain"><h3>命宫主星</h3><p>%s</p></div>' % _h(z["一句话"]))
         for k in ("事业方向", "财运模式", "感情模式", "四化提醒"):
             blk = z.get(k)
@@ -1531,6 +1556,8 @@ def render_plain(data):
     if "占星" in data:
         a = M_plain.astro_plain(data["占星"])
         P.append('<h2 id="s-astro" data-t="占星 · 性格另一面" style="font-size:15px;border-left-color:var(--gold);margin-top:22px">西洋占星 · 看性格的另一面</h2>')
+        P.append('<div class="sec-lead">这一节从另一个角度看性格：别人看到的你、'
+                 '情绪的来处、关系里的张力。</div>')
         P.append('<div class="plain"><h3>一句话</h3><p>%s</p></div>' % _h(a["一句话"]))
         P.append('<div class="plain"><h3>%s</h3>' % _h(a["三支柱"]["标题"]))
         for x in a["三支柱"]["列表"]:
@@ -1870,6 +1897,32 @@ def render_plain(data):
         else:
             P.append("</div>")
     P.append("</section>")
+
+    # ---- 一分钟速览：全篇结论的四句话 ----
+    # 文案全部取自引擎已有的结论（不是另写一句话），
+    # 所以速览和正文不会打架。
+    q_items = []
+    if pe["块"]:
+        q_items.append(("像什么", pe["块"][0]["文"]))
+    if b and b.get("做事方式"):
+        q_items.append(("怎么做事", b["做事方式"]["要点"]))
+    if z and z.get("感情模式"):
+        q_items.append(("关系里", z["感情模式"]["要点"]))
+    if b and b.get("当前阶段"):
+        _cs = b["当前阶段"]
+        q_items.append(("眼前这段", "%s 大运 · %s"
+                        % (_cs.get("干支", ""), _cs.get("主题", ""))))
+    if q_items:
+        _cells = "".join('<div class="q"><b>%s</b><span>%s</span></div>'
+                         % (_h(k), _h(v)) for k, v in q_items)
+        _quick = ('<div class="quick"><div class="quick-h">一分钟速览</div>'
+                  '<div class="quick-t">下面这几句就是全篇的结论，'
+                  '想细看再往下。</div>'
+                  '<div class="quick-grid">%s</div></div>' % _cells)
+    else:
+        _quick = ""
+    _qi = P.index("@@QUICK@@")
+    P[_qi] = _quick
 
     P.append("</section>")
     return _despacify("".join(P))
