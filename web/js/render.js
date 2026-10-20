@@ -320,7 +320,7 @@ export function renderAstro(r) {
 /* ===================================================================
    despacify —— 把过长正文 <p> 按中文句末标点拆成多个 <p>
 
-   与 Python 侧 _despacify 行为一致（render 层对拍比 HTML 字符串）。
+   与 Python 侧 _despacify 行为一致（render 层逐例比对比 HTML 字符串）。
    排版依据：中文一段超过 30 字就开始难读，而文案里大量是
    「三句话写在一个字符串里」，所以在渲染层按句切。
 
@@ -430,7 +430,7 @@ export function buildToc(plainHtml, proHtml) {
 
 
 // 折叠标题右侧的「结论预览」。只放可核对的事实，不放判断句。
-// 与 oracle.py 的 _prev 一一对应（对拍会验两边逐字一致）。
+// 与 oracle.py 的 _prev 一一对应（逐例比对会验两边逐字一致）。
 function prev(text) {
   if (!text) return "";
   return '<span class="fold-prev" title="' + h(text) + '">' + h(text)
@@ -445,7 +445,7 @@ export function renderPlain(data) {
   // 这里先占位，块没跑到就是 null（对应那一套体系没数据）。
   // 速览卡要各体系的白话结果，但它们在各自的 if 块里才赋值。
 
-  // 个性版本：总览，放最前面。必须与 oracle.py 逐字一致（门禁比 HTML）。
+  // 个性版本：总览，放最前面。必须与 oracle.py 逐字一致（自动检查比 HTML）。
   const pe = P_personaPlain(data["八字"], data["紫微"], data["占星"]);
   if (pe["块"].length) {
     P.push('<div class="persona">');
@@ -1242,7 +1242,7 @@ export function renderPlain(data) {
 
   // ---------- B 类：三盘交叉 ----------
   // 排布与 oracle.py 保持一致：一致的当主结论、分歧的折起来。
-  // 必须**逐字相同** —— render 层门禁比的是 HTML 字符串。
+  // 必须**逐字相同** —— render 层自动检查比的是 HTML 字符串。
   if ("八字" in data || "紫微" in data || "占星" in data) {
     const x = P_crossPlain(data["八字"], data["紫微"], data["占星"]);
     if (x["一致"].length || x["分歧"].length || x["单盘"].length) {
@@ -1330,7 +1330,7 @@ export function renderPlain(data) {
   }
 
   // ---------- C 类：桃花星 + 行业细分 ----------
-  // 与 oracle.py 逐字一致（门禁比 HTML 字符串）。
+  // 与 oracle.py 逐字一致（自动检查比 HTML 字符串）。
   // 行业按依据分组：同一依据下的行业是同一件事的展开，
   // 铺平会被读成十几个并列且互相冲突的结论。
   const th = P_taohuaPlain(data["八字"], data["紫微"], data["占星"]);

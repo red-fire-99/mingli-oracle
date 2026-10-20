@@ -105,7 +105,7 @@ python divination.py --time --solar 1990-05-15 --hour 12:00
 python divination.py --numbers 7 15
 python divination.py --toss
 
-# 改过代码后跑一遍自测
+# 改过代码后跑一遍内置用例
 python self_test.py
 ```
 
@@ -184,7 +184,7 @@ python plain.py    # 打印当前示例的白话解读 JSON（含 headline / 八
 | `references/divination-rules.md` | 断六爻卦时 |
 | `references/interpretation-guide.md` | 首次使用、需要语气/伦理/校准模板时 |
 | `scripts/plain.py` | 需要把专业结果翻成白话时（文案库 + 生成函数） |
-| `scripts/almanac.py` | 需要查历法算法与自测锚点时（`python almanac.py` 可跑自测） |
+| `scripts/almanac.py` | 需要查历法算法与内置用例锚点时（`python almanac.py` 可跑内置用例） |
 
 ## 文件结构
 
@@ -200,7 +200,7 @@ mingli-oracle/
 │   ├── plain.py                   # 白话解读文案库（十神/主星/神煞/五行/星座 + 名词解释）
 │   ├── oracle.py                  # 统一入口 + 自包含 HTML 命盘生成（白话优先布局）
 │   ├── server.py                  # 本地交互式排盘服务（浏览器填表排盘，纯本地）
-│   └── self_test.py               # 回归自测（85 项断言）
+│   └── self_test.py               # 回归内置用例（85 项断言）
 ├── templates/
 │   └── app.html                   # 交互界面（响应式，桌面/手机通用）
 └── references/

@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-"""门禁第 20 道：源文件不许被写空 / 写残。
+"""第 20 项自动检查：源文件不许被写空 / 写残。
 
 来历：有一次性脚本 `io.open(path, "w", newline="\\n")` ——
 newline 参数非法，open 阶段先截断再报错，回滚代码根本没跑到，
-oracle.py 变成 0 字节。自测、对拍、构建全部照样跑绿
+oracle.py 变成 0 字节。内置用例、逐例比对、构建全部照样跑绿
 （空文件 compile() 是过的，render.js 不 import oracle.py），
 直到下一轮要改 oracle.py 才发现。
 
@@ -19,7 +19,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
 
 # node 不写死绝对路径 —— 敏感扫描会盯本机用户目录字面量，
-# 运行期从 PATH 找；找不到就降级成文本体检，门禁不能自己先崩。
+# 运行期从 PATH 找；找不到就降级成文本体检，自动检查不能自己先崩。
 def _find_node():
     import shutil
     return shutil.which("node")
@@ -69,7 +69,7 @@ def check_py(p):
 def _js_text_check(p, rel):
     """没有 node 时的兜底：只留不会误报的几项。
 
-    node --check 的完整校验由门禁统一跑（那边 PATH 里有 node）；
+    node --check 的完整校验由自动检查统一跑（那边 PATH 里有 node）；
     单独跑本脚本时机器上可能没有 node。这里不数括号 ——
     正则字面量和注释里天然有不成对的括号，数了全是误报。
     """

@@ -696,8 +696,8 @@ function spouseList(r) {
   // 主星可能带四化后缀（"太阳·化禄"）。**不能**用
   // `filter((s) => s.indexOf("·") < 0)` 把它们滤掉 ——
   // 那样带四化的夫妻宫主星全空，整块不渲染。
-  // 这个错在 512 例对拍里抓不到（那些盘夫妻宫要么有普通主星、
-  // 要么本来就空），是时辰路径门禁用辰时那个盘才暴露的。
+  // 这个错在 512 例逐例比对里抓不到（那些盘夫妻宫要么有普通主星、
+  // 要么本来就空），是时辰路径那项检查用辰时那个盘才暴露的。
   const rawMain = (fu["主星"] || []).filter((s) => s);
   const main = rawMain.slice();
   const baseOf = (s) => s.split("·")[0];
@@ -888,7 +888,7 @@ export function astroPlain(r) {
     元素配比: {
       标题: "你的能量配比", 要点: eTxt, 明细: elem,
       // 逐元素展开。Python 侧用 list comprehension 按 elem 的插入顺序生成，
-      // 这里必须照抄这个顺序 —— 顺序不同则对拍逐字不一致。
+      // 这里必须照抄这个顺序 —— 顺序不同则逐例比对逐字不一致。
       逐项: Object.keys(elem).map((k) => ({
         "元素": k, "个数": elem[k],
         "占比": Math.round(elem[k] / elemTotal * 1000) / 10,
@@ -1338,7 +1338,7 @@ export function careerPlain(baziR, ziweiR, astroR) {
 
    与 Python 侧逐字对应：同样的槽位、同样的模板句、
    同样只取已有查表值、不新增任何判断。
-   对拍（plain 层）会比对输出，两边不一致即失败。
+   逐例比对（plain 层）会比对输出，两边不一致即失败。
    =================================================================== */
 
 export function personaPlain(baziR, ziweiR, astroR) {
@@ -1450,7 +1450,7 @@ export function personaPlain(baziR, ziweiR, astroR) {
    wuxingDonut / dayunTimeline —— 可视化的 JS 移植
 
    与 Python 侧 wuxing_donut / dayun_timeline 逐字对应
-   （render 层对拍比 HTML 字符串）。
+   （render 层逐例比对比 HTML 字符串）。
 
    舍入统一用「加 0.5 取整」—— 不能用 Math.round：
    Python 的 round() 在 .5 归偶，JS 的 Math.round 四舍五入，
@@ -1687,7 +1687,7 @@ export function liunianTimeline(flow, nowYear) {
 /* ===================================================================
    luckyPlaces —— 未来适合方位与推荐城市（对 plain.py 的 lucky_places）
 
-   与 Python 侧逐字对应（render 层对拍比 HTML 字符串）。
+   与 Python 侧逐字对应（render 层逐例比对比 HTML 字符串）。
 
    不用三角函数
    ----------

@@ -263,7 +263,7 @@ details.fold>summary:focus-visible{outline:2px solid var(--gold);
 
 /* ---------- 可视化（1.9.0）：五行环 + 大运时间轴 ----------
    环形图用 SVG stroke-dasharray（整数），不用三角函数 ——
-   Python 与 JS 的 sin/cos 末位有差异，会让对拍全线飘红。 */
+   Python 与 JS 的 sin/cos 末位有差异，会让逐例比对全线飘红。 */
 .donut{display:block;margin:0 auto}
 .donut .dseg{transition:stroke-dasharray var(--dur) var(--ease)}
 .donut .d-main{font-size:26px;font-weight:700}
@@ -731,7 +731,7 @@ def _yr(v):
     起运岁数带小数（7.26 岁起运 -> 第一步从 7.3 虚岁开始），
     但给人看的大运区间写「7.3–17.3 岁」既啰嗦又没信息量 ——
     虚岁本来就是整数计的。取整与 JS 侧保持一致（都用 Math.floor），
-    否则两边 HTML 会差一位小数，对拍会逐字报出来。
+    否则两边 HTML 会差一位小数，逐例比对会逐字报出来。
     """
     import math
     try:
@@ -933,7 +933,7 @@ def _tag(cls, body):
     """按 class 拼 <p>。class 为空时输出无 class 的 <p>。
 
     必须与 render.js 的 _pTag 一致：空 class 时**不写 class 属性**。
-    写成 class="" 会让两侧 HTML 差几个字符，对拍全红。
+    写成 class="" 会让两侧 HTML 差几个字符，逐例比对全红。
     """
     return ('<p class="%s">%s</p>' % (cls, body)) if cls \
         else ("<p>%s</p>" % body)

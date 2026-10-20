@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """时辰路径：JS 引擎 vs Python 引擎，逐字比对（含 HTML）。
 
-512 个既有对拍用例**全部走 birthTime**（"12:00" 这种），
+512 个既有逐例比对用例**全部走 birthTime**（"12:00" 这种），
 没有一个走 shichen（页面上点十二时辰格子那条路）。
 
 而 run() 里两者互斥：
@@ -71,13 +71,13 @@ process.stdout.write("@@R@@" + JSON.stringify(R));
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="时辰路径：Python ↔ JS 对拍")
+    ap = argparse.ArgumentParser(description="时辰路径：Python ↔ JS 逐例比对")
     ap.add_argument("--js", default="node")
     a = ap.parse_args(argv)
 
     import bazi as B, ziwei as Z, astro as AS, plain as PL, oracle as O
 
-    print("时辰路径对拍（Python ↔ JS）\n")
+    print("时辰路径逐例比对（Python ↔ JS）\n")
 
     baseline, cases = [], []
     for opts, z, tag in COMBOS:

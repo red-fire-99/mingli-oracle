@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """pyRoundN(x, nd) 必须与 Python round(x, nd) 逐值相同。
 
-单独做成一道门禁的理由：pyRoundN 的平局分支（round-half-even）很容易写反符号，
+单独做成一项自动检查的理由：pyRoundN 的平局分支（round-half-even）很容易写反符号，
 而它只在「值恰好落在十进制平局点」时才触发 —— 那种值在真实数据里极罕见，
 所以 512 个排盘用例全都可能绕过去，得单独喂边界值。
 
@@ -72,7 +72,7 @@ def main(argv=None):
                       % (v, nd, want, g["nd%d" % nd]))
                 fails += 1
 
-    print("pyRoundN ↔ Python round 对拍")
+    print("pyRoundN ↔ Python round 逐例比对")
     print("  %d 个边界值 × %d 个位数 = %d 次比较"
           % (len(CASES), len(NDS), len(CASES) * len(NDS)))
     print()

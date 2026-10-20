@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Python 引擎 ↔ JS 移植的逐案对拍。
+"""Python 引擎 ↔ JS 移植的逐例比对。
 
 为什么必须有这个
 --------------
 引入 JS 移植后，仓库里就有**两份实现**（Python 与 JS）。两份必然漂移，
-光靠「各跑各的自测」只能保证各自自洽，保证不了**一致**。
+光靠「各跑各的内置用例」只能保证各自自洽，保证不了**一致**。
 
 本工具的做法：用 Python 引擎（唯一事实来源）跑一批用例生成基准，
 再让 JS 版跑同一批用例，逐项比对。任何不一致都算 bug 并让 CI 失败。
@@ -242,7 +242,7 @@ def cases_bazi():
 LAYERS["bazi"] = cases_bazi
 
 def cases_astro():
-    """占星层对拍：十天体黄经、星座度数、上升天顶、相位、元素分布、整宫制。"""
+    """占星层逐例比对：十天体黄经、星座度数、上升天顶、相位、元素分布、整宫制。"""
     import astro as AS
     out = []
     add = lambda op, label, inp, want: out.append((op, label, inp, want))
@@ -287,7 +287,7 @@ LAYERS["astro"] = cases_astro
 
 
 def cases_ziwei():
-    """紫微层对拍：命身宫、五行局、安星、十二宫、大限、流年。
+    """紫微层逐例比对：命身宫、五行局、安星、十二宫、大限、流年。
 
     ziwei.py 的「流年」默认取 datetime.now().year，必须用 year= 钉死，
     否则 Python 与 JS 跑在跨年边界时会得出不同结果。
@@ -342,7 +342,7 @@ LAYERS["ziwei"] = cases_ziwei
 
 
 def cases_plain():
-    """白话解读层对拍：6 个函数在真实排盘结果上的输出。
+    """白话解读层逐例比对：6 个函数在真实排盘结果上的输出。
 
     plain.py 的输入是 bazi/ziwei/astro 的**完整排盘结果**，所以这一层
     同时验证「移植后的 plain.js 能吃 JS 引擎自己产出的结构」——
@@ -357,7 +357,7 @@ def cases_plain():
 
         不能把 None 也塞进去 —— render_plain 判的是 `if "紫微" in data`，
         键在值为 None 时照样进分支，然后在 ziwei_plain 里炸掉。
-        页面的 data 是「算出哪盘才放哪盘」，对拍必须照同样的方式来，
+        页面的 data 是「算出哪盘才放哪盘」，逐例比对必须照同样的方式来，
         否则测的是一个页面永远不会产生的输入。
         """
         d = {}
@@ -404,14 +404,14 @@ def cases_plain():
             dict(common, lat=c["lat"], lon=c["lon"]),
             PL.headline({"八字": rb, "紫微": rz, "占星": ra}))
 
-        # B 类：三盘交叉。必须进对拍 —— 这一层最容易出现
+        # B 类：三盘交叉。必须进逐例比对 —— 这一层最容易出现
         # 「Python 有输出、JS 整块为空」而不报错的分叉
         #（星座键名差一个「座」字就足以让占星那一整边静默消失）。
         add("plain_cross", "cross_plain(%s)" % tag,
             dict(common, lat=c["lat"], lon=c["lon"]),
             PL.cross_plain(rb, rz, ra))
-        # C 类两块同样要进对拍：taohua/career 里有大量「查表键」，
-        # 键写错时两边都返回空、页面上只是少一块，对拍全绿。
+        # C 类两块同样要进逐例比对：taohua/career 里有大量「查表键」，
+        # 键写错时两边都返回空、页面上只是少一块，逐例比对全绿。
         add("plain_taohua", "taohua_plain(%s)" % tag,
             dict(common, lat=c["lat"], lon=c["lon"]),
             PL.taohua_plain(rb, rz, ra))
@@ -474,7 +474,7 @@ LAYERS["plain"] = cases_plain
 
 
 def cases_render():
-    """渲染层端到端对拍：同一生辰，Python 与 JS 必须输出逐字相同的 HTML。"""
+    """渲染层端到端逐例比对：同一生辰，Python 与 JS 必须输出逐字相同的 HTML。"""
     import bazi as B, ziwei as Z, astro as AS, plain as PL, oracle as O
     from datetime import datetime
     out = []
@@ -883,7 +883,7 @@ for (const c of CASES) {
     }
   } catch (e) {
     // 把 stack 的前几行一起带上。只有 message 的话，
-    // 对拍那侧看到的是「Python 缺少字段 __error」——
+    // 逐例比对那侧看到的是「Python 缺少字段 __error」——
     // 像是 Python 少返回了字段，实际是 JS 抛异常了，方向完全反了。
     const st = String((e && e.stack) || "").split("\n").slice(0, 4)
                 .map(s => s.trim()).join(" | ");
@@ -896,7 +896,7 @@ process.stdout.write("@@R@@" + JSON.stringify(R));
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="Python 引擎与 JS 移植逐案对拍")
+    ap = argparse.ArgumentParser(description="Python 引擎与 JS 移植逐例比对")
     ap.add_argument("--layer", default="all", choices=sorted(LAYERS) + ["all"])
     ap.add_argument("--js", default="node", help="Node 可执行文件")
     ap.add_argument("--tol", type=float, default=TOL)

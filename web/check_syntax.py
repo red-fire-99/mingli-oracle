@@ -17,7 +17,7 @@
 而产物只有一个 script 块（出生地数据 + 引擎 + 页面代码），
 一抛错就是**整页空白**，现象是「打开就什么都没有」。
 
-所以：数括号 ≠ 语法正确。这条门禁让 node 的解析器真的过一遍。
+所以：数括号 ≠ 语法正确。这项自动检查让 node 的解析器真的过一遍。
 
 用法
 ----
@@ -40,7 +40,7 @@ DIST = os.path.join(HERE, "dist", "index.html")
 def find_node():
     """找 node。找不到就报错退出 —— 不静默跳过。
 
-    静默跳过等于「这条门禁其实没跑」，而报告里会显示它通过了。
+    静默跳过等于「这项自动检查其实没跑」，而报告里会显示它通过了。
     这正是历史上踩过的坑：验证的是别的东西，却当成这条过了。
     """
     return shutil.which("node")
@@ -55,7 +55,7 @@ def main(argv=None):
     node = a.node or find_node()
     if not node:
         print("[FAIL] 找不到 node，无法校验 JS 语法。\n"
-              "       这条门禁不能跳过 —— 括号配平不等于语法正确，"
+              "       这项自动检查不能跳过 —— 括号配平不等于语法正确，"
               "而产物只有一个 script 块，语法错就是整页空白。\n"
               "       本地可显式指定：--node /path/to/node", file=sys.stderr)
         return 2

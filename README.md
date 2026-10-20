@@ -87,7 +87,7 @@ python divination.py --time --solar 1990-05-15 --hour 12:00
 python divination.py --numbers 7 15
 python divination.py --toss
 
-# 改过代码后跑一遍自测
+# 改过代码后跑一遍内置用例
 python self_test.py
 ```
 
@@ -127,9 +127,9 @@ python self_test.py
 | 紫微星定位 | 与 iztro 文档算法对比 5 局 × 30 日 | 150 组全等，文档三示例全吻合 |
 | 农历 | 15 个历年春节 + 30 组闰月 + 朔望自洽 + 往返一致 | 全部命中 |
 | 八字 | 日柱 / 月柱 / 年柱 / 时柱锚点、400 天日柱连续性 | 全部通过 |
-| JS 移植 | 与 Python 引擎逐案对拍 512 例（render 层 HTML 逐字比对） | **512 / 512 一致** |
+| JS 移植 | 与 Python 引擎逐例比对 512 例（render 层 HTML 逐字比对） | **512 / 512 一致** |
 
-运行内置自测（157 项断言，无需任何外部依赖）：
+运行内置用例（157 项断言，无需任何外部依赖）：
 
 ```bash
 cd scripts && python self_test.py
@@ -156,7 +156,7 @@ cd tools && python verify_calendar.py   # 农历对照（无额外依赖）
    典型触发场景：2020-06-21 夏至与朔同日、2014-12-22 冬至与朔同日。
 4. **子、丑两宫（两月）天干算错** —— 五虎遁公式里 `(zhi_i - 2)` 为负数时取模结果错误，应为 `(zhi_i - 2) % 12`。
 
-JS 移植阶段又踩了几个（只靠逐案对拍抓得到，静态检查全都发现不了）：
+JS 移植阶段又踩了几个（只靠逐例比对抓得到，静态检查全都发现不了）：
 
 5. **`pyRound(x * 10^n) / 10^n` 与 Python `round(x, n)` 不等价** ——
    Python 基于精确值做十进制舍入，先乘 10^n 会丢精度：
@@ -183,7 +183,7 @@ mingli-oracle/
 │   ├── plain.py              # 白话解读文案库（约 300 条）
 │   ├── oracle.py             # 统一入口 + 自包含 HTML 命盘生成
 │   ├── server.py             # 本地网页服务（浏览器填表排盘）
-│   └── self_test.py          # 回归自测（157 项）
+│   └── self_test.py          # 回归内置用例（157 项）
 ├── templates/app.html        # 前端交互界面（原生 JS，响应式）
 ├── references/               # 解读规则知识库
 ├── tools/                    # 与第三方库的交叉验证脚本
@@ -197,13 +197,29 @@ mingli-oracle/
 │   │   └── render.js         # HTML 渲染层
 │   ├── bundle.py             # 把 js/*.js 拼成单文件 IIFE
 │   ├── build_web.py          # 生成器：内联引擎成单个 HTML（零构建依赖）
-│   ├── diff_py_js.py         # Python ↔ JS 逐案对拍（CI 门禁，512 例）
+│   ├── diff_py_js.py         # Python ↔ JS 逐例比对（自动检查，512 例）
 │   ├── gen_plain_json.py     # 把 plain.py 的文案字典机器导出为 JSON
 │   ├── verify_dist.py        # 部署前校验产物
 │   ├── test_load_chain.py    # 把产物里的引擎抠出来端到端跑
 │   ├── check_secrets.py      # 扫仓库里的敏感信息
+│   ├── check_release_notes.py # 查已发布发行版的说法合不合规（发布前手动跑）
 │   └── app.html              # 网页版模板（构建时填入引擎）
-└── .github/workflows/ci.yml  # 自测 + 自动部署到 GitHub Pages
+└── .github/workflows/ci.yml  # 内置用例 + 自动部署到 GitHub Pages
+```
+
+### 发行版说明有两条规矩
+
+发行版是给**下载这个工具的人**看的，不是给流水线看的。所以：
+
+- 不写内部黑话（那 20 道自动检查、逐例比对、内置用例这些说法都不出现）
+- 不写内部审查（隐私审查照做，但审查这件事本身不挂在公开页面上）
+- 每篇顶部要有一段「这版改了什么」的人话总结，读者第一眼就知道这版对他意味着什么
+
+`web/check_privdocs.py` 管文档，`web/check_release_notes.py` 管发行版。
+后者要联网，所以不进那 20 道自动检查 —— 发布前手动跑一次：
+
+```bash
+python web/check_release_notes.py
 ```
 
 ### 网页版是怎么工作的
@@ -236,7 +252,7 @@ python web/diff_py_js.py --layer all      # 512 个用例逐项比对
 render 层做的是**逐字符**比对，只报第一个不同的位置 —— 
 结构比对抓不出「值对了但拼错位置」这类错误，而那恰好是渲染层最容易犯的错。
 
-这条门禁确实有用：移植期间它抓出了几个静态检查完全发现不了的错误，
+这项自动检查确实有用：移植期间它抓出了几个静态检查完全发现不了的错误，
 比如 Python 的 `round(x, 2)` 基于精确值舍入，而 JS 常见的
 `pyRound(x * 100) / 100` 会因为乘法丢精度，把「略低于平局点的值」误判成平局。
 

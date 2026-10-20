@@ -7,7 +7,7 @@
 
 真正「跑一下」的验证在另外两处，别以为这里过了就等于能用：
   - web/test_load_chain.py   把产物里的引擎抠出来在 Node 里跑通端到端
-  - web/diff_py_js.py        JS 引擎与 Python 引擎逐案对拍
+  - web/diff_py_js.py        JS 引擎与 Python 引擎逐例比对
 
 检查项
 ------

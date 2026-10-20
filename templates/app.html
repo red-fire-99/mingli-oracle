@@ -530,12 +530,12 @@ details[open] summary::before{transform:rotate(90deg)}
     setStatus("ok", "已保存为「命盘.html」，双击就能打开。");
   });
 
-  /* ---------- 带 ?demo=1 打开时自动跑一个示例（方便分享和自测） ---------- */
+  /* ---------- 带 ?demo=1 打开时自动跑一个示例（方便分享和内置用例） ---------- */
   if (location.search.indexOf("demo=1") >= 0) {
     setTimeout(function(){ $("#demoBtn").click(); }, 200);
   }
 
-  /* ---------- 带 ?diag=1 时把布局诊断写进标题（开发自测用） ---------- */
+  /* ---------- 带 ?diag=1 时把布局诊断写进标题（开发内置用例用） ---------- */
   if (location.search.indexOf("diag=1") >= 0) {
     setTimeout(function(){
       var vw = document.documentElement.clientWidth;

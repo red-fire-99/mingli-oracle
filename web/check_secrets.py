@@ -261,7 +261,7 @@ def scan_history(max_commits=200):
     # 用 git grep 一次扫全部 commit，不要逐 commit × 逐文件 cat-file。
     #
     # 逐个 cat-file 的写法在 27 个 commit / 60 个文件下是 1175 次进程
-    # spawn —— Windows 上每次约 150ms，实测 223 秒。一个门禁跑 4 分钟
+    # spawn —— Windows 上每次约 150ms，实测 223 秒。一项自动检查跑 4 分钟
     # 会让人以为它挂了（我确实误判成 hang 两次）。
     # git grep 接受多个 tree-ish，每个模式只要一次调用。
     found = {}
@@ -372,7 +372,7 @@ def report_history():
         if v.startswith("!!"):
             need_fix = True
     print("")
-    # gates.py 抓「最后一行非空输出」当门禁结论行，所以结论必须放最后。
+    # gates.py 抓「最后一行非空输出」当自动检查结论行，所以结论必须放最后。
     # 之前把操作提示（git filter-repo…）写在最后，gates 抓到的就是它 ——
     # 读起来像出了事，实际是「工作区没泄露，只有历史遗留待决策」。
     if not need_fix:
@@ -412,7 +412,7 @@ def main(argv):
             #
             # 判据是「命中行是否在它自己的样本清单里」：
             # test_secret_scanner.py 第 25 行的 ghp_abcdefghij… 是
-            # 扫描器自检**必须存在**的阳性样本（删掉它门禁 10 就失去意义），
+            # 扫描器自检**必须存在**的阳性样本（删掉它自动检查 10 就失去意义），
             # 那是数据；同一文件里随便写个真 token 则是泄露。
             # 靠「是否落在 SAMPLE/NEEDLES 这类列表区间内」区分 ——
             # 和 RULES 里 IN_LIST 模式用的是同一套思路。

@@ -5,7 +5,7 @@
    所有 Python/JS 语义差异都走 kernel.js 里的 pyMod / pyFloorDiv / pyRound。
 
    与 Python 版的关系：Python 是唯一事实来源，本文件是它的第二实现。
-   两者的一致性由 tools/diff_py_js.py 逐案对拍保证，任何不一致都算 bug。
+   两者的一致性由 tools/diff_py_js.py 逐例比对保证，任何不一致都算 bug。
    =================================================================== */
 
 import {

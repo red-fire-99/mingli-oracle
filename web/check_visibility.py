@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""校验「JS 显示元素」与「CSS 可见规则」对得上 —— CI 门禁，零第三方依赖。
+"""校验「JS 显示元素」与「CSS 可见规则」对得上 —— 自动检查，零第三方依赖。
 
-为什么需要这道门禁
+为什么需要这项自动检查
 ------------------
 有一类 bug 的形状很固定：
 
@@ -149,7 +149,7 @@ def main():
 
     # ---- 兜底：靠 show 才可见的元素，CSS 里必须有对应的 show 规则 ----
     # 注意 #result 是 **id** 不是 class：#result{display:none} / #result.show{display:block}。
-    # 早先只按 .class 找，于是把这条正常写法误报成缺失 —— 门禁自己先失准，
+    # 早先只按 .class 找，于是把这条正常写法误报成缺失 —— 自动检查自己先失准，
     # 那它报的其他结果就不能信了。所以 id 与 class 都要认。
     print("\n=== 依赖 show 才可见的元素 ===")
     for name in ("status", "summary", "panel", "result"):
