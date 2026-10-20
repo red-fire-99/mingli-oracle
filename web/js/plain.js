@@ -13,6 +13,9 @@
 
 import DATA from "./plain-data.json" with { type: "json" };
 import { pyRoundN } from "./kernel.js";
+// 干 → 五行：判断流年天干是不是喜用要用。
+// 五行表从 almanac 拿（唯一事实来源），干序用本文件已有的 GAN 数组。
+import { GAN_WUXING } from "./almanac.js";
 
 const {
   DAY_MASTER, STRENGTH, SHISHEN, ZIWEI_STAR, SHENSHA,
@@ -75,6 +78,12 @@ function stageOfDayun(dayGan, dayunGan) {
 }
 
 /* 五行意象：把五行统计翻成「哪股劲儿最足 / 最缺」。 */
+// 干 → 五行（流年天干的喜用判定要用）
+function ganWuxing(gan) {
+  const i = GAN.indexOf(gan);
+  return i >= 0 ? GAN_WUXING.charAt(i) : "";
+}
+
 function wuxingImagery(stat, xiyong) {
   if (!stat) return { strong: null, weak: null, items: [] };
   const keys = Object.keys(stat);
@@ -230,6 +239,35 @@ export function baziPlain(r) {
     "是今年": x.年 === curYear,
   }));
 
+  // 「最该注意」：当前大运的提醒
+  // 提醒一直写在十步大运里，但用户不会把十个折叠逐个点开去找。
+  // 这里把它提到最前面 —— 原文照搬，不另写一句。
+  let watchNow = "";
+  for (const x of dayunFull) {
+    if (x["是当前"] && x["提醒"]) { watchNow = x["提醒"]; break; }
+  }
+
+  // 「未来三年」：哪一年有喜用加成
+  // 判据只有一条：流年天干的五行是不是你的喜用。
+  // 这与方位、颜色、行业用的是同一套喜用口径（都是五行级）。
+  const xiyongSet = new Set((r.日主强弱 || {}).喜用神 || []);
+  let start3 = 0;
+  for (let i = 0; i < liunianFull.length; i++) {
+    if (liunianFull[i]["是今年"]) { start3 = i; break; }
+  }
+  const next3 = liunianFull.slice(start3, start3 + 3).map((y) => {
+    const gan = (y["干支"] || "")[0] || "";
+    const wx = ganWuxing(gan);
+    const hit = !!wx && xiyongSet.has(wx);
+    return {
+      "年": y["年"], "干支": y["干支"], "十神": y["十神"],
+      "解读": y["解读"], "是今年": y["是今年"],
+      "标签": hit ? "助力年" : "平常年",
+      "说明": hit ? ("「" + wx + "」正是你的喜用，这一类事上更顺")
+                   : "没有喜用加成，按自己的节奏走就好",
+    };
+  });
+
   // 五行意象：哪股劲儿最足、哪股最缺
   const wxImg = wuxingImagery(r.五行统计 || {}, (r.日主强弱 || {}).喜用神 || []);
 
@@ -245,6 +283,8 @@ export function baziPlain(r) {
     生肖: shengxiao,
     开运指南: luck,
     当前阶段: dayunNow,
+    最该注意: watchNow,
+    未来三年: next3,
     大运详批: { 标题: "你一生十步大运", 列表: dayunFull },
     流年详批: { 标题: "未来七年的年度节奏", 列表: liunianFull },
     五行意象: { 标题: "你身上五股的劲儿",

@@ -80,9 +80,15 @@ def oracle_js():
     放一处是为了避免三份副本改一处漏两处。
     """
     src = read(CSS_FROM)
-    start = src.index('PAGE_JS = """') + len('PAGE_JS = """')
-    end = src.index('"""', start)
-    return src[start:end]
+    # 两种写法都认：普通三引号 / 原始字符串（r"""）。
+    # PAGE_JS 里含 JS 正则的 \s，普通字符串会触发 Python 转义警告，
+    # 所以常量本身已改成原始字符串。
+    for mark in ('PAGE_JS = r"""', 'PAGE_JS = """'):
+        if mark in src:
+            start = src.index(mark) + len(mark)
+            end = src.index('"""', start)
+            return src[start:end]
+    raise ValueError("oracle.py 里找不到 PAGE_JS 常量")
 
 
 def oracle_css():

@@ -3054,6 +3054,42 @@ def bazi_plain(r):
             "是今年": x["年"] == cur_year,
         })
 
+    # ---- 「最该注意」：当前大运的提醒 ----
+    # 提醒一直写在十步大运里，但用户不会把十个折叠逐个点开去找。
+    # 这里把它提到最前面 —— 原文照搬，不另写一句。
+    watch_now = ""
+    for x in dayun_full:
+        if x.get("是当前") and x.get("提醒"):
+            watch_now = x["提醒"]
+            break
+
+    # ---- 「未来三年」：哪一年有喜用加成 ----
+    # 判据只有一条：流年天干的五行是不是你的喜用。
+    # 这与方位、颜色、行业用的是同一套喜用口径（都是五行级），
+    # 所以不引入第二套标准。
+    # 措辞纪律：只说「在这一类事上更顺」，不预言会发生什么。
+    xiyong_set = set(r["日主强弱"]["喜用神"] or [])
+    next3 = []
+    _start = 0
+    for _i, _y in enumerate(liunian_full):
+        if _y.get("是今年"):
+            _start = _i
+            break
+    for _y in liunian_full[_start:_start + 3]:
+        _gan = (_y.get("干支") or [""])[0]
+        _wx = GAN_WUXING[GAN.index(_gan)] if _gan in GAN else ""
+        _hit = bool(_wx) and _wx in xiyong_set
+        next3.append({
+            "年": _y["年"],
+            "干支": _y.get("干支", ""),
+            "十神": _y.get("十神", ""),
+            "解读": _y.get("解读", ""),
+            "是今年": bool(_y.get("是今年")),
+            "标签": "助力年" if _hit else "平常年",
+            "说明": ("「%s」正是你的喜用，这一类事上更顺" % _wx) if _hit
+                    else "没有喜用加成，按自己的节奏走就好",
+        })
+
     # ---- 五行意象：哪股劲儿最足、哪股最缺 ----
     wx_strong, wx_weak, wx_items = wuxing_imagery(
         r.get("五行统计") or {}, (r.get("日主强弱") or {}).get("喜用神") or [])
@@ -3097,6 +3133,8 @@ def bazi_plain(r):
         "生肖": shengxiao,
         "开运指南": luck,
         "当前阶段": dayun_now,
+        "最该注意": watch_now,
+        "未来三年": next3,
         "大运详批": {"标题": "你一生十步大运", "列表": dayun_full},
         "流年详批": {"标题": "未来七年的年度节奏", "列表": liunian_full},
         "五行意象": {"标题": "你身上五股的劲儿",

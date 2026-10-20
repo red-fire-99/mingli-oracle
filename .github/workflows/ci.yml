@@ -113,6 +113,38 @@ jobs:
       - name: 时区无关性
         run: python web/check_timezone.py
 
+      # 下面这 6 道以前只在我本机跑，GitHub 上根本没接 ——
+      # 于是「对比度掉回 2:1」「class 没样式」「文件被写空」
+      # 「公开文档混进内部审查叙述」这类问题推上去，CI 全是绿的。
+      # 安全网只存在于一台机器上，等于没有安全网。
+
+      # 文字色的对比度：低于 4.5:1 的字在页面上基本看不见
+      - name: 校验文字色对比度
+        run: python web/check_contrast.py
+
+      # HTML 用到的 class 必须在 CSS 里有定义，
+      # 否则浏览器按默认值渲染（顶格、宽度失控、颜色不可控）
+      - name: 校验 class 都有样式
+        run: python web/check_css.py
+
+      # 源文件不许被写空/写残：一次脚本误操作就让文件成了 0 字节，
+      # 而自测、逐例比对、构建全部照样绿（空文件也过得了语法检查）
+      - name: 校验源文件非空
+        run: python web/check_nonzero.py
+
+      # 公开文档里不许出现内部审查的叙述
+      - name: 校验文档叙述
+        run: python web/check_privdocs.py
+
+      # 历史扫描器自检：确认它真的会拦（会漏报吗？不会）
+      - name: 历史扫描器自检
+        run: python web/test_history_scanner.py
+
+      # 外部精度复核（信息性）：缺 ephem / iztro 时自动跳过，
+      # 跑它是为了在日志里留一句「外部精度声明这次没有复验」
+      - name: 外部精度复核（信息性）
+        run: python web/check_accuracy.py
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web/dist

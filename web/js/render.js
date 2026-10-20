@@ -425,7 +425,17 @@ export function buildToc(plainHtml, proHtml) {
   return '<nav class="toc" aria-label="本页目录">'
     + '<div class="toc-h">本页目录'
     + '<span class="toc-tip">点一下跳到对应小节</span></div>'
-    + '<div class="toc-grid">' + links + "</div></nav>";
+    + '<div class="toc-grid">' + links + "</div>"
+    + '<div class="toc-tools">'
+    + '<input class="toc-search" type="search" placeholder="找一句话…'
+    + '" aria-label="在本页查找">'
+    + '<button type="button" class="toc-btn" data-toc="expand">'
+    + "全部展开</button>"
+    + '<button type="button" class="toc-btn" data-toc="collapse">'
+    + "全部收起</button>"
+    + "</div>"
+    + '<div class="toc-results" hidden></div>'
+    + "</nav>";
 }
 
 
@@ -633,6 +643,21 @@ export function renderPlain(data) {
     // ---- 1.3.1 新增：流年逐年（折叠）----
     if (b["流年详批"] && b["流年详批"]["列表"].length) {
       const ll = b["流年详批"]["列表"];
+    // 接下来三年：七年平铺着看不出轻重，先给三年摘要
+    if (gBazi && gBazi["未来三年"] && gBazi["未来三年"].length) {
+      let cells = "";
+      for (const y of gBazi["未来三年"]) {
+        cells += '<div class="y3-i"><div class="y3-yr">' + y["年"] + " "
+          + h(y["干支"] || "") + (y["是今年"] ? "（今年）" : "")
+          + '<span class="y3-tag">' + h(y["标签"] || "") + "</span></div>"
+          + '<p class="y3-t">' + h(y["解读"] || "") + "</p>"
+          + '<p class="y3-n">' + h(y["说明"] || "") + "</p></div>";
+      }
+      P.push('<div class="y3"><div class="y3-h">接下来三年</div>'
+        + '<p class="y3-sub">判据只有一条：这一年的天干五行'
+        + "是不是你的喜用 —— 与方位、颜色、行业同一套口径。</p>"
+        + '<div class="y3-grid">' + cells + "</div></div>");
+    }
       P.push('<details class="fold"><summary>未来七年的年度节奏'
         + prev((function () {
             const y = ll.find((q) => q["是今年"]);
@@ -1418,6 +1443,11 @@ export function renderPlain(data) {
     const cs = gBazi["当前阶段"];
     qItems.push(["眼前这段", (cs["干支"] || "") + " 大运 · "
                  + (cs["主题"] || "")]);
+  if (gBazi && gBazi["最该注意"]) {
+    // 提醒一直写在十步大运里，但没人会把十个折叠逐个点开去找 ——
+    // 提到速览里，它才真的被看见
+    qItems.push(["最该注意", gBazi["最该注意"]]);
+  }
   }
   let quick = "";
   if (qItems.length) {

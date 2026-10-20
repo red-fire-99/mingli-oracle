@@ -295,6 +295,14 @@ details.fold>summary:focus-visible{outline:2px solid var(--gold);
 @media(max-width:720px){
   .dy-seg u{display:none}
   .dy-seg b{font-size:var(--t-sm)}
+  /* 窄屏时「结论预览」独占一行。
+     跟标题、计数抢同一行的话，它会被挤到 80–120px，
+     17 个字只剩 7–10 个 —— 第三批做这个预览的意义就没了。
+     用 order 调视觉顺序（标题 → 计数 → 预览），不动 HTML 结构。 */
+  details.fold>summary{flex-wrap:wrap;row-gap:2px}
+  details.fold>summary .cnt{order:1}
+  details.fold>summary .fold-prev{order:2;flex-basis:100%;max-width:100%;
+    margin-left:16px;text-align:left;padding-top:1px}
 }
 
 /* ---------- 紫微盘格子可点 ----------
@@ -389,6 +397,15 @@ a.cell.ming:hover{border-color:var(--red)}
   .persona{background:#fff;border:1px solid #999;box-shadow:none}
   details.fold{border-color:#ccc}
   details.fold>*:not(summary){animation:none}
+  /* 打印/存 PDF 时不能只印半份：
+     折叠块里的内容（大运、流年、神煞、十二宫、四化…）占了大半篇幅，
+     折叠着就全没了。展开由脚本在打印前做（CSS 没法真的打开 details），
+     这里只保证每个折叠块不被拦腰截断。 */
+  details.fold, details.ssx{break-inside:avoid-page}
+  .fbody{padding-top:var(--s2)}
+  /* 网页版的两个页签都要印出来，否则只印了当前那个 */
+  .panel{display:block !important}
+  .tabs,.toc-tools,.toc-results,.ml-totop,.ml-pgbar{display:none !important}
 }
 
 /* ===================================================================
@@ -485,6 +502,23 @@ details.fold>summary .cnt{margin-left:auto;font-size:var(--t-sm);
 .dy .it.now,.ly .it.now{border-color:var(--gold);
   box-shadow:0 0 0 1px var(--gold) inset;background:#fdf9f1}
 
+/* ---------- 接下来三年 ---------- */
+.y3{margin:var(--s3) 0 var(--s4);padding:var(--s3) var(--s4);
+  background:#fdf9f2;border:1px solid var(--line);
+  border-left:3px solid var(--red);border-radius:var(--r-md)}
+.y3-h{font-size:var(--t-md);font-weight:700;color:var(--ink);margin-bottom:2px}
+.y3-sub{font-size:var(--t-sm);color:var(--sub);margin:0 0 10px;line-height:1.6}
+.y3-grid{display:grid;gap:var(--s3) var(--s4);
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.y3-i{padding-left:10px;border-left:2px solid var(--line2);min-width:0}
+.y3-yr{font-size:var(--t-sm);font-weight:700;color:var(--ink);
+  display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:3px}
+.y3-tag{font-size:11px;font-weight:600;color:var(--red);
+  background:#f7e8e6;border-radius:var(--r-pill);padding:1px 7px;
+  letter-spacing:.3px}
+.y3-t{font-size:var(--t-sm);color:var(--ink);line-height:1.7;margin:0 0 3px}
+.y3-n{font-size:var(--t-xs);color:var(--sub);line-height:1.6;margin:0}
+
 /* ---------- 一分钟速览 + 小节导语 ---------- */
 .quick{margin:0 0 var(--s4);padding:var(--s3) var(--s4);
   background:#fdf9f2;border:1px solid var(--line);
@@ -515,6 +549,25 @@ details.fold>summary .cnt{margin-left:auto;font-size:var(--t-sm);
   background:#fdf9f2;border:1px solid var(--line);color:var(--ink);
   text-decoration:none;font-size:12.5px;line-height:1.5}
 .toc-i:hover{background:#f6efe1;border-color:var(--gold);color:var(--ink)}
+/* 目录卡下方的工具条：查找 / 全部展开 / 全部收起 */
+.toc-tools{display:flex;gap:8px;align-items:center;margin-top:10px;
+  flex-wrap:wrap}
+.toc-search{flex:1 1 160px;min-width:120px;padding:5px 9px;font-size:13px;
+  font-family:inherit;color:var(--ink);background:#fffdf8;
+  border:1px solid var(--line);border-radius:var(--r-sm)}
+.toc-search:focus{outline:2px solid var(--gold);outline-offset:1px}
+.toc-btn{padding:5px 10px;font-size:12px;font-family:inherit;cursor:pointer;
+  color:var(--ink);background:#fdf9f2;border:1px solid var(--line);
+  border-radius:var(--r-sm)}
+.toc-btn:hover{background:#f6efe1;border-color:var(--gold)}
+.toc-results{margin-top:8px;max-height:220px;overflow:auto;
+  border-top:1px solid var(--line);padding-top:8px}
+.toc-results .r-h{font-size:12px;color:var(--sub);margin-bottom:4px}
+.toc-results .r-i{display:block;width:100%;text-align:left;padding:4px 6px;
+  font-size:12.5px;line-height:1.6;color:var(--ink);background:none;
+  border:none;border-radius:var(--r-sm);cursor:pointer;font-family:inherit}
+.toc-results .r-i:hover{background:#f6efe1}
+.toc-results mark{background:#f7e8c0;color:inherit;border-radius:2px}
 /* 锚点跳转时别被吸顶条压住 */
 h2[id]{scroll-margin-top:38px}
 .ml-pgbar{position:fixed;left:0;right:0;top:0;height:26px;z-index:60;
@@ -542,7 +595,7 @@ h2[id]{scroll-margin-top:38px}
 # 这份代码在三个地方用同一份：CLI 导出的命盘网页、网页版（构建时注入）、
 # 网页版导出的离线命盘文件。放一处是为了避免三份副本改一处漏两处 ——
 # 之前 CSS 就是这么散过（app.html 一份、oracle.py 一份）。
-PAGE_JS = """(function () {
+PAGE_JS = r"""(function () {
   if (window.__mlPageReady) return;
   window.__mlPageReady = 1;
 
@@ -556,7 +609,7 @@ PAGE_JS = """(function () {
   top.type = "button";
   top.className = "ml-totop";
   top.setAttribute("aria-label", "回到顶部");
-  top.textContent = "\u2191";
+  top.textContent = "↑";
   document.body.appendChild(bar);
   document.body.appendChild(top);
 
@@ -651,6 +704,172 @@ PAGE_JS = """(function () {
     } catch (err) { /* 老浏览器没有 CustomEvent，忽略 */ }
     setTimeout(function () { scrollToEl(el); }, 60);
   });
+  // ---------- 全部展开 / 全部收起 ----------
+  function setAll(open) {
+    var ds = document.querySelectorAll("details");
+    for (var i = 0; i < ds.length; i++) {
+      if (ds[i].open !== open) ds[i].open = open;
+    }
+    onScroll();
+  }
+
+  // ---------- 打印前展开全部 ----------
+  // 折叠块里是大运、流年、神煞、十二宫、四化……占了大半篇幅。
+  // 折叠着打印出来就是半份命盘。CSS 没法真的打开 details，只能在
+  // 打印前用脚本打开，打完还原。
+  var printOpened = null;
+  window.addEventListener("beforeprint", function () {
+    if (printOpened) return;
+    printOpened = [];
+    var ds = document.querySelectorAll("details");
+    for (var i = 0; i < ds.length; i++) {
+      if (!ds[i].open) { printOpened.push(ds[i]); ds[i].open = true; }
+    }
+  });
+  window.addEventListener("afterprint", function () {
+    if (!printOpened) return;
+    for (var i = 0; i < printOpened.length; i++) printOpened[i].open = false;
+    printOpened = null;
+  });
+
+  // ---------- 本页查找 ----------
+  // 不用 innerHTML 高亮：改 innerHTML 会重建节点，details 的展开状态
+  // 全丢（用户刚点开的折叠块会全合上）。改用 CSS Custom Highlight API，
+  // 不动 DOM；浏览器不支持时退化成「只列命中处」。
+  var results = [];
+  var findRoot = document.querySelector("main") || document.body;
+
+  function clearFind() {
+    results = [];
+    try {
+      if (window.CSS && CSS.highlights) CSS.highlights.delete("ml-find");
+    } catch (e) { /* 不支持就算了 */ }
+  }
+
+  function snippetFor(node, q) {
+    var block = node.parentElement;
+    while (block && block !== findRoot) {
+      var tag = block.tagName;
+      if (tag === "P" || tag === "LI" || tag === "DIV" || tag === "TD") break;
+      block = block.parentElement;
+    }
+    var txt = ((block ? block.textContent : node.nodeValue) || "")
+      .replace(/\s+/g, " ").trim();
+    var at = txt.indexOf(q);
+    if (at < 0) at = 0;
+    var from = Math.max(0, at - 14);
+    var to = Math.min(txt.length, at + q.length + 22);
+    return (from > 0 ? "…" : "") + txt.slice(from, to)
+      + (to < txt.length ? "…" : "");
+  }
+
+  function renderFind(q) {
+    var box = document.querySelector(".toc-results");
+    if (!box) return;
+    if (!q) { box.hidden = true; box.innerHTML = ""; return; }
+    if (!results.length) {
+      box.hidden = false;
+      box.innerHTML = '<div class="r-h">没找到「' + q + "」</div>";
+      return;
+    }
+    var html = '<div class="r-h">找到 ' + results.length + " 处：</div>";
+    for (var i = 0; i < results.length && i < 30; i++) {
+      html += '<button type="button" class="r-i" data-find="' + i + '">'
+        + results[i].snip + "</button>";
+    }
+    if (results.length > 30) {
+      html += '<div class="r-h">还有 ' + (results.length - 30) + " 处未列出</div>";
+    }
+    box.hidden = false;
+    box.innerHTML = html;
+  }
+
+  function doFind(q) {
+    clearFind();
+    q = (q || "").trim();
+    if (q.length < 2) { renderFind(""); return; }
+    var walker = document.createTreeWalker(findRoot, NodeFilter.SHOW_TEXT);
+    var ranges = [];
+    var node;
+    while ((node = walker.nextNode())) {
+      if (!node.nodeValue || node.nodeValue.indexOf(q) < 0) continue;
+      var par = node.parentElement;
+      if (!par) continue;
+      var tag = par.tagName;
+      if (tag === "SCRIPT" || tag === "STYLE") continue;
+      var text = node.nodeValue;
+      var at = text.indexOf(q);
+      while (at >= 0) {
+        var r = document.createRange();
+        try {
+          r.setStart(node, at);
+          r.setEnd(node, at + q.length);
+        } catch (e) { break; }
+        ranges.push(r);
+        results.push({ range: r, node: node, snip: snippetFor(node, q) });
+        at = text.indexOf(q, at + q.length);
+        if (results.length >= 200) break;
+      }
+      if (results.length >= 200) break;
+    }
+    try {
+      if (window.CSS && CSS.highlights && ranges.length) {
+        CSS.highlights.set("ml-find", new Highlight.apply(null, ranges));
+      }
+    } catch (e) { /* 不支持 Custom Highlight 就只列命中处 */ }
+    renderFind(q);
+  }
+
+  var searchBox = document.querySelector(".toc-search");
+  if (searchBox) {
+    var timer = null;
+    searchBox.addEventListener("input", function () {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(function () { doFind(searchBox.value); }, 180);
+    });
+    searchBox.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (timer) clearTimeout(timer);
+        doFind(searchBox.value);
+      }
+      if (e.key === "Escape") {
+        searchBox.value = "";
+        doFind("");
+      }
+    });
+  }
+
+  document.addEventListener("click", function (e) {
+    var btn = e.target && e.target.closest
+      ? e.target.closest("[data-toc]") : null;
+    if (btn) {
+      e.preventDefault();
+      setAll(btn.getAttribute("data-toc") === "expand");
+      return;
+    }
+    var hit = e.target && e.target.closest
+      ? e.target.closest("[data-find]") : null;
+    if (hit) {
+      e.preventDefault();
+      var idx = Number(hit.getAttribute("data-find"));
+      var r = results[idx];
+      if (!r) return;
+      // 命中的内容在折叠块里就先把块打开，否则滚过去也是空的
+      var p = r.node.parentElement;
+      while (p && p !== document.body) {
+        if (p.tagName === "DETAILS") p.open = true;
+        p = p.parentElement;
+      }
+      setTimeout(function () {
+        if (r.range.startContainer.parentElement) {
+          r.range.startContainer.parentElement.scrollIntoView(
+            { block: "center" });
+        }
+      }, 30);
+    }
+  });
+
   collect();
   onScroll();
 })();"""
@@ -1203,6 +1422,21 @@ def render_plain(data):
             if _lnt:
                 P.append(_lnt)
             _now_ln = next((y for y in ll if y.get("是今年")), None)
+            # 接下来三年：七年平铺着看不出轻重，先给三年摘要
+            if b.get("未来三年"):
+                _cells = ""
+                for _y in b["未来三年"]:
+                    _cells += ('<div class="y3-i"><div class="y3-yr">%d %s%s'
+                               '<span class="y3-tag">%s</span></div>'
+                               '<p class="y3-t">%s</p><p class="y3-n">%s</p></div>'
+                               % (_y["年"], _h(_y.get("干支", "")),
+                                  "（今年）" if _y.get("是今年") else "",
+                                  _h(_y.get("标签", "")), _h(_y.get("解读", "")),
+                                  _h(_y.get("说明", ""))))
+                P.append('<div class="y3"><div class="y3-h">接下来三年</div>'
+                         '<p class="y3-sub">判据只有一条：这一年的天干五行'
+                         '是不是你的喜用 —— 与方位、颜色、行业同一套口径。</p>'
+                         '<div class="y3-grid">%s</div></div>' % _cells)
             P.append('<details class="fold"><summary>未来七年的年度节奏'
                      '%s<span class="cnt">%d–%d</span></summary><div class="fbody">'
                      '<p class="sub2">大运是十年的大背景，流年是这一年的具体调子。'
@@ -1912,6 +2146,10 @@ def render_plain(data):
         _cs = b["当前阶段"]
         q_items.append(("眼前这段", "%s 大运 · %s"
                         % (_cs.get("干支", ""), _cs.get("主题", ""))))
+    if b and b.get("最该注意"):
+        # 提醒一直写在十步大运里，但没人会把十个折叠逐个点开去找 ——
+        # 提到速览里，它才真的被看见
+        q_items.append(("最该注意", b["最该注意"]))
     if q_items:
         _cells = "".join('<div class="q"><b>%s</b><span>%s</span></div>'
                          % (_h(k), _h(v)) for k, v in q_items)
@@ -1962,7 +2200,17 @@ def render_toc(plain_html, pro_html):
     return ('<nav class="toc" aria-label="本页目录">'
             '<div class="toc-h">本页目录'
             '<span class="toc-tip">点一下跳到对应小节</span></div>'
-            '<div class="toc-grid">%s</div></nav>' % links)
+            '<div class="toc-grid">%s</div>'
+            '<div class="toc-tools">'
+            '<input class="toc-search" type="search" placeholder="找一句话…'
+            '" aria-label="在本页查找">'
+            '<button type="button" class="toc-btn" data-toc="expand">'
+            '全部展开</button>'
+            '<button type="button" class="toc-btn" data-toc="collapse">'
+            '全部收起</button>'
+            '</div>'
+            '<div class="toc-results" hidden></div>'
+            '</nav>' % links)
 
 
 def render_html(data, title="命理神机 · 命盘"):

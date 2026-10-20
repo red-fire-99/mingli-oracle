@@ -1221,6 +1221,64 @@ if (/error/i.test(errMsg)) {
   }
 }
 
+// ---------- 新增内容：速览 / 接下来三年 / 查找工具条 ----------
+{
+  const plain = byId.get("panel-plain") ? byId.get("panel-plain").innerHTML : "";
+  const tocBox = byId.get("tocBox") ? byId.get("tocBox").innerHTML : "";
+  const scope = plain + tocBox;
+
+  // 速览卡：至少 4 格，且不能有空格
+  const qCells = (scope.match(/<div class="q">/g) || []).length;
+  const qEmpty = (scope.match(/<div class="q"><b>[\s\S]*?<\/b><span><\/span>/g) || []).length;
+  if (qCells < 4) {
+    fail("速览卡条目太少（" + qCells + " 格）");
+  } else if (qEmpty) {
+    fail("速览卡里有 " + qEmpty + " 格是空的");
+  } else {
+    console.log("  OK   速览卡 " + qCells + " 格，每格都有内容");
+  }
+  // 「最该注意」那格：当前大运有提醒时必须出现
+  if (scope.indexOf("<b>最该注意</b>") < 0) {
+    fail("速览卡里没有「最该注意」这一格 —— 提醒散在折叠块里没人看得到");
+  } else {
+    console.log("  OK   速览卡带「最该注意」");
+  }
+
+  // 接下来三年：3 格，每格要有标签、解读、说明
+  const y3 = (scope.match(/<div class="y3-i">/g) || []).length;
+  const y3Bad = (scope.match(/<div class="y3-i">[\s\S]*?<span class="y3-tag"><\/span>/g) || []).length;
+  const y3NoTxt = (scope.match(/<p class="y3-t"><\/p>/g) || []).length;
+  const y3NoNote = (scope.match(/<p class="y3-n"><\/p>/g) || []).length;
+  if (y3 !== 3) {
+    fail("「接下来三年」应该是 3 格，实际 " + y3 + " 格");
+  } else if (y3Bad || y3NoTxt || y3NoNote) {
+    fail("「接下来三年」里有空格子（标签/解读/说明缺一）");
+  } else {
+    console.log("  OK   接下来三年 3 格，标签与解读齐全");
+  }
+
+  // 目录工具条：查找框 + 两个按钮
+  if (scope.indexOf('class="toc-search"') < 0) {
+    fail("目录卡里没有查找框");
+  } else {
+    console.log("  OK   目录卡有查找框");
+  }
+  const btns = (scope.match(/class="toc-btn"/g) || []).length;
+  if (btns < 2) {
+    fail("目录卡里缺「全部展开 / 全部收起」按钮");
+  } else {
+    console.log("  OK   目录卡有全部展开/全部收起");
+  }
+
+  // 打印时必须展开全部折叠，否则印出来是半份命盘
+  const html = fs.readFileSync(process.argv[2], "utf8");
+  if (html.indexOf("beforeprint") < 0) {
+    fail("产物里没有打印前展开折叠的处理 —— 打印/存 PDF 会只有半份内容");
+  } else {
+    console.log("  OK   打印前会展开全部折叠");
+  }
+}
+
 if (bad) { console.error("\nUI 端到端验证失败 " + bad + " 项"); process.exit(1); }
 console.log("\nPASS: 页面表单交互全通（填表→提交→出结果）");
 """
