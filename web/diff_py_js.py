@@ -534,9 +534,11 @@ def O_run_js_equiv(c, O, PL, data):
     if "紫微" in data: pro += O.render_ziwei(data["紫微"])
     if "占星" in data: pro += O.render_astro(data["占星"])
     pro += O.render_glossary()
+    plain_html = O.render_plain(data)
     return {"headline": PL.headline(data),
-            "plain_html": O.render_plain(data),
-            "pro_html": pro}
+            "plain_html": plain_html,
+            "pro_html": pro,
+            "toc_html": O.render_toc(plain_html, pro)}
 
 
 LAYERS["render"] = cases_render

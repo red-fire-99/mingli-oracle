@@ -16,6 +16,7 @@ python oracle.py --lunar 1990-04-21 --shichen 午 --sex 女 --only ziwei
 
 import argparse
 import json
+import re
 import sys
 
 from almanac import setup_console
@@ -478,7 +479,159 @@ details.fold>summary .cnt{margin-left:auto;font-size:var(--t-sm);
   border-radius:var(--r-sm);padding:var(--s3) var(--s4);line-height:1.8}
 .dy .it.now,.ly .it.now{border-color:var(--gold);
   box-shadow:0 0 0 1px var(--gold) inset;background:#fdf9f1}
+
+/* ---------- 页首目录 + 吸顶进度条 + 返回顶部 ---------- */
+.toc{margin:0 0 var(--s4);padding:var(--s3) var(--s4);
+  background:var(--card);border:1px solid var(--line);
+  border-radius:var(--r-md);box-shadow:var(--sh-1)}
+.toc-h{display:flex;align-items:baseline;gap:var(--s2);font-size:var(--t-md);
+  font-weight:700;color:var(--ink);margin-bottom:9px}
+.toc-tip{font-size:var(--t-xs);font-weight:400;color:var(--sub)}
+.toc-grid{display:grid;gap:6px;
+  grid-template-columns:repeat(auto-fill,minmax(104px,1fr))}
+.toc-i{display:block;padding:6px 9px;border-radius:var(--r-sm);
+  background:#fdf9f2;border:1px solid var(--line);color:var(--ink);
+  text-decoration:none;font-size:12.5px;line-height:1.5}
+.toc-i:hover{background:#f6efe1;border-color:var(--gold);color:var(--ink)}
+/* 锚点跳转时别被吸顶条压住 */
+h2[id]{scroll-margin-top:38px}
+.ml-pgbar{position:fixed;left:0;right:0;top:0;height:26px;z-index:60;
+  background:rgba(255,253,248,.97);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;opacity:0;pointer-events:none;
+  transition:opacity .2s;box-shadow:0 1px 6px rgba(0,0,0,.04)}
+.ml-pgbar.on{opacity:1}
+.ml-pgbar-f{position:absolute;left:0;top:0;height:2px;width:0;
+  background:var(--red)}
+.ml-pgbar-t{position:relative;margin-left:var(--s3);font-size:var(--t-sm);
+  color:var(--sub)}
+.ml-totop{position:fixed;right:14px;bottom:18px;width:42px;height:42px;
+  border-radius:50%;border:none;background:var(--red);color:#fff;
+  font-size:18px;line-height:1;cursor:pointer;opacity:0;pointer-events:none;
+  transition:opacity .2s;z-index:60;box-shadow:0 3px 12px rgba(168,50,45,.28)}
+.ml-totop.on{opacity:1;pointer-events:auto}
+@media(max-width:720px){
+  .toc-grid{grid-template-columns:repeat(auto-fill,minmax(92px,1fr))}
+  .ml-totop{right:10px;bottom:12px;width:38px;height:38px}
+}
 """
+
+# 页面级交互：吸顶进度条 + 返回顶部 + 目录跳转。
+#
+# 这份代码在三个地方用同一份：CLI 导出的命盘网页、网页版（构建时注入）、
+# 网页版导出的离线命盘文件。放一处是为了避免三份副本改一处漏两处 ——
+# 之前 CSS 就是这么散过（app.html 一份、oracle.py 一份）。
+PAGE_JS = """(function () {
+  if (window.__mlPageReady) return;
+  window.__mlPageReady = 1;
+
+  var bar = document.createElement("div");
+  bar.className = "ml-pgbar";
+  bar.innerHTML = '<div class="ml-pgbar-f"></div>' +
+                  '<span class="ml-pgbar-t"></span>';
+  var fill = bar.firstChild;
+  var label = bar.lastChild;
+  var top = document.createElement("button");
+  top.type = "button";
+  top.className = "ml-totop";
+  top.setAttribute("aria-label", "回到顶部");
+  top.textContent = "\u2191";
+  document.body.appendChild(bar);
+  document.body.appendChild(top);
+
+  var secs = [];
+  function collect() {
+    secs = [];
+    var hs = document.querySelectorAll("h2[data-t]");
+    for (var i = 0; i < hs.length; i++) {
+      // 隐藏页签里的标题不算「当前小节」
+      if (hs[i].offsetParent !== null) secs.push(hs[i]);
+    }
+  }
+  function currentName() {
+    var cur = "";
+    for (var i = 0; i < secs.length; i++) {
+      if (secs[i].getBoundingClientRect().top <= 90) {
+        cur = secs[i].getAttribute("data-t");
+      }
+    }
+    return cur;
+  }
+  // 刷新进度条。用时间节流而不是 requestAnimationFrame：
+  // 窗口不可见时 rAF 不触发，进度条会永远停在空白（实测踩过）。
+  function update() {
+    var y = window.pageYOffset || document.documentElement.scrollTop || 0;
+    var h = document.documentElement.scrollHeight - window.innerHeight;
+    var p = h > 0 ? Math.max(0, Math.min(1, y / h)) : 0;
+    fill.style.width = (p * 100).toFixed(2) + "%";
+    var c = currentName();
+    if (label.textContent !== c) label.textContent = c;
+    if (y > 360) {
+      bar.classList.add("on");
+      top.classList.add("on");
+    } else {
+      bar.classList.remove("on");
+      top.classList.remove("on");
+    }
+  }
+  var lastRun = 0, pending = false;
+  function onScroll() {
+    var now = (window.performance && performance.now) ? performance.now()
+                                                        : Date.now();
+    var wait = 60 - (now - lastRun);
+    if (wait <= 0) {
+      lastRun = now;
+      update();
+      return;
+    }
+    if (pending) return;
+    pending = true;
+    setTimeout(function () {
+      pending = false;
+      lastRun = (window.performance && performance.now) ? performance.now()
+                                                        : Date.now();
+      update();
+    }, wait);
+  }
+  window.addEventListener("scroll", onScroll, { passive: true });
+  window.addEventListener("resize", function () { collect(); onScroll(); });
+  document.addEventListener("mingli:refresh", function () {
+    collect();
+    onScroll();
+  });
+  // 瞬时跳转，不用动画。
+  // 实测：窗口不可见时 requestAnimationFrame 不触发，原生 smooth 滚动
+  // 也依赖合成器、同样不动 —— 症状是「点了目录没反应」。
+  // window.scrollTo 立即生效，任何环境都可靠。
+  function scrollToY(targetY) {
+    var y = Math.max(0, Math.round(targetY));
+    if (window.scrollTo) window.scrollTo(0, y);
+  }
+  function scrollToEl(el) {
+    var r = el.getBoundingClientRect();
+    var y = r.top + (window.pageYOffset || document.documentElement.scrollTop || 0) - 34;
+    scrollToY(y);
+  }
+  top.addEventListener("click", function () { scrollToY(0); });
+  // 目录跳转：目标可能落在另一个页签里（网页版「专业数据」是单独一页签），
+  // 先广播一个事件让页面切过去，再滚动。
+  document.addEventListener("click", function (e) {
+    var a = (e.target && e.target.closest)
+      ? e.target.closest("a[href^='#']") : null;
+    if (!a) return;
+    var id = a.getAttribute("href").slice(1);
+    if (!id) return;
+    var el = document.getElementById(id);
+    if (!el) return;
+    e.preventDefault();
+    try {
+      document.dispatchEvent(new CustomEvent("mingli:goto",
+        { detail: { id: id } }));
+    } catch (err) { /* 老浏览器没有 CustomEvent，忽略 */ }
+    setTimeout(function () { scrollToEl(el); }, 60);
+  });
+  collect();
+  onScroll();
+})();"""
 
 WX_COLOR = {"木": "#5b8c5a", "火": "#c0504d", "土": "#b08d4a", "金": "#8a8f98", "水": "#4a6fa5"}
 
@@ -568,7 +721,7 @@ def _yr(v):
 def render_bazi(r):
     i = r["输入"]
     p = []
-    p.append('<section><h2>四柱八字</h2>')
+    p.append('<section><h2 id="s-bazi-pro" data-t="四柱八字">四柱八字</h2>')
     p.append('<div class="info"><span>公历 <b>%s</b></span><span>农历 <b>%s</b></span>'
              '<span>时辰 <b>%s</b></span><span>性别 <b>%s</b></span><span>出生地 <b>%s</b></span></div>'
              % (_h(i["公历"]), _h(i["农历"]), _h(i["时辰"]), _h(i["性别"]), _h(i["出生地"])))
@@ -651,7 +804,7 @@ def render_ziwei(r):
     i = r["输入"]
     by_zhi = {p["地支"]: p for p in r["十二宫"]}
     _pl_i = 0
-    p = ['<section><h2>紫微斗数</h2>']
+    p = ['<section><h2 id="s-ziwei-pro" data-t="紫微斗数">紫微斗数</h2>']
     p.append('<div class="info"><span>农历 <b>%s</b></span><span>时辰 <b>%s</b></span>'
              '<span>年干支 <b>%s</b></span><span>五行局 <b>%s</b></span>'
              '<span>命宫 <b>%s%s</b></span><span>身宫 <b>%s%s</b></span></div>'
@@ -723,7 +876,7 @@ def render_ziwei(r):
 
 
 def render_astro(r):
-    p = ['<section><h2>西洋占星本命盘</h2>']
+    p = ['<section><h2 id="s-astro-pro" data-t="占星盘">西洋占星本命盘</h2>']
     p.append('<div class="info"><span>太阳 <b>%s</b></span><span>月亮 <b>%s</b></span>'
              '<span>上升 <b>%s</b></span><span>经纬度 <b>%s</b></span></div>'
              % (_h(r["太阳星座"]), _h(r["月亮星座"]), _h(r["上升星座"]), _h(r["输入"]["经纬度"])))
@@ -822,7 +975,7 @@ def _despacify(html, max_len=36):
 
 def render_plain(data):
     """白话解读区：先给结论，再给依据，全部用日常语言。"""
-    P = ['<section><h2>先说人话</h2>',
+    P = ['<section><h2 id="s-plain" data-t="先说人话">先说人话</h2>',
          '<div class="secnote">这一段不用懂任何术语，看完就知道自己大概是什么样的人。'
          '想研究细节，往下翻「专业排盘数据」。</div>']
 
@@ -853,7 +1006,7 @@ def render_plain(data):
 
     if "八字" in data:
         b = M_plain.bazi_plain(data["八字"])
-        P.append('<h2 style="font-size:15px;border-left-color:var(--gold)">八字 · 看你的性格和天赋</h2>')
+        P.append('<h2 id="s-bazi" data-t="八字 · 性格天赋" style="font-size:15px;border-left-color:var(--gold)">八字 · 看你的性格和天赋</h2>')
         P.append('<div class="plain"><h3>%s</h3><p>%s</p><p class="sub2">%s</p></div>'
                  % (_h(b["性格底色"]["标题"]), _h(b["性格底色"]["要点"]), _h(b["性格底色"]["补充"])))
         P.append('<div class="plain"><h3>%s</h3><p>%s</p><p class="sub2">%s</p></div>'
@@ -1135,7 +1288,7 @@ def render_plain(data):
             P.append("</div></div></details>")
     if "紫微" in data:
         z = M_plain.ziwei_plain(data["紫微"])
-        P.append('<h2 style="font-size:15px;border-left-color:var(--gold);margin-top:22px">紫微斗数 · 看事业、财运、感情</h2>')
+        P.append('<h2 id="s-ziwei" data-t="紫微 · 事业财运" style="font-size:15px;border-left-color:var(--gold);margin-top:22px">紫微斗数 · 看事业、财运、感情</h2>')
         P.append('<div class="plain"><h3>命宫主星</h3><p>%s</p></div>' % _h(z["一句话"]))
         for k in ("事业方向", "财运模式", "感情模式", "四化提醒"):
             blk = z.get(k)
@@ -1316,7 +1469,7 @@ def render_plain(data):
             P.append("</div></details>")
     if "占星" in data:
         a = M_plain.astro_plain(data["占星"])
-        P.append('<h2 style="font-size:15px;border-left-color:var(--gold);margin-top:22px">西洋占星 · 看性格的另一面</h2>')
+        P.append('<h2 id="s-astro" data-t="占星 · 性格另一面" style="font-size:15px;border-left-color:var(--gold);margin-top:22px">西洋占星 · 看性格的另一面</h2>')
         P.append('<div class="plain"><h3>一句话</h3><p>%s</p></div>' % _h(a["一句话"]))
         P.append('<div class="plain"><h3>%s</h3>' % _h(a["三支柱"]["标题"]))
         for x in a["三支柱"]["列表"]:
@@ -1499,7 +1652,7 @@ def render_plain(data):
         x = M_plain.cross_plain(data.get("八字"), data.get("紫微"),
                                 data.get("占星"))
         if x["一致"] or x["分歧"] or x["单盘"]:
-            P.append('<h2 style="font-size:15px;border-left-color:var(--gold)">'
+            P.append('<h2 id="s-cross" data-t="三盘交叉" style="font-size:15px;border-left-color:var(--gold)">'
                      '三盘交叉 · 几套体系一起看</h2>')
             P.append('<div class="plain"><p>%s</p><p class="sub2">%s</p>'
                      '</div>' % (_h(x["要点"]), _h(x["说明"])))
@@ -1581,7 +1734,7 @@ def render_plain(data):
     th = M_plain.taohua_plain(data.get("八字"), data.get("紫微"),
                               data.get("占星"))
     if th["列表"]:
-        P.append('<h2 style="font-size:15px;border-left-color:var(--gold)">'
+        P.append('<h2 id="s-taohua" data-t="桃花星" style="font-size:15px;border-left-color:var(--gold)">'
                  '%s</h2>' % _h(th["标题"]))
         P.append('<div class="plain"><p>%s</p>'
                  '<p class="li">下面三边说的是<em>不同层面</em>，'
@@ -1606,7 +1759,7 @@ def render_plain(data):
     cr = M_plain.career_plain(data.get("八字"), data.get("紫微"),
                               data.get("占星"))
     if cr["列表"]:
-        P.append('<h2 style="font-size:15px;border-left-color:var(--gold)">'
+        P.append('<h2 id="s-industry" data-t="行业细分" style="font-size:15px;border-left-color:var(--gold)">'
                  '%s</h2>' % _h(cr["标题"]))
         P.append('<div class="plain"><p>%s</p><p class="sub2">%s</p></div>'
                  % (_h(cr["要点"]), _h(cr["提醒"])))
@@ -1645,11 +1798,40 @@ def render_plain(data):
 
 
 def render_glossary():
-    P = ['<section><h2>名词解释 · 看不懂的词看这里</h2><div class="gloss">']
+    P = ['<section><h2 id="s-glossary" data-t="名词解释">'
+         '名词解释 · 看不懂的词看这里</h2><div class="gloss">']
     for k, v in M_plain.GLOSSARY.items():
         P.append("<div><b>%s</b>：%s</div>" % (_h(k), _h(v)))
     P.append("</div></section>")
     return "".join(P)
+
+
+def render_toc(plain_html, pro_html):
+    """从已渲染的 HTML 反推本页目录。
+
+    为什么不另写一份「本页有哪些小节」的清单：
+    清单会和实际渲染脱节（数据不够时某节不渲染，目录里却还留着，
+    点过去什么都没有），而且清单要在 Python 和 JS 两边各写一遍，
+    改一处就可能对不上。这里改成扫 h2[data-t]：
+    渲染出什么，目录就是什么；两边输入相同，输出必然相同。
+    """
+    items = []
+    for html in (plain_html, pro_html):
+        for m in re.finditer(r"<h2([^>]*)>([^<]*)</h2>", html):
+            attrs = m.group(1)
+            idm = re.search(r'id="([^"]+)"', attrs)
+            tm = re.search(r'data-t="([^"]*)"', attrs)
+            if not (idm and tm):
+                continue
+            items.append((idm.group(1), tm.group(1)))
+    if not items:
+        return ""
+    links = "".join('<a class="toc-i" href="#%s">%s</a>' % (i, t)
+                    for i, t in items)
+    return ('<nav class="toc" aria-label="本页目录">'
+            '<div class="toc-h">本页目录'
+            '<span class="toc-tip">点一下跳到对应小节</span></div>'
+            '<div class="toc-grid">%s</div></nav>' % links)
 
 
 def render_html(data, title="命理神机 · 命盘"):
@@ -1662,19 +1844,25 @@ def render_html(data, title="命理神机 · 命盘"):
              "<div class='sub'>八字 · 紫微斗数 · 西洋占星　|　在你自己的电脑上算，不上传、不联网</div>",
              '<div class="headline"><div class="big">%s</div>'
              '<div class="tip">↑ 这是你命盘的三个关键词，下面用大白话展开</div></div>' % _h(hl)]
-    parts.append(render_plain(data))
+    plain_html = render_plain(data)
+    pro_parts = []
+    if "八字" in data:
+        pro_parts.append(render_bazi(data["八字"]))
+    if "紫微" in data:
+        pro_parts.append(render_ziwei(data["紫微"]))
+    if "占星" in data:
+        pro_parts.append(render_astro(data["占星"]))
+    pro_parts.append(render_glossary())
+    pro_html = "".join(pro_parts)
+    parts.append(render_toc(plain_html, pro_html))
+    parts.append(plain_html)
     parts.append('<div class="secnote" style="text-align:center;margin:6px 0 16px">'
                  '———— 以下是专业排盘数据，想深入研究的可以往下看 ————</div>')
-    if "八字" in data:
-        parts.append(render_bazi(data["八字"]))
-    if "紫微" in data:
-        parts.append(render_ziwei(data["紫微"]))
-    if "占星" in data:
-        parts.append(render_astro(data["占星"]))
-    parts.append(render_glossary())
+    parts.append(pro_html)
     parts.append('<div class="foot">上面的排盘结果是按天文历法和命理规则算出来的，'
                  '解读部分仅供娱乐参考，不能当作医疗、投资或人生的决策依据。<br>'
                  '命盘显示的是可能性，路怎么走还是看你自己。</div>')
+    parts.append("<script>%s</script>" % PAGE_JS)
     parts.append("</main></body></html>")
     return "".join(parts)
 

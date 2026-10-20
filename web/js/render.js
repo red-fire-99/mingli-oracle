@@ -107,7 +107,7 @@ export function build(o) {
 export function renderBazi(r) {
   const i = r.输入;
   const p = [];
-  p.push('<section><h2>四柱八字</h2>');
+  p.push('<section><h2 id="s-bazi-pro" data-t="四柱八字">四柱八字</h2>');
   p.push('<div class="info"><span>公历 <b>' + h(i.公历) + '</b></span><span>农历 <b>'
     + h(i.农历) + '</b></span><span>时辰 <b>' + h(i.时辰) + '</b></span><span>性别 <b>'
     + h(i.性别) + '</b></span><span>出生地 <b>' + h(i.出生地) + '</b></span></div>');
@@ -206,7 +206,7 @@ export function renderZiwei(r) {
   const byZhi = {};
   let palIdx = 0;
   for (const pp of r.十二宫) byZhi[pp.地支] = pp;
-  const p = ['<section><h2>紫微斗数</h2>'];
+  const p = ['<section><h2 id="s-ziwei-pro" data-t="紫微斗数">紫微斗数</h2>'];
   p.push('<div class="info"><span>农历 <b>' + h(i.农历) + '</b></span><span>时辰 <b>'
     + h(i.时辰) + '</b></span><span>年干支 <b>' + h(i.年干支) + '</b></span><span>五行局 <b>'
     + h(r.五行局) + '</b></span><span>命宫 <b>' + r.命宫.天干 + r.命宫.地支
@@ -275,7 +275,7 @@ export function renderZiwei(r) {
 /* ------------------------------------------------------------------ */
 
 export function renderAstro(r) {
-  const p = ['<section><h2>西洋占星本命盘</h2>'];
+  const p = ['<section><h2 id="s-astro-pro" data-t="占星盘">西洋占星本命盘</h2>'];
   p.push('<div class="info"><span>太阳 <b>' + h(r.太阳星座) + '</b></span><span>月亮 <b>'
     + h(r.月亮星座) + '</b></span><span>上升 <b>' + h(r.上升星座) + '</b></span><span>经纬度 <b>'
     + h(r.输入.经纬度) + "</b></span></div>");
@@ -403,8 +403,33 @@ function despacify(html, maxLen) {
 export function _despacifyForTest(html) { return despacify(html); }
 
 
+// 目录：从已渲染的 HTML 反推（与 oracle.py 的 render_toc 同一套算法）。
+// 不另写「本页有哪些小节」的清单：清单会和实际渲染脱节，
+// 而且这份清单要在这边和 Python 边各写一遍，改一处就可能对不上。
+export function buildToc(plainHtml, proHtml) {
+  const items = [];
+  const re = /<h2([^>]*)>([^<]*)<\/h2>/g;
+  for (const html of [plainHtml, proHtml]) {
+    let m;
+    re.lastIndex = 0;
+    while ((m = re.exec(html)) !== null) {
+      const idm = /id="([^"]+)"/.exec(m[1]);
+      const tm = /data-t="([^"]*)"/.exec(m[1]);
+      if (!idm || !tm) continue;
+      items.push([idm[1], tm[1]]);
+    }
+  }
+  if (!items.length) return "";
+  const links = items.map(x => '<a class="toc-i" href="#' + x[0] + '">'
+                          + x[1] + "</a>").join("");
+  return '<nav class="toc" aria-label="本页目录">'
+    + '<div class="toc-h">本页目录'
+    + '<span class="toc-tip">点一下跳到对应小节</span></div>'
+    + '<div class="toc-grid">' + links + "</div></nav>";
+}
+
 export function renderPlain(data) {
-  const P = ['<section><h2>先说人话</h2>',
+  const P = ['<section><h2 id="s-plain" data-t="先说人话">先说人话</h2>',
     '<div class="secnote">这一段不用懂任何术语，看完就知道自己大概是什么样的人。'
     + '想研究细节，往下翻「专业排盘数据」。</div>'];
 
@@ -433,7 +458,7 @@ export function renderPlain(data) {
 
   if (data.八字) {
     const b = baziPlain(data.八字);
-    P.push('<h2 style="font-size:15px;border-left-color:var(--gold)">八字 · 看你的性格和天赋</h2>');
+    P.push('<h2 id="s-bazi" data-t="八字 · 性格天赋" style="font-size:15px;border-left-color:var(--gold)">八字 · 看你的性格和天赋</h2>');
     P.push('<div class="plain"><h3>' + h(b.性格底色.标题) + '</h3><p>' + h(b.性格底色.要点)
       + '</p><p class="sub2">' + h(b.性格底色.补充) + "</p></div>");
     P.push('<div class="plain"><h3>' + h(b.做事方式.标题) + '</h3><p>' + h(b.做事方式.要点)
@@ -744,7 +769,7 @@ export function renderPlain(data) {
 
   if (data.紫微) {
     const z = ziweiPlain(data.紫微);
-    P.push('<h2 style="font-size:15px;border-left-color:var(--gold);margin-top:22px">'
+    P.push('<h2 id="s-ziwei" data-t="紫微 · 事业财运" style="font-size:15px;border-left-color:var(--gold);margin-top:22px">'
       + "紫微斗数 · 看事业、财运、感情</h2>");
     P.push('<div class="plain"><h3>命宫主星</h3><p>' + h(z.一句话) + "</p></div>");
     for (const k of ["事业方向", "财运模式", "感情模式", "四化提醒"]) {
@@ -951,7 +976,7 @@ export function renderPlain(data) {
 
   if (data.占星) {
     const a = astroPlain(data.占星);
-    P.push('<h2 style="font-size:15px;border-left-color:var(--gold);margin-top:22px">'
+    P.push('<h2 id="s-astro" data-t="占星 · 性格另一面" style="font-size:15px;border-left-color:var(--gold);margin-top:22px">'
       + "西洋占星 · 看性格的另一面</h2>");
     P.push('<div class="plain"><h3>一句话</h3><p>' + h(a.一句话) + "</p></div>");
     P.push('<div class="plain"><h3>' + h(a.三支柱.标题) + "</h3>");
@@ -1147,7 +1172,7 @@ export function renderPlain(data) {
   if ("八字" in data || "紫微" in data || "占星" in data) {
     const x = P_crossPlain(data["八字"], data["紫微"], data["占星"]);
     if (x["一致"].length || x["分歧"].length || x["单盘"].length) {
-      P.push('<h2 style="font-size:15px;border-left-color:var(--gold)">'
+      P.push('<h2 id="s-cross" data-t="三盘交叉" style="font-size:15px;border-left-color:var(--gold)">'
            + "三盘交叉 · 几套体系一起看</h2>");
       P.push('<div class="plain"><p>' + h(x["要点"]) + '</p><p class="sub2">'
            + h(x["说明"]) + "</p></div>");
@@ -1235,7 +1260,7 @@ export function renderPlain(data) {
   // 铺平会被读成十几个并列且互相冲突的结论。
   const th = P_taohuaPlain(data["八字"], data["紫微"], data["占星"]);
   if (th["列表"].length) {
-    P.push('<h2 style="font-size:15px;border-left-color:var(--gold)">'
+    P.push('<h2 id="s-taohua" data-t="桃花星" style="font-size:15px;border-left-color:var(--gold)">'
          + h(th["标题"]) + "</h2>");
     P.push('<div class="plain"><p>' + h(th["要点"]) + "</p>"
          + "<p class=\"li\">下面三边说的是<em>不同层面</em>，"
@@ -1261,7 +1286,7 @@ export function renderPlain(data) {
 
   const cr = P_careerPlain(data["八字"], data["紫微"], data["占星"]);
   if (cr["列表"].length) {
-    P.push('<h2 style="font-size:15px;border-left-color:var(--gold)">'
+    P.push('<h2 id="s-industry" data-t="行业细分" style="font-size:15px;border-left-color:var(--gold)">'
          + h(cr["标题"]) + "</h2>");
     P.push('<div class="plain"><p>' + h(cr["要点"]) + '</p><p class="sub2">'
          + h(cr["提醒"]) + "</p></div>");
@@ -1305,7 +1330,7 @@ export function renderPlain(data) {
 }
 
 export function renderGlossary() {
-  const P = ['<section><h2>名词解释 · 看不懂的词看这里</h2><div class="gloss">'];
+  const P = ['<section><h2 id="s-glossary" data-t="名词解释">名词解释 · 看不懂的词看这里</h2><div class="gloss">'];
   for (const k in GLOSSARY) {
     P.push("<div><b>" + h(k) + "</b>：" + h(GLOSSARY[k]) + "</div>");
   }
@@ -1333,5 +1358,7 @@ export function run(v) {
   if (data.紫微) pro += renderZiwei(data.紫微);
   if (data.占星) pro += renderAstro(data.占星);
   pro += renderGlossary();
-  return { headline: headline(data), plain_html: renderPlain(data), pro_html: pro };
+  const plain = renderPlain(data);
+  return { headline: headline(data), plain_html: plain,
+           pro_html: pro, toc_html: buildToc(plain, pro) };
 }

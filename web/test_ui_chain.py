@@ -1136,6 +1136,32 @@ if (/error/i.test(errMsg)) {
   }
 }
 
+// ---------- 目录：每个条目都要有落点 ----------
+// 目录是从渲染结果反推的，理论上不会出死链；
+// 但「理论」不值钱，这里真的把每个 href 的目标找一遍。
+{
+  const toc = byId.get("tocBox");
+  const tocHtml = (toc && toc.innerHTML) || "";
+  const links = tocHtml.match(/href="#([^"]+)"/g) || [];
+  if (!links.length) {
+    fail("页面里没有目录条目 —— 目录没生成");
+  } else {
+    const scope = (byId.get("panel-plain") ? byId.get("panel-plain").innerHTML : "")
+      + (byId.get("panel-pro") ? byId.get("panel-pro").innerHTML : "")
+      + tocHtml;
+    const missing = [];
+    for (const raw of links) {
+      const id = raw.slice(7, -1);
+      if (scope.indexOf('id="' + id + '"') < 0) missing.push(id);
+    }
+    if (missing.length) {
+      fail("目录里有 " + missing.length + " 个死链: " + missing.join(","));
+    } else {
+      console.log("  OK   目录 " + links.length + " 个条目，每个都有落点");
+    }
+  }
+}
+
 if (bad) { console.error("\nUI 端到端验证失败 " + bad + " 项"); process.exit(1); }
 console.log("\nPASS: 页面表单交互全通（填表→提交→出结果）");
 """

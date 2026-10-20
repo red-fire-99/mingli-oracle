@@ -37,6 +37,7 @@ TEMPLATE = os.path.join(HERE, "app.html")
 
 PLACEHOLDER_ENGINE = "/*__MINGLI_ENGINE__*/"
 PLACEHOLDER_CSS = "/*__ORACLE_CSS__*/"
+PLACEHOLDER_JS = "/*__ORACLE_JS__*/"
 PLACEHOLDER_REGIONS = "/*__MINGLI_REGIONS__*/"
 PLACEHOLDER_PY = "/*__MINGLI_PY__*/"
 
@@ -69,6 +70,19 @@ def engine_version():
         if name and name.lower() != "unreleased":
             return name
     return "dev"
+
+
+def oracle_js():
+    """从 oracle.py 里抠出 PAGE_JS 常量。
+
+    页面级交互（吸顶进度条 / 返回顶部 / 目录跳转）在三个地方用同一份：
+    CLI 导出的命盘网页、网页版、网页版导出的离线命盘文件。
+    放一处是为了避免三份副本改一处漏两处。
+    """
+    src = read(CSS_FROM)
+    start = src.index('PAGE_JS = """') + len('PAGE_JS = """')
+    end = src.index('"""', start)
+    return src[start:end]
 
 
 def oracle_css():
@@ -123,6 +137,9 @@ def main(argv=None):
     if PLACEHOLDER_CSS not in html:
         print("模板缺少占位符 %s（命盘样式）" % PLACEHOLDER_CSS, file=sys.stderr)
         return 1
+    if PLACEHOLDER_JS not in html:
+        print("模板缺少占位符 %s（页面级脚本）" % PLACEHOLDER_JS, file=sys.stderr)
+        return 1
     if PLACEHOLDER_REGIONS not in html:
         print("模板缺少占位符 %s（行政区划经纬度）" % PLACEHOLDER_REGIONS,
               file=sys.stderr)
@@ -153,6 +170,7 @@ def main(argv=None):
     for tok in sorted(VERSION_TOKENS, key=len, reverse=True):
         html = html.replace(tok, quoted)
     html = html.replace(PLACEHOLDER_CSS, oracle_css())
+    html = html.replace(PLACEHOLDER_JS, oracle_js())
 
     # 行政区划数据：整体内联成 window.MINGLI_REGIONS。
     # 用 JSON.parse 而不是直接贴字面量 —— 40 万字符的对象字面量

@@ -259,6 +259,38 @@ def scan_svg_text(paths):
     return out
 
 
+# ---- 设计令牌同步：网页版与 CLI 必须用同一套色 ----
+# app.html 自己有一份 :root，它在文档里排在 oracle CSS 之后，
+# 同名令牌会覆盖 oracle 那份。两边一旦不同步，网页版就会悄悄
+# 用另一套颜色 —— --green 停在旧值就是这样漏到网页版的。
+def root_tokens(text):
+    i = text.find(":root{")
+    if i < 0:
+        return {}
+    j = text.find("}", i)
+    if j < 0:
+        return {}
+    body = text[i + 6:j]
+    return dict(re.findall(r"--([a-z0-9-]+)\s*:\s*([^;}]+)", body))
+
+
+def check_tokens():
+    """返回不一致的令牌 [(名, CLI 值, 网页版值)]。"""
+    t = io.open(P_ORACLE, encoding="utf-8").read()
+    css = css_text(t)
+    app_path = os.path.join(ROOT, "web", "app.html")
+    if not os.path.isfile(app_path):
+        return []
+    app = io.open(app_path, encoding="utf-8").read()
+    a = root_tokens(css)
+    b = root_tokens(app)
+    bad = []
+    for k in sorted(set(a) & set(b)):
+        if a[k].strip() != b[k].strip():
+            bad.append((k, a[k].strip(), b[k].strip()))
+    return bad
+
+
 def selftest():
     """历史不合格色必须全部抓到；正常用例必须通过。"""
     bad_css = """
@@ -298,6 +330,16 @@ def main():
     svg_files = [os.path.join(ROOT, "scripts", "plain.py"),
                  os.path.join(ROOT, "web", "js", "plain.js")]
     svg = scan_svg_text(svg_files)
+    bad = check_tokens()
+    print("设计令牌：CLI 与网页版共有 %d 个同名令牌"
+          % len(set(root_tokens(css_text(io.open(P_ORACLE, encoding="utf-8").read())))
+                 & set(root_tokens(io.open(os.path.join(ROOT, "web", "app.html"),
+                                          encoding="utf-8").read()))))
+    for k, v1, v2 in bad:
+        print("   ! 令牌 %s 两端不一致：CLI %s / 网页版 %s" % (k, v1, v2))
+    if bad:
+        fails.extend([("token " + k, v1, 0.0) for k, v1, _v2 in bad])
+
     svg_fail = [x for x in svg if x[3] < NEED]
     print("SVG 文字色 %d 处（%d 个文件）" % (len(svg), len(svg_files)))
     for src, cls, col, r in svg_fail:

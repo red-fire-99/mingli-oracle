@@ -291,6 +291,20 @@ def main():
     ck("声明生辰不上传", "不上传" in html)
     ck("引擎标识已写进页面", "纯 JS 引擎" in html)
 
+    print("\n9) 目录 · 页面级交互")
+    # 目录是从渲染结果反推的（不另写清单），所以引擎里必须带着
+    # buildToc 与 data-t 标记，少一样页面就没有目录。
+    ck("引擎里带目录生成器", "buildToc" in html)
+    ck("引擎里带目录条目样式", 'class=\"toc-i\"' in html or "toc-i" in html)
+    ck("标题带 data-t 标记（目录落点）", "data-t=" in html)
+    ck("目录落点 id 存在", "s-plain" in html and "s-glossary" in html)
+    # 页面级脚本：吸顶进度条 + 返回顶部
+    ck("页面级脚本已注入", "ml-pgbar" in html and "ml-totop" in html)
+    ck("页面级脚本容器存在", 'id="oracle-js"' in html)
+    ck("页面里有目录容器", 'id="tocBox"' in html)
+    # 目录跳转要能跨页签（网页版「专业数据」是单独一页签）
+    ck("目录跳转有跨页签处理", "mingli:goto" in html)
+
     # ---- 产物目录不应再有运行时文件：留着只会让人以为还需要下载 ----
     ddir = os.path.dirname(DIST)
     ck("dist/pyodide 已移除", not os.path.isdir(os.path.join(ddir, "pyodide")))

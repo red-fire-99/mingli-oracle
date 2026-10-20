@@ -10,7 +10,7 @@
 /* ===================== 应用层样式 ===================== */
 :root{
   --bg:#f7f4ee;--card:#fffdf8;--ink:#2b2621;--sub:#6b6154;--line:#e3dbcd;
-  --red:#a8322d;--gold:#a8842c;--green:#3f7a52;--blue:#2f5d7c;
+  --red:#a8322d;--gold:#a8842c;--green:#366f48;--blue:#2f5d7c;
   --ok:#2f7a4a;--err:#b3403a;--radius:14px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -295,6 +295,7 @@ align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index
 
   <main id="result">
     <div class="headline" id="headline"></div>
+    <div id="tocBox"></div>
     <div class="tabs" role="tablist">
       <button type="button" data-tab="plain" role="tab" aria-selected="true">说人话版</button>
       <button type="button" data-tab="pro" role="tab" aria-selected="false">专业数据</button>
@@ -942,6 +943,7 @@ function unpackSearch(v){
           state.result = res;
           $("#headline").innerHTML = '<div class="big">' + esc(res.headline) + '</div>'
             + '<div class="tip">↑ 这是你命盘的三个关键词，下面用大白话展开</div>';
+          $("#tocBox").innerHTML = res.toc_html || "";
           $("#panel-plain").innerHTML = res.plain_html;
           $("#panel-pro").innerHTML = res.pro_html;
           $("#result").classList.add("show");
@@ -990,11 +992,13 @@ function unpackSearch(v){
         + "<title>命理神机 · 命盘</title><style>" + $("#oracle-css").textContent + "<\/style></head>"
         + "<body><main class='wrap'><h1>命 理 神 机</h1>"
         + "<div class='headline'><div class='big'>" + esc(state.result.headline) + "</div></div>"
+        + (state.result.toc_html || "")
         + state.result.plain_html
         + "<div class='secnote' style='text-align:center;margin:6px 0 16px'>———— 专业排盘数据 ————</div>"
         + state.result.pro_html
         + "<div class='foot'>排盘结果按天文历法与命理规则计算得出，解读仅供文化研究与娱乐参考，"
         + "不能作为医疗、投资或人生决策的依据。<br>命盘显示的是可能性，路怎么走还是看你自己。</div>"
+        + "<script>" + $("#oracle-js").textContent + "<\/script>"
         + "</main></body></html>";
       var a = document.createElement("a");
       a.href = URL.createObjectURL(new Blob([html], {type:"text/html;charset=utf-8"}));
@@ -1005,18 +1009,32 @@ function unpackSearch(v){
 
     // 切页按钮在原模板里用 class="tabs" + data-tab（没有 id），所以按这两个特征找
     var tabs = Array.prototype.slice.call(document.querySelectorAll(".tabs [data-tab]"));
-    tabs.forEach(function(b){
-      b.addEventListener("click", function(){
-        tabs.forEach(function(x){
-          x.classList.remove("on");
-          x.setAttribute("aria-selected", "false");
-        });
-        b.classList.add("on");
-        b.setAttribute("aria-selected", "true");
-        state.tab = b.dataset.tab;
-        $("#panel-plain").classList.toggle("show", state.tab === "plain");
-        $("#panel-pro").classList.toggle("show", state.tab === "pro");
+    function switchTab(name){
+      tabs.forEach(function(x){
+        var on = (x.dataset.tab === name);
+        x.classList.toggle("on", on);
+        x.setAttribute("aria-selected", on ? "true" : "false");
       });
+      state.tab = name;
+      $("#panel-plain").classList.toggle("show", name === "plain");
+      $("#panel-pro").classList.toggle("show", name === "pro");
+      // 进度条要知道当前页签里有哪些小节
+      try {
+        document.dispatchEvent(new CustomEvent("mingli:refresh"));
+      } catch (err) { /* 忽略 */ }
+    }
+    tabs.forEach(function(b){
+      b.addEventListener("click", function(){ switchTab(b.dataset.tab); });
+    });
+    // 目录里指向「专业数据」的条目在另一个页签里：
+    // 先切过去，再让页面级脚本滚动过去（否则滚动落点不存在）。
+    document.addEventListener("mingli:goto", function(e){
+      var id = (e.detail && e.detail.id) || "";
+      var el = document.getElementById(id);
+      if (!el) return;
+      var pro = $("#panel-pro");
+      if (pro && pro.contains(el)) switchTab("pro");
+      else switchTab("plain");
     });
   }
 
@@ -1125,6 +1143,9 @@ function unpackSearch(v){
 
   boot();
 })();
+</script>
+<script id="oracle-js">
+/*__ORACLE_JS__*/
 </script>
 </body>
 </html>
