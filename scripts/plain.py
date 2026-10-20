@@ -2876,7 +2876,7 @@ def astro_chart(r, size=340):
         # 宫位序号（从上升起算）
         xn, yn = _chart_xy(a, R_IN - 6, cx, cy)
         p.append('<text x="%d" y="%d" text-anchor="middle" '
-                 'class="a-num" fill="#b3a693">%d</text>'
+                 'class="a-num" fill="#6f675b">%d</text>'
                  % (xn, yn, i + 1))
 
     # 相位连线（先画线，行星压在线上层）
@@ -2907,7 +2907,7 @@ def astro_chart(r, size=340):
         # 相位符号标注在线的中点
         mx, my = _r_half_up((x1 + x2) / 2), _r_half_up((y1 + y2) / 2)
         p.append('<text x="%d" y="%d" text-anchor="middle" '
-                 'class="a-asp-t" fill="#a08f6c">%s</text>'
+                 'class="a-asp-t" fill="#866a23">%s</text>'
                  % (mx, my, _esc(tone)))
 
     # 行星点

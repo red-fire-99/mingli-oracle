@@ -293,7 +293,7 @@ align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index
     <button type="button" id="editBtn">修改信息</button>
   </div>
 
-  <div id="result">
+  <main id="result">
     <div class="headline" id="headline"></div>
     <div class="tabs" role="tablist">
       <button type="button" data-tab="plain" role="tab" aria-selected="true">说人话版</button>
@@ -304,7 +304,7 @@ align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index
     <button type="button" class="btn btn-ghost" id="saveBtn" style="margin-top:6px">
       保存成网页文件（可离线打开 / 发给别人）
     </button>
-  </div>
+  </main>
 
   <div class="foot" style="text-align:center;color:var(--sub);font-size:12px;
     margin-top:26px;line-height:1.8">
@@ -986,15 +986,16 @@ function unpackSearch(v){
       if (!state.result) return;
       var html = "<!DOCTYPE html><html lang='zh-CN'><head><meta charset='utf-8'>"
         + "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+        + "<meta name='description' content='八字、紫微斗数、西洋占星排盘结果。全部计算在本地完成，生辰不上传，可离线打开。'>"
         + "<title>命理神机 · 命盘</title><style>" + $("#oracle-css").textContent + "<\/style></head>"
-        + "<body><div class='wrap'><h1>命 理 神 机</h1>"
+        + "<body><main class='wrap'><h1>命 理 神 机</h1>"
         + "<div class='headline'><div class='big'>" + esc(state.result.headline) + "</div></div>"
         + state.result.plain_html
         + "<div class='secnote' style='text-align:center;margin:6px 0 16px'>———— 专业排盘数据 ————</div>"
         + state.result.pro_html
         + "<div class='foot'>排盘结果按天文历法与命理规则计算得出，解读仅供文化研究与娱乐参考，"
         + "不能作为医疗、投资或人生决策的依据。<br>命盘显示的是可能性，路怎么走还是看你自己。</div>"
-        + "</div></body></html>";
+        + "</main></body></html>";
       var a = document.createElement("a");
       a.href = URL.createObjectURL(new Blob([html], {type:"text/html;charset=utf-8"}));
       a.download = "命盘.html";

@@ -1603,7 +1603,7 @@ export function astroChart(r, size) {
            + escSvg(SIGN_ORDER[i]) + "</text>");
     const an = chartXy(a, R_IN - 6, cx, cy);
     p.push('<text x="' + an[0] + '" y="' + an[1]
-           + '" text-anchor="middle" class="a-num" fill="#b3a693">'
+           + '" text-anchor="middle" class="a-num" fill="#6f675b">'
            + (i + 1) + "</text>");
   }
 
@@ -1630,7 +1630,7 @@ export function astroChart(r, size) {
            + (harmony ? "1.6" : "1") + '"/>');
     p.push('<text x="' + rHalfUp((c1[0] + c2[0]) / 2) + '" y="'
            + rHalfUp((c1[1] + c2[1]) / 2)
-           + '" text-anchor="middle" class="a-asp-t" fill="#a08f6c">'
+           + '" text-anchor="middle" class="a-asp-t" fill="#866a23">'
            + escSvg(a.相位) + "</text>");
   }
 

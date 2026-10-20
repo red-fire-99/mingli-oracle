@@ -264,6 +264,29 @@ def main():
     for needle in FORBIDDEN:
         ck("不含 %s" % needle, needle not in html)
 
+    print("\n8) 无障碍 · 元信息 · 配色")
+    # main 地标：读屏用户靠它跳正文，缺了整页都在导航里。
+    ck("结果区是 <main> 地标",
+       re.search(r'<main[^>]*id="result"', html) is not None)
+    ck("main 开闭配平", html.count("<main") == html.count("</main>"),
+       "%d / %d" % (html.count("<main"), html.count("</main>")))
+    ck("含 meta description", 'name="description"' in html)
+    # 导出的离线单文件同样要有（它是会被转发给别人看的成品）
+    ck("导出的命盘文件带 meta description",
+       "meta name='description'" in html)
+    ck("导出的命盘文件用 <main> 包裹", "<main class='wrap'>" in html)
+    # 配色：不合格的旧色必须已经不在产物里。
+    # （真浏览器审计实测：#b3a693 落在时间轴上只有 1.97:1，几乎看不见）
+    for bad, why in (("#9a8f7e", "大运十神名 2.63:1"),
+                     ("#b3a693", "时间轴年份 1.97:1")):
+        ck("已移除不合格色 %s（%s）" % (bad, why), bad not in html)
+    for good, why in (("#6f675b", "大运十神名/注记 4.6:1"),
+                      ("#736a5e", "流年年份 4.68:1"),
+                      ("#366f48", "神煞药丸 5.2:1"),
+                      ("#866a23", "化曜星名 4.67:1"),
+                      ("rgba(255,255,255,.94)", "流年当前年 7.4:1")):
+        ck("含修好的色值 %s（%s）" % (good, why), good in html)
+
     print("\n7) 文案与隐私")
     ck("声明生辰不上传", "不上传" in html)
     ck("引擎标识已写进页面", "纯 JS 引擎" in html)

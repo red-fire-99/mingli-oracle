@@ -81,7 +81,7 @@ CSS = """
 :root{
   --bg:#f7f4ee; --card:#fffdf8; --ink:#2b2621; --sub:#6b6154;
   --line:#e3dbcd; --line2:#efe8da;
-  --red:#a8322d; --gold:#a8842c; --green:#3f7a52; --blue:#2f5d7c;
+  --red:#a8322d; --gold:#a8842c; --green:#366f48; --blue:#2f5d7c;
   --purple:#6b4a7a;
   /* 字阶 */
   --t-xs:11px; --t-sm:12px; --t-md:13px; --t-base:15px;
@@ -157,7 +157,9 @@ th{background:#f1ece1;font-weight:600;color:var(--sub);font-size:var(--t-md)}
 .cell .stars{line-height:1.45}
 .star{color:var(--ink)}
 .star.main{color:var(--red);font-weight:700}
-.star.hua{color:var(--gold)}
+/* 化曜星名用的金色单独加深：--gold 还承担边框/装饰，
+   全局加深会让金边发闷。文字版 4.67:1。 */
+.star.hua{color:#866a23}
 .star.aux{color:var(--blue)}
 .center{grid-column:2/4;grid-row:2/4;border:1px solid var(--line);
   border-radius:9px;background:#faf6ee;display:flex;flex-direction:column;
@@ -279,8 +281,8 @@ details.fold>summary:focus-visible{outline:2px solid var(--gold);
   transition:background var(--dur) var(--ease)}
 .dy-seg:last-child{border-right:none}
 .dy-seg b{font-size:var(--t-md);color:var(--ink);letter-spacing:.5px}
-.dy-seg i{font-style:normal;color:#9a8f7e}
-.dy-seg u{text-decoration:none;color:#b3a693;font-size:10px}
+.dy-seg i{font-style:normal;color:#6f675b}
+.dy-seg u{text-decoration:none;color:#6f675b;font-size:10px}
 .dy-seg.now{background:linear-gradient(180deg,#fdf6ee,#f7ead6);
   color:var(--red);box-shadow:inset 0 0 0 1px var(--gold)}
 .dy-seg.now b{color:var(--red);font-weight:700}
@@ -317,11 +319,11 @@ a.cell.ming:hover{border-color:var(--red)}
   background:#f6f0e4;border:1px solid var(--line);border-radius:var(--r-sm);
   font-size:var(--t-sm);color:var(--sub);min-width:0;
   transition:background var(--dur) var(--ease)}
-.ln-seg i{display:block;font-style:normal;font-size:10px;color:#b3a693}
+.ln-seg i{display:block;font-style:normal;font-size:10px;color:#736a5e}
 .ln-seg b{display:block;font-size:var(--t-md);color:var(--ink);
   letter-spacing:.5px;margin-top:1px}
 .ln-seg.now{background:var(--red);border-color:var(--red);color:#fff}
-.ln-seg.now i{color:rgba(255,255,255,.7)}
+.ln-seg.now i{color:rgba(255,255,255,.94)}
 .ln-seg.now b{color:#fff;font-weight:700}
 @media(max-width:420px){
   .ln-seg i{display:none}
@@ -448,7 +450,7 @@ details.fold>summary .cnt{margin-left:auto;font-size:var(--t-sm);
 .no{color:var(--sub);font-style:normal}
 .now-tag{background:var(--red);color:#fff;font-size:10px;
   padding:1px 6px;border-radius:var(--r-pill);margin-left:var(--s2)}
-.note-sys{font-size:var(--t-xs);color:#9a8f7e}
+.note-sys{font-size:var(--t-xs);color:#6f675b}
 .gloss{padding:var(--s2) 0}
 .gloss>div{padding:var(--s2) 0;border-bottom:1px dashed var(--line2);
   line-height:1.8}
@@ -1653,8 +1655,9 @@ def render_glossary():
 def render_html(data, title="命理神机 · 命盘"):
     hl = M_plain.headline(data)
     parts = ['<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">',
+             '<meta name="description" content="' + _h('八字、紫微斗数、西洋占星在线排盘。全部计算在你的浏览器里完成，生辰不上传任何服务器，可离线使用。') + '">',  # noqa: E501
              '<meta name="viewport" content="width=device-width,initial-scale=1">',
-             "<title>%s</title><style>%s</style></head><body><div class='wrap'>" % (_h(title), CSS),
+             "<title>%s</title><style>%s</style></head><body><main class='wrap'>" % (_h(title), CSS),
              "<h1>命 理 神 机</h1>",
              "<div class='sub'>八字 · 紫微斗数 · 西洋占星　|　在你自己的电脑上算，不上传、不联网</div>",
              '<div class="headline"><div class="big">%s</div>'
@@ -1672,7 +1675,7 @@ def render_html(data, title="命理神机 · 命盘"):
     parts.append('<div class="foot">上面的排盘结果是按天文历法和命理规则算出来的，'
                  '解读部分仅供娱乐参考，不能当作医疗、投资或人生的决策依据。<br>'
                  '命盘显示的是可能性，路怎么走还是看你自己。</div>')
-    parts.append("</div></body></html>")
+    parts.append("</main></body></html>")
     return "".join(parts)
 
 
