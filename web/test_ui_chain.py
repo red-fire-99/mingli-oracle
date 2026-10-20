@@ -631,10 +631,18 @@ const pp = byId.get("panel-plain");
   const nFold = (html.match(/<details/g) || []).length;
   const nClose = (html.match(/<\/details>/g) || []).length;
   if (nFold !== nClose) fail("折叠标签不配平：" + nFold + " 开 / " + nClose + " 闭");
-  if (/<details[^>]*\sopen/.test(html)) fail("折叠区块带 open 属性，没有默认收起");
+  // 默认折叠是老规矩（「新内容默认折叠」），但用户后来明确要
+  // 「关键折叠块默认展开」——命盘印象是结论本身，不是细节，
+  // 所以只有它默认展开，其余折叠块仍然必须收起。
+  const nOpen = (html.match(/<details[^>]*\sopen/g) || []).length;
+  if (nOpen !== 1) {
+    fail("默认展开的折叠块应只有命盘印象一个，实际 " + nOpen + " 个");
+  } else if (html.indexOf('<details class="fold" open><summary>展开看：内核') < 0) {
+    fail("默认展开的不是命盘印象（结论本身）");
+  }
   // 「（今年）」说明流年里确实标出了当前年份
   if (html.indexOf("（今年）") < 0) fail("流年没有标出今年");
-  console.log("  OK   白话区新增 " + nFold + " 个折叠区块（默认收起），"
+  console.log("  OK   白话区新增 " + nFold + " 个折叠区块（命盘印象默认展开，其余收起），"
     + "含大运逐段/流年逐年/五行意象/四元素逐项");
 }
 
@@ -1158,6 +1166,33 @@ if (/error/i.test(errMsg)) {
       fail("目录里有 " + missing.length + " 个死链: " + missing.join(","));
     } else {
       console.log("  OK   目录 " + links.length + " 个条目，每个都有落点");
+    }
+  }
+}
+
+// ---------- 折叠块：标题必须写清「里面有什么」 ----------
+// 读者不点开就没法判断值不值得点 —— 只写「展开看」的折叠等于没写。
+{
+  const scope = (byId.get("panel-plain") ? byId.get("panel-plain").innerHTML : "")
+    + (byId.get("panel-pro") ? byId.get("panel-pro").innerHTML : "");
+  const ds = scope.match(/<details[^>]*><summary>[\s\S]*?<\/summary>/g) || [];
+  if (!ds.length) {
+    fail("页面上一个折叠块都没有");
+  } else {
+    const bare = ds.filter((d) => d.indexOf('class="cnt"') < 0
+                                && d.indexOf('class="fold-prev"') < 0);
+    if (bare.length) {
+      fail(bare.length + " 个折叠标题没写「里面有什么」: "
+           + bare[0].replace(/<[^>]+>/g, " ").slice(0, 70));
+    } else {
+      console.log("  OK   " + ds.length + " 个折叠标题都带结论预览或计数");
+    }
+    // 命盘印象是「结论」本身，不是细节：默认展开，
+    // 否则读者第一眼只看到一句「像一把好刀」。
+    if (!/<details class="fold" open><summary>展开看：内核/.test(scope)) {
+      fail("命盘印象没有默认展开 —— 读者第一眼只看到一句结论就结束了");
+    } else {
+      console.log("  OK   命盘印象默认展开");
     }
   }
 }

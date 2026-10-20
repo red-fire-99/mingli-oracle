@@ -428,6 +428,14 @@ export function buildToc(plainHtml, proHtml) {
     + '<div class="toc-grid">' + links + "</div></nav>";
 }
 
+
+// 折叠标题右侧的「结论预览」。只放可核对的事实，不放判断句。
+// 与 oracle.py 的 _prev 一一对应（对拍会验两边逐字一致）。
+function prev(text) {
+  if (!text) return "";
+  return '<span class="fold-prev" title="' + h(text) + '">' + h(text)
+         + "</span>";
+}
 export function renderPlain(data) {
   const P = ['<section><h2 id="s-plain" data-t="先说人话">先说人话</h2>',
     '<div class="secnote">这一段不用懂任何术语，看完就知道自己大概是什么样的人。'
@@ -441,8 +449,9 @@ export function renderPlain(data) {
     P.push('<p class="p-lead">' + h(pe["块"][0]["文"]) + "</p>");
     const rest = pe["块"].slice(1);
     if (rest.length) {
-      P.push('<details class="fold"><summary>展开看：内核 / 运转'
-           + " / 关系 / 独处 / 团队 / 压力</summary>");
+      P.push('<details class="fold" open><summary>展开看：内核 / 运转'
+            + " / 关系 / 独处 / 团队 / 压力"
+            + '<span class="cnt">' + rest.length + " 个角度</span></summary>");
       for (const r of rest) {
         P.push('<div class="p-block"><div class="p-k">' + h(r["块"]) + " · "
              + h(r["问"]) + '</div><div class="p-v">' + h(r["文"])
@@ -535,6 +544,8 @@ export function renderPlain(data) {
       (data["八字"] || {}).输入 ? (data["八字"].输入.出生地 || null) : null);
     if (_lp["方位"].length) {
       P.push('<details class="fold"><summary>未来适合方位与推荐城市'
+        + prev(_lp["方位"].map((d) => "宜" + d["方位"]).join("、")
+            + " · " + _lp["城市"].length + " 城")
         + '<span class="cnt">' + _lp["方位"].length
         + " 个方位</span></summary>"
         + '<div class="fbody">');
@@ -570,6 +581,8 @@ export function renderPlain(data) {
       const curTail = curI >= 0
         ? "，当前在第 " + dl[curI]["序"] + " 步" : "";
       P.push('<details class="fold"><summary>你一生十步大运'
+        + prev(curI >= 0 ? "当前 " + dl[curI]["干支"] + " · "
+            + dl[curI]["主题"].slice(0, 12) : "")
         + '<span class="cnt">共 ' + dl.length + " 步" + curTail
         + "</span></summary><div class=\"fbody\">"
         + '<p class="sub2">每十年换一段，是运势的主基调。'
@@ -615,6 +628,10 @@ export function renderPlain(data) {
     if (b["流年详批"] && b["流年详批"]["列表"].length) {
       const ll = b["流年详批"]["列表"];
       P.push('<details class="fold"><summary>未来七年的年度节奏'
+        + prev((function () {
+            const y = ll.find((q) => q["是今年"]);
+            return y ? y["年"] + " " + y["干支"] + " · 虚岁 " + y["虚岁"] : "";
+          })())
         + '<span class="cnt">' + ll[0]["年"] + "–" + ll[ll.length - 1]["年"]
         + "</span></summary><div class=\"fbody\">"
         + '<p class="sub2">大运是十年的大背景，流年是这一年的具体调子。'
@@ -638,6 +655,12 @@ export function renderPlain(data) {
     if (b["五行意象"] && b["五行意象"]["明细"] && b["五行意象"]["明细"].length) {
       const w = b["五行意象"];
       P.push('<details class="fold"><summary>你身上五股的劲儿'
+        + prev((function () {
+            const p = [];
+            if (w["最强"]) p.push(w["最强"]["五行"] + "最旺");
+            if (w["最弱"]) p.push(w["最弱"]["五行"] + "最弱");
+            return p.join(" · ");
+          })())
         + '<span class="cnt">八字五行</span></summary><div class="fbody">'
         + '<p class="sub2">「多」不等于「好」，「少」也不等于「坏」——'
         + "命理里五行强弱本身没有优劣，只有适不适配你。"
@@ -693,6 +716,12 @@ export function renderPlain(data) {
     if (b["十神详批"] && b["十神详批"]["明细"].length) {
       const shd = b["十神详批"];
       P.push('<details class="fold"><summary>你的十神分布'
++ prev((function () {
+              const its = String(shd["最多"]).split("、").filter(Boolean);
+              if (!its.length) return "";
+              return "最重 " + its[0]
+                + (its.length > 1 ? "（" + its.length + " 个并列）" : "");
+            })())
         + '<span class="cnt">哪个最重</span></summary><div class="fbody">'
         + '<p class="li"><span class="h">最重的是</span>' + h(shd["最多"]) + "</p>"
         + '<p class="sub2">' + h(shd["最多说明"]) + "</p>"
@@ -797,6 +826,12 @@ export function renderPlain(data) {
     if (z["十二宫详批"] && z["十二宫详批"]["列表"].length) {
       const pl = z["十二宫详批"]["列表"];
       P.push('<details class="fold"><summary>你的十二宫'
+        + prev((function () {
+            const q = pl.find((m) => m["是命宫"]);
+            if (!q) return "";
+            return "命宫 " + ((q["主星"] && q["主星"].length)
+              ? q["主星"].join("、") : "空宫");
+          })())
         + '<span class="cnt">逐宫看</span></summary><div class="fbody">'
         + '<p class="sub2">十二宫代表人生十二个领域。'
         + "「主星」决定这个领域的底色；宫里没有主星很常见，"
@@ -844,6 +879,7 @@ export function renderPlain(data) {
       const cur = z["流年详情"] || {};
       const curDx = cur["当前大限宫"] || "";
       P.push('<details class="fold"><summary>你一生十二步大限'
+        + prev(curDx ? "当前 " + curDx : "")
         + '<span class="cnt">紫微的十年分段</span></summary><div class="fbody">'
         + '<p class="sub2">大限走的是<b>宫位</b>而不是十神 —— '
         + "每十年重心落在哪个宫，那十年的主语就是那个宫代表的事。"
@@ -869,6 +905,7 @@ export function renderPlain(data) {
     if (z["流年详情"]) {
       const ln = z["流年详情"];
       P.push('<details class="fold"><summary>今年的落点'
+        + prev(ln["流年命宫名"] ? "流年命宫 " + ln["流年命宫名"] : "")
         + '<span class="cnt">' + h(String(ln["年"])) + "年 " + h(String(ln["干支"]))
         + '</span></summary><div class="fbody">'
         + '<div class="info" style="margin:0 0 10px">'
@@ -890,6 +927,14 @@ export function renderPlain(data) {
 
     if (z["四化详批"] && z["四化详批"].length) {
       P.push('<details class="fold"><summary>四化落在哪'
+        + prev((function () {
+            const p = [];
+            const lu = z["四化详批"].find((q) => q["化"] === "化禄");
+            const ji = z["四化详批"].find((q) => q["化"] === "化忌");
+            if (lu && lu["宫位"]) p.push("化禄在" + lu["宫位"]);
+            if (ji && ji["宫位"]) p.push("化忌在" + ji["宫位"]);
+            return p.join(" · ");
+          })())
         + '<span class="cnt">禄权科忌</span></summary><div class="fbody">'
         + '<p class="sub2">生年四化是「哪颗星被强化」，'
         + "它落在哪个宫，那一块就跟着强化。化忌不是坏事，"
@@ -919,6 +964,9 @@ export function renderPlain(data) {
     // 直接判空会两边行为分叉（这批已经栽过一次）。
     if ((sp["主星"] && sp["主星"].length) || (sp["煞星"] && sp["煞星"].length)) {
       P.push('<details class="fold"><summary>夫妻宫'
+        + prev(sp["组合"] ? sp["组合"]["型"]
+            : ((sp["主星"] && sp["主星"].length)
+              ? "主星 " + sp["主星"].join("、") : ""))
         + '<span class="cnt">'
         + h(sp["宫干"] ? "宫干 " + sp["宫干"] : "")
         + h(sp["大限年龄"] ? "大限 " + sp["大限年龄"] : "")
@@ -1008,6 +1056,14 @@ export function renderPlain(data) {
     // 1.3.1 新增：四元素逐项展开（折叠）
     if (a.元素配比.逐项 && a.元素配比.逐项.length) {
       P.push('<details class="fold"><summary>四种元素逐项看'
+        + prev((function () {
+            const p = [];
+            const mx = a.元素配比.逐项.find((x) => x["最旺"]);
+            const nn = a.元素配比.逐项.find((x) => x["完全缺"]);
+            if (mx) p.push(mx["元素"] + "最多");
+            if (nn) p.push(nn["元素"] + "完全没有");
+            return p.join(" · ");
+          })())
         + '<span class="cnt">占星四元素</span></summary><div class="fbody">'
         + '<div class="note-sys">这里的火 / 土 / 风 / 水是'
         + "<b>西洋占星的四元素</b>，由行星与星座决定，"
@@ -1056,6 +1112,14 @@ export function renderPlain(data) {
     // 1.5.0：轴点
     if (a["轴点详批"] && a["轴点详批"]["列表"].length) {
       P.push('<details class="fold"><summary>两个轴点'
+        + prev((function () {
+            const ax = {};
+            for (const x of a["轴点详批"]["列表"]) ax[x["名"]] = x["星座"];
+            const p = [];
+            if (ax["上升"]) p.push("上升" + ax["上升"]);
+            if (ax["天顶"]) p.push("天顶" + ax["天顶"]);
+            return p.join(" · ");
+          })())
         + '<span class="cnt">上升与天顶</span></summary><div class="fbody">'
         + '<p class="sub2">上升不是「真正的你」，是别人看到的你；'
         + "天顶是命运把你推向的位置。"
@@ -1206,8 +1270,9 @@ export function renderPlain(data) {
       // 摘要卡片里，逐项对照里看不到它们的具体表现。
       const rest = x["分歧"].concat(x["单盘"], x["一致"]);
       if (rest.length) {
-        P.push('<details class="ssx"><summary>六个维度逐项对照（'
-             + rest.length + " 个，点开看三边各说了什么）</summary>"
+        P.push('<details class="ssx"><summary>六个维度逐项对照'
+             + '<span class="cnt">' + rest.length
+             + " 个 · 三边各说了什么</span></summary>"
              + '<div class="plain">');
         for (const r of rest) {
           P.push('<div class="xsx"><p class="xsx-q">' + h(r["维度"]) + "："
@@ -1244,7 +1309,7 @@ export function renderPlain(data) {
       }
 
       P.push('<details class="ssx"><summary>这三边分别按什么算的'
-           + "（想查证时点开）</summary>"
++ '<span class="cnt">三边各一节</span></summary>'
            + '<div class="plain"><div class="tagline">');
       for (const s of x["依据"]) {
         P.push('<div class="tag"><b>' + h(s["盘"]) + "</b>" + h(s["源"])
@@ -1269,7 +1334,8 @@ export function renderPlain(data) {
          + "占星看的是你被什么样的人吸引、"
          + "以及你希望怎么被对待。</p></div>");
     P.push('<details class="ssx"><summary>三盘分别怎么说'
-         + "（点开逐条对照）</summary><div class=\"plain\">");
++ '<span class="cnt">' + th["列表"].length
+          + " 条逐条对照</span></summary><div class=\"plain\">");
     for (const r of th["列表"]) {
       P.push('<div class="xsx"><p class="xsx-h"><b>' + h(r["盘"]) + "</b>"
            + h(r["项"]) + "</p>");
@@ -1299,7 +1365,8 @@ export function renderPlain(data) {
     }
     if (groups.length > 1) {
       P.push('<details class="ssx"><summary>' + groups.length
-           + " 组方向（点开看每组有哪些行业）</summary>"
+           + " 组方向"
+           + '<span class="cnt">点开看每组有哪些行业</span></summary>'
            + '<div class="plain">');
     } else {
       P.push('<div class="plain">');

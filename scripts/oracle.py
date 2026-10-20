@@ -405,6 +405,11 @@ a.cell.ming:hover{border-color:var(--red)}
 .fbody p{margin:6px 0;max-width:40em}
 
 /* 摘要右侧计数 */
+/* 折叠标题右侧的「结论预览」：读者不点开也知道里面有什么 */
+details.fold>summary .fold-prev{margin-left:auto;font-size:var(--t-sm);
+  font-weight:400;color:var(--sub);text-align:right;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:62%}
+details.fold>summary .fold-prev+.cnt{margin-left:var(--s2)}
 details.fold>summary .cnt{margin-left:auto;font-size:var(--t-sm);
   font-weight:400;color:var(--sub);letter-spacing:0}
 
@@ -973,6 +978,18 @@ def _despacify(html, max_len=36):
     return out_html
 
 
+def _prev(text):
+    """折叠标题右侧的「结论预览」。
+
+    只放可核对的事实（哪一步、哪个宫、几个），不放判断句 ——
+    判断句在正文里已经说过了，重复一遍反而稀释。
+    """
+    if not text:
+        return ""
+    # title 一起带上：预览太长会被省略号截断，悬停仍要看得到全文
+    return '<span class="fold-prev" title="%s">%s</span>' % (_h(text), _h(text))
+
+
 def render_plain(data):
     """白话解读区：先给结论，再给依据，全部用日常语言。"""
     P = ['<section><h2 id="s-plain" data-t="先说人话">先说人话</h2>',
@@ -991,8 +1008,12 @@ def render_plain(data):
         P.append('<p class="p-lead">%s</p>' % _h(lead))
         rest = pe["块"][1:]
         if rest:
-            P.append("<details class=\"fold\"><summary>展开看：内核 / 运转"
-                     " / 关系 / 独处 / 团队 / 压力</summary>")
+            # 默认展开：这一块是「结论」本身，不是细节。
+            # 折叠起来的话，读者看到的第一眼就只有一句「像一把好刀」，
+            # 而内核、运转、关系这些真正在回答「我是什么人」的内容全在折叠里。
+            P.append("<details class=\"fold\" open><summary>展开看：内核 / 运转"
+                     " / 关系 / 独处 / 团队 / 压力"
+                     "<span class=\"cnt\">%d 个角度</span></summary>" % len(rest))
             for r in rest:
                 P.append('<div class="p-block"><div class="p-k">%s · %s</div>'
                          '<div class="p-v">%s</div>'
@@ -1083,8 +1104,12 @@ def render_plain(data):
             (data.get("八字") or {}).get("输入", {}).get("出生地"))
         if _lp["方位"]:
             P.append('<details class="fold"><summary>未来适合方位与推荐城市'
-                     '<span class="cnt">%d 个方位</span></summary>'
-                     '<div class="fbody">' % len(_lp["方位"]))
+                     '%s<span class="cnt">%d 个方位</span></summary>'
+                     '<div class="fbody">'
+                     % (_prev("%s · %d 城"
+                              % ("、".join("宜" + d["方位"] for d in _lp["方位"]),
+                                 len(_lp["城市"]))),
+                        len(_lp["方位"])))
             P.append('<p class="sub2">%s</p>' % _h(_lp["说明"]))
             for d in _lp["方位"]:
                 P.append('<div class="xsx"><p class="xsx-h">'
@@ -1111,11 +1136,14 @@ def render_plain(data):
             dl = b["大运详批"]["列表"]
             cur_i = next((i for i, x in enumerate(dl) if x["是当前"]), None)
             P.append('<details class="fold"><summary>你一生十步大运'
-                     '<span class="cnt">共 %d 步%s</span></summary><div class="fbody">'
+                     '%s<span class="cnt">共 %d 步%s</span></summary><div class="fbody">'
                      '<p class="sub2">每十年换一段，是运势的主基调。'
                      '折叠起来是因为十段一起铺开太长，实际用到的是当前那一步——'
                      '所以当前那步放在最前面标出来。</p><div class="dy">'
-                     % (len(dl), ("，当前在第 %d 步" % dl[cur_i]["序"]) if cur_i is not None else ""))
+                     % (_prev(("当前 %s · %s" % (dl[cur_i]["干支"],
+                                               dl[cur_i]["主题"][:12]))
+                              if cur_i is not None else ""),
+                        len(dl), ("，当前在第 %d 步" % dl[cur_i]["序"]) if cur_i is not None else ""))
             for i, x in enumerate(dl):
                 now = x["是当前"]
                 P.append('<div class="it%s"%s>'
@@ -1151,10 +1179,15 @@ def render_plain(data):
                 now_year=int((data.get("八字") or {}).get("当前时间", 2026)))
             if _lnt:
                 P.append(_lnt)
-            P.append('<details class="fold"><summary>未来七年的年度节奏<span class="cnt">%d–%d</span></summary><div class="fbody">'
+            _now_ln = next((y for y in ll if y.get("是今年")), None)
+            P.append('<details class="fold"><summary>未来七年的年度节奏'
+                     '%s<span class="cnt">%d–%d</span></summary><div class="fbody">'
                      '<p class="sub2">大运是十年的大背景，流年是这一年的具体调子。'
                      '大运管方向，流年管「今年什么事儿容易发生」。</p><div class="ly">'
-                     % (ll[0]["年"], ll[-1]["年"]))
+                     % (_prev(("%d %s · 虚岁 %d" % (_now_ln["年"], _now_ln["干支"],
+                                                  _now_ln["虚岁"]))
+                              if _now_ln else ""),
+                        ll[0]["年"], ll[-1]["年"]))
             for x in ll:
                 gz = x["干支"]
                 gan = gz[0] if gz != "未知" else "—"
@@ -1172,7 +1205,10 @@ def render_plain(data):
         if b.get("五行意象") and b["五行意象"].get("明细"):
             w = b["五行意象"]
             P.append('<details class="fold"><summary>你身上五股的劲儿'
-                     '<span class="cnt">八字五行</span></summary><div class="fbody">')
+                     '%s<span class="cnt">八字五行</span></summary><div class="fbody">'
+                     % _prev(" · ".join(
+                         ([("%s最旺" % w["最强"]["五行"])] if w.get("最强") else [])
+                         + ([("%s最弱" % w["最弱"]["五行"])] if w.get("最弱") else []))))
             P.append('<p class="sub2">「多」不等于「好」，「少」也不等于「坏」——'
                      '命理里五行强弱本身没有优劣，只有适不适配你。'
                      '这里讲的是描述，不是评判。</p><div class="wx">')
@@ -1224,7 +1260,10 @@ def render_plain(data):
         if b.get("十神详批") and b["十神详批"]["明细"]:
             shd = b["十神详批"]
             P.append('<details class="fold"><summary>你的十神分布'
-                     '<span class="cnt">哪个最重</span></summary><div class="fbody">')
+                     '%s<span class="cnt">哪个最重</span></summary><div class="fbody">'
+                     % _prev((lambda its: ("最重 %s" % its[0])
+                              + ("（%d 个并列）" % len(its) if len(its) > 1 else ""))
+                              ([x for x in str(shd["最多"]).split("、") if x])))
             P.append('<p class="li"><span class="h">最重的是</span>%s</p>'
                      % _h(shd["最多"]))
             P.append('<p class="sub2">%s</p>' % _h(shd["最多说明"]))
@@ -1315,11 +1354,15 @@ def render_plain(data):
         # 而同一张盘里八字那边已经逐项展开了，两边详略不该差这么多。
         if z.get("十二宫详批") and z["十二宫详批"]["列表"]:
             pl = z["十二宫详批"]["列表"]
+            _ming = next((q for q in pl if q.get("是命宫")), None)
             P.append('<details class="fold"><summary>你的十二宫'
-                     '<span class="cnt">逐宫看</span></summary><div class="fbody">'
+                     '%s<span class="cnt">逐宫看</span></summary><div class="fbody">'
                      '<p class="sub2">十二宫代表人生十二个领域。'
                      '「主星」决定这个领域的底色；宫里没有主星很常见，'
-                     '要借对宫的星来看，那不是缺陷。</p><div class="pl">')
+                     '要借对宫的星来看，那不是缺陷。</p><div class="pl">'
+                     % _prev(("命宫 %s" % ("、".join(_ming["主星"])
+                                        if _ming and _ming["主星"] else "空宫"))
+                              if _ming else ""))
             for pl_i, p2 in enumerate(pl):
                 cls = ""
                 marks = []
@@ -1356,10 +1399,11 @@ def render_plain(data):
             cur = z.get("流年详情") or {}
             cur_dx = cur.get("当前大限宫", "")
             P.append('<details class="fold"><summary>你一生十二步大限'
-                     '<span class="cnt">紫微的十年分段</span></summary><div class="fbody">'
+                     '%s<span class="cnt">紫微的十年分段</span></summary><div class="fbody">'
                      '<p class="sub2">大限走的是<b>宫位</b>而不是十神 —— '
                      '每十年重心落在哪个宫，那十年的主语就是那个宫代表的事。'
-                     '和大运是两套不同的分段方式，别混着看。</p><div class="dx">')
+                     '和大运是两套不同的分段方式，别混着看。</p><div class="dx">'
+                     % _prev(("当前 %s" % cur_dx) if cur_dx else ""))
             for x in dl:
                 now = bool(cur_dx) and x["宫位"] == cur_dx
                 P.append('<div class="it%s"><div class="hd">'
@@ -1379,8 +1423,10 @@ def render_plain(data):
         if z.get("流年详情"):
             ln = z["流年详情"]
             P.append('<details class="fold"><summary>今年的落点'
-                     '<span class="cnt">%s年 %s</span></summary><div class="fbody">'
-                     % (_h(str(ln.get("年", ""))), _h(str(ln.get("干支", "")))))
+                     '%s<span class="cnt">%s年 %s</span></summary><div class="fbody">'
+                     % (_prev(("流年命宫 %s" % ln["流年命宫名"])
+                              if ln.get("流年命宫名") else ""),
+                        _h(str(ln.get("年", ""))), _h(str(ln.get("干支", "")))))
             P.append('<div class="info" style="margin:0 0 10px">'
                      '<span>虚岁 <b>%s</b></span>'
                      '<span>流年命宫 <b>%s%s</b></span>'
@@ -1397,11 +1443,19 @@ def render_plain(data):
             P.append("</div></details>")
 
         if z.get("四化详批"):
+            _lu = next((q for q in z["四化详批"] if q.get("化") == "化禄"), None)
+            _ji = next((q for q in z["四化详批"] if q.get("化") == "化忌"), None)
+            _sh_prev = []
+            if _lu and _lu.get("宫位"):
+                _sh_prev.append("化禄在%s" % _lu["宫位"])
+            if _ji and _ji.get("宫位"):
+                _sh_prev.append("化忌在%s" % _ji["宫位"])
             P.append('<details class="fold"><summary>四化落在哪'
-                     '<span class="cnt">禄权科忌</span></summary><div class="fbody">'
+                     '%s<span class="cnt">禄权科忌</span></summary><div class="fbody">'
                      '<p class="sub2">生年四化是「哪颗星被强化」，'
                      '它落在哪个宫，那一块就跟着强化。化忌不是坏事，'
-                     '是这辈子要学的课题。</p><div class="sh">')
+                     '是这辈子要学的课题。</p><div class="sh">'
+                     % _prev(" · ".join(_sh_prev)))
             for h2 in z["四化详批"]:
                 cls = " ji" if h2["化"] == "化忌" else ""
                 P.append('<div class="it%s"><div class="hd">'
@@ -1421,9 +1475,16 @@ def render_plain(data):
         # 一律走「需要磨合的地方 / 怎么相处」，不走「好 / 坏」。
         sp = z.get("夫妻详批") or {}
         if sp.get("主星") or sp.get("煞星"):
+            if sp.get("组合"):
+                _sp_prev = sp["组合"]["型"]
+            elif sp.get("主星"):
+                _sp_prev = "主星 " + "、".join(sp["主星"])
+            else:
+                _sp_prev = ""
             P.append('<details class="fold"><summary>夫妻宫'
-                     '<span class="cnt">%s%s</span></summary><div class="fbody">'
-                     % (_h(("宫干 " + sp["宫干"]) if sp.get("宫干") else ""),
+                     '%s<span class="cnt">%s%s</span></summary><div class="fbody">'
+                     % (_prev(_sp_prev),
+                        _h(("宫干 " + sp["宫干"]) if sp.get("宫干") else ""),
                         _h(("大限 " + sp["大限年龄"]) if sp.get("大限年龄") else "")))
             if sp.get("组合"):
                 P.append('<p class="li"><span class="h">%s</span>%s</p>'
@@ -1496,8 +1557,16 @@ def render_plain(data):
         # 上面那行只有四个数字，看不出「我这个配比意味着什么」——
         # 哪一项最旺、旺了像什么样、哪一项完全缺、缺了要补什么。
         if a["元素配比"].get("逐项"):
+            _el_max = next((x for x in a["元素配比"]["逐项"] if x.get("最旺")), None)
+            _el_none = next((x for x in a["元素配比"]["逐项"] if x.get("完全缺")), None)
+            _el_prev = []
+            if _el_max:
+                _el_prev.append("%s最多" % _el_max["元素"])
+            if _el_none:
+                _el_prev.append("%s完全没有" % _el_none["元素"])
             P.append('<details class="fold"><summary>四种元素逐项看'
-                     '<span class="cnt">占星四元素</span></summary><div class="fbody">')
+                     '%s<span class="cnt">占星四元素</span></summary><div class="fbody">'
+                     % _prev(" · ".join(_el_prev)))
             P.append('<div class="note-sys">这里的火 / 土 / 风 / 水是'
                      '<b>西洋占星的四元素</b>，由行星与星座决定，'
                      '和八字那套木火土金水<b>是两套独立体系</b> ——'
@@ -1547,8 +1616,15 @@ def render_plain(data):
 
         # ---- 1.5.0：轴点 ----
         if a.get("轴点详批") and a["轴点详批"]["列表"]:
+            _ax = {}
+            for _x in a["轴点详批"]["列表"]:
+                # 键是「名」（上升 / 天顶），不是「角色」（那是一句解释）
+                _ax[_x.get("名")] = _x.get("星座")
             P.append('<details class="fold"><summary>两个轴点'
-                     '<span class="cnt">上升与天顶</span></summary><div class="fbody">')
+                     '%s<span class="cnt">上升与天顶</span></summary><div class="fbody">'
+                     % _prev(" · ".join(x for x in [
+                         ("上升" + _ax["上升"]) if _ax.get("上升") else "",
+                         ("天顶" + _ax["天顶"]) if _ax.get("天顶") else ""] if x)))
             P.append('<p class="sub2">上升不是「真正的你」，是别人看到的你；'
                      '天顶是命运把你推向的位置。两者都不是性格本身，'
                      '而是「你在别人眼里」和「你被认可的方向」。</p><div class="ssx">')
@@ -1685,7 +1761,7 @@ def render_plain(data):
             rest = x["分歧"] + x["单盘"] + x["一致"]
             if rest:
                 P.append("<details class=\"ssx\"><summary>六个维度逐项对照"
-                         "（%d 个，点开看三边各说了什么）</summary>"
+                         '<span class="cnt">%d 个 · 三边各说了什么</span></summary>'
                          % len(rest))
                 P.append('<div class="plain">')
                 for r in rest:
@@ -1718,7 +1794,7 @@ def render_plain(data):
                 P.append("</div></details>")
 
             P.append("<details class=\"ssx\"><summary>这三边分别按什么算的"
-                     "（想查证时点开）</summary>"
+                     "<span class=\"cnt\">三边各一节</span></summary>"
                      '<div class="plain"><div class="tagline">')
             for s in x["依据"]:
                 P.append('<div class="tag"><b>%s</b>%s</div>'
@@ -1744,7 +1820,8 @@ def render_plain(data):
                  '以及你希望怎么被对待。</p></div>'
                  % _h(th["要点"]))
         P.append('<details class="ssx"><summary>三盘分别怎么说'
-                 '（点开逐条对照）</summary><div class="plain">')
+                 '<span class="cnt">%d 条逐条对照</span></summary><div class="plain">'
+                 % len(th["列表"]))
         for r in th["列表"]:
             P.append('<div class="xsx"><p class="xsx-h"><b>%s</b>%s</p>'
                      % (_h(r["盘"]), _h(r["项"])))
@@ -1774,7 +1851,8 @@ def render_plain(data):
                 groups.append((k, [r]))
         if len(groups) > 1:
             P.append('<details class="ssx"><summary>%d 组方向'
-                     '（点开看每组有哪些行业）</summary><div class="plain">'
+                     '<span class="cnt">点开看每组有哪些行业</span></summary>'
+                     '<div class="plain">'
                      % len(groups))
         else:
             P.append('<div class="plain">')
