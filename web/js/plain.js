@@ -1888,4 +1888,54 @@ export function headline(data) {
   return bits.join(" ｜ ");
 }
 
+/* 方位图：四个正方向 + 中间，喜用方位填色。
+   五行方位：木东、火南、土中、金西、水北。4+1 个固定位置，不做角度计算。 */
+export function fangweiCompass(xiyong) {
+  const xs = new Set(xiyong || []);
+  if (!xs.size) return "";
+  const nodes = [["n", "北", "水"], ["e", "东", "木"], ["s", "南", "火"],
+                 ["w", "西", "金"], ["c", "中", "土"]];
+  const good = nodes.filter((n) => xs.has(n[2])).map((n) => n[1]);
+  const p = ['<div class="compass" role="img" aria-label="方位图：宜'
+    + escSvg(good.join("、")) + '">', '<div class="cmp-box"></div>'];
+  for (const [k, d, w] of nodes) {
+    const cls = "cmp cmp-" + k + (xs.has(w) ? " on" : "");
+    p.push('<div class="' + cls + '"><b>' + escSvg(d) + "</b><span>"
+      + escSvg(w) + "</span></div>");
+  }
+  p.push("</div>");
+  return p.join("");
+}
+
+/* 一生流年格：十步大运 × 十年，一格一年。
+   只标「这一年的天干五行是不是喜用」，和「助力年」同一个口径。 */
+export function lifeGrid(dayun, xiyong, nowYear) {
+  if (nowYear === undefined || nowYear === null) nowYear = 2026;
+  const items = (dayun || {}).列表 || [];
+  const xs = new Set(xiyong || []);
+  if (items.length < 2 || !xs.size) return "";
+  const p = ['<div class="life">',
+             '<div class="life-key"><span><i class="on"></i>助力年</span>'
+             + '<span><i></i>平常年</span>'
+             + '<span><i class="now"></i>今年</span></div>'];
+  for (const it of items) {
+    const y0 = it.起始公历 || 0;
+    if (!y0) return "";
+    p.push('<div class="life-row"><span class="life-lab">' + escSvg(it.干支 || "")
+      + "<em>" + Math.trunc(y0) + "–" + (Math.trunc(y0) + 9) + "</em></span>");
+    for (let k = 0; k < 10; k++) {
+      const yy = Math.trunc(y0) + k;
+      const gi = (yy - 4) % 60;
+      const on = xs.has(GAN_WUXING.charAt(gi % 10));
+      const cur = (yy === nowYear);
+      p.push('<i class="lc' + (on ? " on" : "") + (cur ? " now" : "")
+        + '" title="' + yy + " " + GAN[gi % 10] + ZHI[gi % 12]
+        + (on ? " · 助力年" : "") + '"></i>');
+    }
+    p.push("</div>");
+  }
+  p.push("</div>");
+  return p.join("");
+}
+
 export function glossaryHtml() { return GLOSSARY; }

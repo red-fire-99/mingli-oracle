@@ -15,7 +15,8 @@ import { pyRoundN } from "./kernel.js";
 import { STAR_BRIEF } from "./ziwei.js";
 import { baziPlain, ziweiPlain, astroPlain, headline, GLOSSARY, crossPlain as P_crossPlain, taohuaPlain as P_taohuaPlain, careerPlain as P_careerPlain, personaPlain as P_personaPlain, wuxingDonut as P_wuxingDonut, dayunTimeline as P_dayunTimeline,
          astroChart as P_astroChart, PALACE_MEANING as P_MEANING, liunianTimeline as P_liunianTimeline,
-         luckyPlaces as P_luckyPlaces } from "./plain.js";
+         luckyPlaces as P_luckyPlaces, fangweiCompass as P_fangweiCompass,
+         lifeGrid as P_lifeGrid } from "./plain.js";
 import { paiPan as baziPaiPan } from "./bazi.js";
 import { paiPan as ziweiPaiPan } from "./ziwei.js";
 import { paiPan as astroPaiPan } from "./astro.js";
@@ -201,11 +202,65 @@ export function renderBazi(r) {
 /* 紫微                                                                */
 /* ------------------------------------------------------------------ */
 
+/* 紫微 4x4 盘。mini 用在说人话区：只留宫名和主星。
+   格子的 #pl-N 按「十二宫详批」列表顺序（命宫、兄弟、夫妻……）编，
+   不是按盘面位置 —— 以前两边各用各的序号，点「迁移」会跳到「命宫」。 */
+function ziweiPan(r, mini) {
+  const byZhi = {};
+  const idxOf = {};
+  r.十二宫.forEach((pp, n) => { byZhi[pp.地支] = pp; idxOf[pp.宫名] = n; });
+  const p = ['<div class="pan' + (mini ? " mini" : "") + '">'];
+  for (let row = 0; row < 4; row++) {
+    for (let col = 0; col < 4; col++) {
+      if ((row === 1 || row === 2) && (col === 1 || col === 2)) continue;
+      const pal = byZhi[PAN_LAYOUT[row + "," + col]];
+      if (!pal) { p.push("<div></div>"); continue; }
+      let cls = "cell";
+      if (pal.是否命宫) cls += " ming";
+      if (pal.是否身宫) cls += " shen";
+      const tag = [];
+      if (pal.是否命宫) tag.push("命");
+      if (pal.是否身宫) tag.push("身");
+      const _meaning = P_MEANING[pal.宫名] || "";
+      const _tip = _meaning ? pal.宫名 + "：" + _meaning : pal.宫名;
+      let body;
+      if (mini) {
+        const mains = pal.星曜.filter((s) => s.split("·")[0] in STAR_BRIEF).slice(0, 2);
+        const stars = mains.map((s) => '<span class="star main">' + h(s) + "</span>");
+        body = '<div class="pos"><span>' + h(pal.宫名) + '</span><span>' + tag.join("")
+          + '</span></div><div class="stars">'
+          + (stars.length ? stars.join(" ") : '<span class="ss">空宫</span>') + "</div>";
+      } else {
+        const stars = pal.星曜.map((s) => {
+          const base = s.split("·")[0];
+          const k = (base in STAR_BRIEF) ? "star main" : (s.includes("化") ? "star hua" : "star aux");
+          return '<span class="' + k + '">' + h(s) + "</span>";
+        });
+        body = '<div class="pos"><span>' + h(pal.宫名) + '</span><span>' + tag.join("")
+          + '</span></div><div class="gz2"><span class="gan">' + pal.天干
+          + '</span><span class="zhi">' + pal.地支 + '</span></div><div class="stars">'
+          + (stars.length ? stars.join(" ") : '<span class="ss">空宫</span>') + "</div>";
+      }
+      const _idx = (pal.宫名 in idxOf) ? idxOf[pal.宫名] : 0;
+      p.push('<a class="' + cls + '" href="#pl-' + _idx + '" title="' + h(_tip)
+        + '">' + body + "</a>");
+    }
+  }
+  if (mini) {
+    p.push('<div class="center"><div class="t">你的盘</div><div class="ss">命宫 '
+      + h(r.命宫.地支) + " · 身宫 " + h(r.身宫.地支) + "</div></div>");
+  } else {
+    p.push('<div class="center"><div class="t">命盘</div>'
+      + '<div>紫微 ' + h(r.紫微星) + '</div><div>天府 ' + h(r.天府星) + '</div><div>'
+      + h(r.五行局) + '</div><div class="ss">大限' + h(r.大限.顺逆) + " · 起运"
+      + d(r.大限.起运虚岁) + "岁</div></div>");
+  }
+  p.push("</div>");
+  return p.join("");
+}
+
 export function renderZiwei(r) {
   const i = r.输入;
-  const byZhi = {};
-  let palIdx = 0;
-  for (const pp of r.十二宫) byZhi[pp.地支] = pp;
   const p = ['<section><h2 id="s-ziwei-pro" data-t="紫微斗数">紫微斗数</h2>'];
   p.push('<div class="info"><span>农历 <b>' + h(i.农历) + '</b></span><span>时辰 <b>'
     + h(i.时辰) + '</b></span><span>年干支 <b>' + h(i.年干支) + '</b></span><span>五行局 <b>'
@@ -216,42 +271,7 @@ export function renderZiwei(r) {
     + '</b> · 权 <b>' + h(hu.化权) + '</b> · 科 <b>' + h(hu.化科) + '</b> · 忌 <b>'
     + h(hu.化忌) + "</b></span></div>");
 
-  p.push('<div class="pan">');
-  for (let row = 0; row < 4; row++) {
-    for (let col = 0; col < 4; col++) {
-      if ((row === 1 || row === 2) && (col === 1 || col === 2)) continue;
-      const z = PAN_LAYOUT[row + "," + col];
-      const pal = byZhi[z];
-      if (!pal) { p.push("<div></div>"); continue; }
-      let cls = "cell";
-      if (pal.是否命宫) cls += " ming";
-      if (pal.是否身宫) cls += " shen";
-      const stars = pal.星曜.map((s) => {
-        const base = s.split("·")[0];
-        const k = (base in STAR_BRIEF) ? "star main" : (s.includes("化") ? "star hua" : "star aux");
-        return '<span class="' + k + '">' + h(s) + "</span>";
-      });
-      const tag = [];
-      if (pal.是否命宫) tag.push("命");
-      if (pal.是否身宫) tag.push("身");
-      // 格子做成可点的：外裹 <a href="#pl-N">，hover 出这一宫管什么，
-      // 点击滚到下面逐宫解读里对应的那一块。
-      const _meaning = P_MEANING[pal.宫名] || "";
-      const _tip = _meaning ? pal.宫名 + "：" + _meaning : pal.宫名;
-      p.push('<a class="' + cls + '" href="#pl-' + palIdx
-        + '" title="' + h(_tip) + '"><div class="pos"><span>' + h(pal.宫名)
-        + '</span><span>' + tag.join("") + '</span></div>'
-        + '<div class="gz2"><span class="gan">' + pal.天干 + '</span><span class="zhi">'
-        + pal.地支 + '</span></div><div class="stars">'
-        + (stars.length ? stars.join(" ") : '<span class="ss">空宫</span>') + "</div></a>");
-      palIdx++;
-    }
-  }
-  p.push('<div class="center"><div class="t">命盘</div>'
-    + '<div>紫微 ' + h(r.紫微星) + '</div><div>天府 ' + h(r.天府星) + '</div><div>'
-    + h(r.五行局) + '</div><div class="ss">大限' + h(r.大限.顺逆) + " · 起运"
-    + d(r.大限.起运虚岁) + "岁</div></div>");
-  p.push("</div>");
+  p.push(ziweiPan(r));
 
   p.push("<h2 style='margin-top:20px'>大限</h2><div class='liu'>");
   for (const x of r.大限.列表) {
@@ -498,6 +518,19 @@ export function renderPlain(data) {
     P.push('<div class="plain"><h3>' + h(b.能量分布.标题) + "</h3><p>" + h(b.能量分布.要点)
       + '</p><p class="sub2">对你有利的五行是「' + b.能量分布.喜用.join("、")
       + "」，可以在颜色、方位、行业上多往这边靠。</p></div>");
+    // 环图放在「能量分布」下面：先读一句结论，再看比例。
+    const _wx = (data.八字 || {}).五行统计 || {};
+    if (Object.keys(_wx).length) {
+      P.push('<div class="plain"><h3>五行的配比</h3>'
+        + '<p class="sub2">这不是好坏，是配比：哪一块多、哪一块少。'
+        + '环图就是你的比例。</p><div class="donut-wrap">' + P_wuxingDonut(_wx)
+        + '<div class="donut-legend">');
+      for (const _w in _wx) {
+        P.push('<div><i style="background:' + WX_COLOR[_w] + '"></i><b>' + _w
+          + "</b>" + f1(_wx[_w]) + "%</div>");
+      }
+      P.push("</div></div></div>");
+    }
     if (b.运气加成.标签.length) {
       P.push('<div class="plain"><h3>' + h(b.运气加成.标题) + '</h3><div class="tagline">');
       for (const t of b.运气加成.标签) {
@@ -524,6 +557,11 @@ export function renderPlain(data) {
         + "<div><b>开运饰品</b>" + h(lk.饰品) + "</div>"
         + "<div><b>日常做法</b>" + h(lk.日常) + "</div>"
         + "</div></div>");
+      // 方位图：把「有利方位」那句文字变成一张图。
+      P.push('<div class="plain"><h3>你的方位图</h3>'
+        + '<p class="sub2">填色的是你的喜用方位；四个正方向 + 中间（本地），'
+        + '和上面的「有利方位」是同一套。</p>'
+        + P_fangweiCompass(b.能量分布.喜用) + "</div>");
     }
     if (b.当前阶段) {
       P.push('<div class="plain"><h3>你现在这段时期</h3>'
@@ -551,7 +589,20 @@ export function renderPlain(data) {
       }
     }
     const _tl = P_dayunTimeline(_dz, _cxs);
-    if (_tl) P.push(_tl);
+    if (_tl) {
+      P.push(_tl);
+      // 一生流年格：十步大运 × 十年压成一张图。
+      let _ny2 = (data.八字 || {}).当前时间
+        ? parseInt((data.八字 || {}).当前时间, 10) : 2026;
+      if (!isFinite(_ny2)) _ny2 = 2026;
+      const _lg = P_lifeGrid(_dz, b.能量分布.喜用, _ny2);
+      if (_lg) {
+        P.push('<div class="plain"><h3>一生流年一览</h3>'
+          + '<p class="sub2">横着是十年一步的大运，每格一年。'
+          + '深色是助力年 —— 这一年的天干五行是你的喜用；'
+          + '圈出来的是今年。</p>' + _lg + "</div>");
+      }
+    }
 
     // ---- 1.10.0：未来适合方位与推荐城市 ----
     // 紧跟开运指南（两者都是「未来往哪走」），默认折叠。
@@ -833,6 +884,9 @@ export function renderPlain(data) {
       + "紫微斗数 · 看事业、财运、感情</h2>");
     P.push('<div class="sec-lead">这一节讲事业、财运、感情，'
       + '还有眼前这一段的重心落在哪儿。</div>');
+    P.push(ziweiPan(data.紫微, true));
+    P.push('<p class="sub2" style="text-align:center;margin:6px 0 14px">'
+      + '红框是命宫，虚线是身宫；点一格，下面会滚到那一宫的解读。</p>');
     P.push('<div class="plain"><h3>命宫主星</h3><p>' + h(z.一句话) + "</p></div>");
     for (const k of ["事业方向", "财运模式", "感情模式", "四化提醒"]) {
       const blk = z[k];
@@ -1061,6 +1115,13 @@ export function renderPlain(data) {
       + "西洋占星 · 看性格的另一面</h2>");
     P.push('<div class="sec-lead">这一节从另一个角度看性格：别人看到的你、'
       + '情绪的来处、关系里的张力。</div>');
+    // 星盘轮：先把盘给出来，再读文字。和「专业数据」里那张是同一张。
+    if ((data.占星 || {}).天体 && data.占星.天体.length) {
+      P.push('<div class="plain"><h3>你的星盘</h3>'
+        + '<p class="sub2">外圈是黄道十二宫，行星按真实黄经落在盘上；'
+        + '两点之间的线是相位。看个形状就好，细节在下面的文字里。</p>'
+        + P_astroChart(data.占星, 300) + "</div>");
+    }
     P.push('<div class="plain"><h3>一句话</h3><p>' + h(a.一句话) + "</p></div>");
     P.push('<div class="plain"><h3>' + h(a.三支柱.标题) + "</h3>");
     for (const x of a.三支柱.列表) {

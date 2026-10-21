@@ -503,6 +503,46 @@ def test_plain():
     ck("紫微盘-格子有 hover 提示", 'title="' in hp, True)
     ck("紫微盘-十二个格子都是链接", hp.count('<a class="cell'), 12)
     ck("紫微盘-解读卡有 id 可被跳到", pp.count('id="pl-'), 12)
+    # 上面只比了「href 集合 == 0..11」，错位也能过。
+    # 真出过的事：点「迁移」跳到「命宫」，十二个全错位。
+    # 现在按宫名逐格核对：格子的 title 宫名 == 目标 id 的宫名。
+    _name_of_id = {}
+    for _m in _re.finditer(r'id="pl-(\d+)"[^>]*>(.{0,300}?)</div>', pp, _re.S):
+        _nm = _re.search(r'class="pn">([^<]+)<', _m.group(2))
+        if _nm:
+            _name_of_id[_m.group(1)] = _nm.group(1)
+    _cells = [(m.group(1), m.group(2).split("：")[0])
+              for m in _re.finditer(r'href="#pl-(\d+)" title="([^"]*)"', hp)]
+    ck("紫微盘-每个格子跳到同名宫",
+       all(_name_of_id.get(i) == nm for i, nm in _cells), True)
+    _mini = [(m.group(1), m.group(2).split("：")[0])
+             for m in _re.finditer(r'href="#pl-(\d+)" title="([^"]*)"', pp)]
+    ck("紫微小盘-每格也跳到同名宫",
+       all(_name_of_id.get(i) == nm for i, nm in _mini), True)
+    # 解读卡在折叠块里：不先展开，点了只会滚到收起的标题上。
+    ck("盘面锚点-解读卡默认在折叠块里",
+       '<details class="fold"><summary>你的十二宫' in pp, True)
+    ck("盘面锚点-点击会先展开再跳",
+       "closest('a[href^=\"#\"]')" in O.PAGE_JS, True)
+
+    # ---- 说人话区的图：有、而且数据对得上 ----
+    ck("白话区-紫微小盘在", pp.count('class="pan mini"'), 1)
+    ck("白话区-小盘十二格", pp.count('<a class="cell'), 12)
+    ck("白话区-五行环图在", pp.count('class="donut-wrap"'), 1)
+    ck("白话区-星盘轮在", pp.count('class="astro"'), 1)
+    ck("白话区-方位图在", pp.count('class="compass"'), 1)
+    ck("白话区-流年格十步", pp.count('class="life-row"'), 10)
+    ck("白话区-流年格一百年", len(_re.findall(r'<i class="lc', pp)), 100)
+    # 格子的年份干支必须和引擎的流年一致（同一套甲子算法）
+    _ln = d["八字"]["流年"]
+    ck("流年格-年份干支与引擎流年一致",
+       all(('title="%d %s' % (x["年"], x["干支"])) in pp for x in _ln), True)
+    _bx = PL.bazi_plain(d["八字"])
+    _comp = _re.search(r'<div class="compass".*?</div></div>', pp, _re.S).group(0)
+    _on = _re.findall(r'<div class="cmp cmp-[nsewc] on"><b>[^<]+</b>'
+                      r'<span>([^<]+)</span>', _comp)
+    ck("方位图-填色方位就是喜用",
+       sorted(_on), sorted(_bx["能量分布"]["喜用"]))
     ck("交叉-一致维度都有具体表现（不是空串）",
        all(r.get("表现") for r in x["一致"] if r["一致"]), True)
     ck("交叉-CROSS_SAME 覆盖全部 维度×端点",

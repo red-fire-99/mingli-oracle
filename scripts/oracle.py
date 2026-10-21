@@ -167,6 +167,14 @@ th{background:#f1ece1;font-weight:600;color:var(--sub);font-size:var(--t-md)}
   justify-content:center;align-items:center;padding:var(--s4);text-align:center;
   font-size:var(--t-md);gap:5px}
 .center .t{font-size:var(--t-lg);font-weight:700;letter-spacing:3px;color:var(--red)}
+/* 说人话区的迷你盘：只留宫名和主星，先给形状，不抢正文 */
+.pan.mini{max-width:400px;gap:4px;margin:var(--s4) auto var(--s2)}
+.pan.mini .cell{padding:5px 6px;border-radius:7px}
+.pan.mini .pos{font-size:10px}
+.pan.mini .stars{font-size:11px;line-height:1.35}
+.pan.mini .center{padding:var(--s2);gap:2px}
+.pan.mini .center .t{font-size:15px;letter-spacing:2px}
+.pan.mini .center .ss{font-size:10px}
 
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:var(--s5)}
 .liu{display:flex;flex-wrap:wrap;gap:6px;font-size:var(--t-sm)}
@@ -274,6 +282,44 @@ details.fold>summary:focus-visible{outline:2px solid var(--gold);
 .donut-legend i{width:9px;height:9px;border-radius:2px;flex:none}
 .donut-legend b{color:var(--ink);font-weight:600}
 
+/* 方位图：四个正方向 + 中间，喜用方位填色 */
+.compass{position:relative;width:min(300px,100%);aspect-ratio:1/1;
+  margin:var(--s4) auto var(--s2)}
+.cmp-box{position:absolute;inset:19%;border:1px dashed var(--line);
+  border-radius:12px;transform:rotate(45deg)}
+.cmp{position:absolute;width:64px;height:64px;border-radius:50%;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:#f6f1e6;border:1px solid var(--line);color:var(--sub);
+  font-size:var(--t-sm);line-height:1.15;z-index:1}
+.cmp b{font-size:var(--t-base);color:var(--ink);font-weight:600}
+.cmp span{font-size:var(--t-xs)}
+.cmp.on{background:#fdf1ea;border-color:var(--red);
+  box-shadow:0 0 0 1px var(--red) inset}
+.cmp.on b,.cmp.on span{color:var(--red)}
+.cmp-n{top:0;left:50%;transform:translateX(-50%)}
+.cmp-s{bottom:0;left:50%;transform:translateX(-50%)}
+.cmp-e{right:0;top:50%;transform:translateY(-50%)}
+.cmp-w{left:0;top:50%;transform:translateY(-50%)}
+.cmp-c{top:50%;left:50%;transform:translate(-50%,-50%);
+  width:74px;height:74px;background:#faf6ee}
+
+/* 一生流年格：一格一年，深色 = 助力年 */
+.life{max-width:520px;margin:var(--s3) auto var(--s2)}
+.life-key{display:flex;flex-wrap:wrap;gap:var(--s4);font-size:var(--t-xs);
+  color:var(--sub);margin-bottom:var(--s2)}
+.life-key span{display:flex;align-items:center;gap:5px}
+.life-key i{width:11px;height:11px;border-radius:2px;background:#f1ece1}
+.life-key i.on{background:var(--red)}
+.life-key i.now{background:#fff;box-shadow:0 0 0 1.5px var(--red) inset}
+.life-row{display:grid;grid-template-columns:86px repeat(10,1fr);gap:3px;
+  align-items:center;margin:3px 0}
+.life-lab{font-size:var(--t-xs);color:var(--sub);white-space:nowrap}
+.life-lab em{display:block;font-style:normal;font-size:10px;color:var(--sub)}
+.life .lc{display:block;aspect-ratio:1/1;border-radius:2px;
+  background:#f1ece1;min-height:13px}
+.life .lc.on{background:var(--red)}
+.life .lc.now{box-shadow:0 0 0 1.5px #fff,0 0 0 3px var(--red)}
+
 .dy-tl{display:flex;position:relative;margin:var(--s4) 0 var(--s3);
   border-radius:var(--r-sm);overflow:hidden;background:#efe9dd}
 .dy-seg{padding:var(--s2) 4px;text-align:center;font-size:var(--t-xs);
@@ -335,7 +381,7 @@ a.cell.ming:hover{border-color:var(--red)}
 .astro-wrap{display:flex;align-items:center;gap:var(--s5);
   flex-wrap:wrap;margin:var(--s3) 0}
 .astro{display:block;margin:0 auto;background:#fffefb;
-  border-radius:50%;box-shadow:var(--sh-1)}
+  border-radius:50%;box-shadow:var(--sh-1);max-width:100%;height:auto}
 .astro-note{flex:1;min-width:200px}
 .astro .a-sign{font-size:9px;letter-spacing:1px}
 .astro .a-num{font-size:8px}
@@ -383,6 +429,21 @@ a.cell.ming:hover{border-color:var(--red)}
   h1{font-size:var(--t-lg);letter-spacing:3px}
   .persona .p-lead{font-size:var(--t-lg)}
   .tagline .tag{min-width:100%}
+}
+/* 迷你盘是「说人话」区的形状提示，不是逐宫数据：
+   窄屏也保持 4x4，别降成两列（降了就不像盘了）。 */
+@media(max-width:720px){
+  .pan.mini{grid-template-columns:repeat(4,1fr);
+    grid-template-rows:repeat(4,1fr);aspect-ratio:1/1;gap:4px}
+  .pan.mini .center{grid-column:2/4;grid-row:2/4;padding:var(--s2)}
+  .pan.mini .cell{padding:5px 6px;font-size:var(--t-sm);min-height:0}
+  .pan.mini .pos{font-size:10px}
+  .pan.mini .stars{font-size:11px}
+  /* 流年格：窄屏把大运名放到单独一行，十格就能占满宽度 */
+  .life-row{grid-template-columns:repeat(10,1fr)}
+  .life-lab{grid-column:1/-1;display:flex;justify-content:space-between;
+    align-items:baseline}
+  .life-lab em{display:inline}
 }
 @media print{
   body{background:#fff;padding:0}
@@ -834,6 +895,27 @@ PAGE_JS = r"""(function () {
       flash(el);
     }, 60);
   }
+
+  // 页内锚点如果落在折叠块里（比如紫微盘格子的 #pl-N），
+  // 浏览器原生跳转只会滚到收起的标题上，点完还是看不到内容。
+  // 这里统一：先展开祖先 details，再走 goTo（跨页签也能接上）。
+  document.addEventListener("click", function (ev) {
+    var a = (ev.target && ev.target.closest)
+      ? ev.target.closest('a[href^="#"]') : null;
+    if (!a) return;
+    var id = (a.getAttribute("href") || "").slice(1);
+    if (!id) return;
+    var el = document.getElementById(id);
+    if (!el) return;
+    var p = el.parentElement, opened = false;
+    while (p && p !== document.body) {
+      if (p.tagName === "DETAILS" && !p.open) { p.open = true; opened = true; }
+      p = p.parentElement;
+    }
+    if (!opened) return;   // 不在折叠块里：交给浏览器原生跳转
+    ev.preventDefault();
+    goTo(id);
+  });
 
   top.addEventListener("click", function () { scrollToY(0); });
 
@@ -1365,10 +1447,79 @@ def render_bazi(r):
     return "".join(p)
 
 
+def ziwei_pan(r, mini=False):
+    """紫微 4x4 盘。mini=True 用在说人话区：只留宫名和主星，格子小一点。
+
+    格子链接到 #pl-N。那个 id 是按「十二宫详批」的列表顺序编的
+    （命宫、兄弟、夫妻……），不是按盘面位置编的 ——
+    以前两边各用各的序号，结果点「迁移」跳到「命宫」，十二个全错位。
+    现在统一按宫名查 id。
+    """
+    by_zhi = {x["地支"]: x for x in r["十二宫"]}
+    idx_of = {x["宫名"]: i for i, x in enumerate(r["十二宫"])}
+    p = ['<div class="pan%s">' % (" mini" if mini else "")]
+    for row in range(4):
+        for col in range(4):
+            if row in (1, 2) and col in (1, 2):
+                continue
+            pal = by_zhi.get(PAN_LAYOUT[(row, col)])
+            if not pal:
+                p.append("<div></div>")
+                continue
+            cls = "cell"
+            if pal["是否命宫"]:
+                cls += " ming"
+            if pal["是否身宫"]:
+                cls += " shen"
+            tag = []
+            if pal["是否命宫"]:
+                tag.append("命")
+            if pal["是否身宫"]:
+                tag.append("身")
+            _meaning = M_plain.PALACE_MEANING.get(pal["宫名"], "")
+            _tip = ("%s：%s" % (pal["宫名"], _meaning)) if _meaning else pal["宫名"]
+            if mini:
+                mains = [s for s in pal["星曜"]
+                         if s.split("·")[0] in M_ziwei.STAR_BRIEF][:2]
+                stars = " ".join('<span class="star main">%s</span>' % _h(s)
+                                 for s in mains)
+                body = ('<div class="pos"><span>%s</span><span>%s</span></div>'
+                        '<div class="stars">%s</div>'
+                        % (_h(pal["宫名"]), "".join(tag),
+                           stars or '<span class="ss">空宫</span>'))
+            else:
+                stars = []
+                for s in pal["星曜"]:
+                    base = s.split("·")[0]
+                    k = ("star main" if base in M_ziwei.STAR_BRIEF
+                         else ("star hua" if "化" in s else "star aux"))
+                    stars.append('<span class="%s">%s</span>' % (k, _h(s)))
+                body = ('<div class="pos"><span>%s</span><span>%s</span></div>'
+                        '<div class="gz2"><span class="gan">%s</span>'
+                        '<span class="zhi">%s</span></div>'
+                        '<div class="stars">%s</div>'
+                        % (_h(pal["宫名"]), "".join(tag),
+                           pal["天干"], pal["地支"],
+                           " ".join(stars) if stars
+                           else '<span class="ss">空宫</span>'))
+            p.append('<a class="%s" href="#pl-%d" title="%s">%s</a>'
+                     % (cls, idx_of.get(pal["宫名"], 0), _h(_tip), body))
+    if mini:
+        p.append('<div class="center"><div class="t">你的盘</div>'
+                 '<div class="ss">命宫 %s · 身宫 %s</div></div>'
+                 % (_h(r["命宫"]["地支"]), _h(r["身宫"]["地支"])))
+    else:
+        p.append('<div class="center"><div class="t">命盘</div>'
+                 '<div>紫微 %s</div><div>天府 %s</div><div>%s</div>'
+                 '<div class="ss">大限%s · 起运%d岁</div></div>'
+                 % (_h(r["紫微星"]), _h(r["天府星"]), _h(r["五行局"]),
+                    _h(r["大限"]["顺逆"]), r["大限"]["起运虚岁"]))
+    p.append("</div>")
+    return "".join(p)
+
+
 def render_ziwei(r):
     i = r["输入"]
-    by_zhi = {p["地支"]: p for p in r["十二宫"]}
-    _pl_i = 0
     p = ['<section><h2 id="s-ziwei-pro" data-t="紫微斗数">紫微斗数</h2>']
     p.append('<div class="info"><span>农历 <b>%s</b></span><span>时辰 <b>%s</b></span>'
              '<span>年干支 <b>%s</b></span><span>五行局 <b>%s</b></span>'
@@ -1379,52 +1530,7 @@ def render_ziwei(r):
     p.append('<div class="info"><span>四化（%s干）：禄 <b>%s</b> · 权 <b>%s</b> · 科 <b>%s</b> · 忌 <b>%s</b></span></div>'
              % (_h(h["年干"]), _h(h["化禄"]), _h(h["化权"]), _h(h["化科"]), _h(h["化忌"])))
     # 4x4 盘
-    p.append('<div class="pan">')
-    for row in range(4):
-        for col in range(4):
-            if row in (1, 2) and col in (1, 2):
-                continue
-            z = PAN_LAYOUT[(row, col)]
-            pal = by_zhi.get(z)
-            if not pal:
-                p.append("<div></div>")
-                continue
-            cls = "cell"
-            if pal["是否命宫"]:
-                cls += " ming"
-            if pal["是否身宫"]:
-                cls += " shen"
-            stars = []
-            for s in pal["星曜"]:
-                base = s.split("·")[0]
-                k = "star main" if base in M_ziwei.STAR_BRIEF else ("star hua" if "化" in s else "star aux")
-                stars.append('<span class="%s">%s</span>' % (k, _h(s)))
-            tag = []
-            if pal["是否命宫"]:
-                tag.append("命")
-            if pal["是否身宫"]:
-                tag.append("身")
-            # 格子做成可点的：外裹 <a href="#pl-N">，hover 出这一宫
-            # 管什么，点击滚到下面逐宫解读里对应的那一块。
-            # 不在格内套 <details> —— 会撑坏 4x4 网格，
-            # 而且「宫位含义+主星+辅星+煞星」很长，塞不进一格。
-            _meaning = M_plain.PALACE_MEANING.get(pal["宫名"], "")
-            _tip = ("%s：%s" % (pal["宫名"], _meaning)) if _meaning else pal["宫名"]
-            p.append('<a class="%s" href="#pl-%d" title="%s">'
-                     '<div class="pos"><span>%s</span><span>%s</span></div>'
-                     '<div class="gz2"><span class="gan">%s</span>'
-                     '<span class="zhi">%s</span></div>'
-                     '<div class="stars">%s</div></a>'
-                     % (cls, _pl_i, _h(_tip), _h(pal["宫名"]), "".join(tag),
-                        pal["天干"], pal["地支"],
-                        " ".join(stars) if stars else '<span class="ss">空宫</span>'))
-            _pl_i += 1
-    p.append('<div class="center"><div class="t">命盘</div>'
-             '<div>紫微 %s</div><div>天府 %s</div><div>%s</div>'
-             '<div class="ss">大限%s · 起运%d岁</div></div>'
-             % (_h(r["紫微星"]), _h(r["天府星"]), _h(r["五行局"]),
-                _h(r["大限"]["顺逆"]), r["大限"]["起运虚岁"]))
-    p.append("</div>")
+    p.append(ziwei_pan(r))
     # 大限
     p.append("<h2 style='margin-top:20px'>大限</h2><div class='liu'>")
     for x in r["大限"]["列表"]:
@@ -1606,7 +1712,19 @@ def render_plain(data):
         P.append('<div class="plain"><h3>%s</h3><p>%s</p>'
                  '<p class="sub2">对你有利的五行是「%s」，可以在颜色、方位、行业上多往这边靠。</p></div>'
                  % (_h(b["能量分布"]["标题"]), _h(b["能量分布"]["要点"]),
-                    "、".join(b["能量分布"]["喜用"])))
+                     "、".join(b["能量分布"]["喜用"])))
+        # 环图放在「能量分布」下面：先读一句结论，再看比例。
+        _wx = (data.get("八字") or {}).get("五行统计") or {}
+        if _wx:
+            P.append('<div class="plain"><h3>五行的配比</h3>'
+                     '<p class="sub2">这不是好坏，是配比：哪一块多、哪一块少。'
+                     '环图就是你的比例。</p><div class="donut-wrap">%s'
+                     '<div class="donut-legend">'
+                     % M_plain.wuxing_donut(_wx))
+            for _w, _v in _wx.items():
+                P.append('<div><i style="background:%s"></i><b>%s</b>%.1f%%</div>'
+                         % (WX_COLOR[_w], _w, _v))
+            P.append("</div></div></div>")
         if b["运气加成"]["标签"]:
             P.append('<div class="plain"><h3>%s</h3><div class="tagline">' % _h(b["运气加成"]["标题"]))
             for t in b["运气加成"]["标签"]:
@@ -1632,6 +1750,11 @@ def render_plain(data):
                      '</div></div>'
                      % (_h(lk["五行"]), _h(lk["颜色"]), _h(lk["方位"]), _h(lk["数字"]),
                         _h(lk["行业"]), _h(lk["饰品"]), _h(lk["日常"])))
+            # 方位图：把「有利方位」那句文字变成一张图。
+            P.append('<div class="plain"><h3>你的方位图</h3>'
+                     '<p class="sub2">填色的是你的喜用方位；四个正方向 + 中间（本地），'
+                     '和上面的「有利方位」是同一套。</p>%s</div>'
+                     % M_plain.fangwei_compass(b["能量分布"]["喜用"]))
         if b["当前阶段"]:
             P.append('<div class="plain"><h3>你现在这段时期</h3>'
                      '<p>当前走在「<span class="k">%s</span>」大运（%s），主题是<span class="k">%s</span>。</p>'
@@ -1662,6 +1785,18 @@ def render_plain(data):
         _tl = M_plain.dayun_timeline(_dz, cur_xs=_cur_xs)
         if _tl:
             P.append(_tl)
+            # 一生流年格：十步大运 × 十年压成一张图。
+            # 只标「天干五行是不是喜用」，和「未来三年」同一个口径。
+            try:
+                _ny = int(_bz.get("当前时间") or 2026)
+            except (TypeError, ValueError):
+                _ny = 2026
+            _lg = M_plain.life_grid(_dz, b["能量分布"]["喜用"], _ny)
+            if _lg:
+                P.append('<div class="plain"><h3>一生流年一览</h3>'
+                         '<p class="sub2">横着是十年一步的大运，每格一年。'
+                         '深色是助力年 —— 这一年的天干五行是你的喜用；'
+                         '圈出来的是今年。</p>%s</div>' % _lg)
 
         # ---- 1.10.0：未来适合方位与推荐城市 ----
         # 紧跟开运指南之后（两者都是「未来往哪走」），默认折叠。
@@ -1911,6 +2046,10 @@ def render_plain(data):
         P.append('<h2 id="s-ziwei" data-t="紫微 · 事业财运" style="font-size:15px;border-left-color:var(--gold);margin-top:22px">紫微斗数 · 看事业、财运、感情</h2>')
         P.append('<div class="sec-lead">这一节讲事业、财运、感情，'
                  '还有眼前这一段的重心落在哪儿。</div>')
+        # 十二宫小盘：先给形状，再逐条读。点一格跳到下面那一宫的解读。
+        P.append(ziwei_pan(data["紫微"], mini=True))
+        P.append('<p class="sub2" style="text-align:center;margin:6px 0 14px">'
+                 '红框是命宫，虚线是身宫；点一格，下面会滚到那一宫的解读。</p>')
         P.append('<div class="plain"><h3>命宫主星</h3><p>%s</p></div>' % _h(z["一句话"]))
         for k in ("事业方向", "财运模式", "感情模式", "四化提醒"):
             blk = z.get(k)
@@ -2116,6 +2255,12 @@ def render_plain(data):
         P.append('<h2 id="s-astro" data-t="占星 · 性格另一面" style="font-size:15px;border-left-color:var(--gold);margin-top:22px">西洋占星 · 看性格的另一面</h2>')
         P.append('<div class="sec-lead">这一节从另一个角度看性格：别人看到的你、'
                  '情绪的来处、关系里的张力。</div>')
+        # 星盘轮：先把盘给出来，再读文字。和「专业数据」里那张是同一张。
+        if data["占星"].get("天体"):
+            P.append('<div class="plain"><h3>你的星盘</h3>'
+                     '<p class="sub2">外圈是黄道十二宫，行星按真实黄经落在盘上；'
+                     '两点之间的线是相位。看个形状就好，细节在下面的文字里。</p>%s</div>'
+                     % M_plain.astro_chart(data["占星"], 300))
         P.append('<div class="plain"><h3>一句话</h3><p>%s</p></div>' % _h(a["一句话"]))
         P.append('<div class="plain"><h3>%s</h3>' % _h(a["三支柱"]["标题"]))
         for x in a["三支柱"]["列表"]:

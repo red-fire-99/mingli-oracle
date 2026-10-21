@@ -2963,6 +2963,62 @@ def liunian_timeline(flow, now_year=2026):
     return "".join(p)
 
 
+def fangwei_compass(xiyong):
+    """方位图：四个正方向 + 中间，喜用方位填色。
+
+    五行方位是老规矩：木东、火南、土中、金西、水北。
+    只用 4+1 个固定位置，不做角度计算 —— 逐例比对才稳。
+    """
+    xs = set(xiyong or [])
+    if not xs:
+        return ""
+    nodes = [("n", "北", "水"), ("e", "东", "木"), ("s", "南", "火"),
+             ("w", "西", "金"), ("c", "中", "土")]
+    good = [d for _k, d, w in nodes if w in xs]
+    p = ['<div class="compass" role="img" aria-label="方位图：宜%s">'
+         % _esc("、".join(good)), '<div class="cmp-box"></div>']
+    for k, d, w in nodes:
+        cls = "cmp cmp-" + k + (" on" if w in xs else "")
+        p.append('<div class="%s"><b>%s</b><span>%s</span></div>'
+                 % (cls, _esc(d), _esc(w)))
+    p.append("</div>")
+    return "".join(p)
+
+
+def life_grid(dayun, xiyong, now_year=2026):
+    """一生流年格：十步大运 × 十年，一格一年。
+
+    只标一件事：这一年的天干五行是不是喜用 —— 和「助力年」同一个口径。
+    不评吉凶，只给密度：哪几段助力年扎堆，一眼能看出来。
+    """
+    items = (dayun or {}).get("列表") or []
+    xs = set(xiyong or [])
+    if len(items) < 2 or not xs:
+        return ""
+    p = ['<div class="life">',
+         '<div class="life-key"><span><i class="on"></i>助力年</span>'
+         '<span><i></i>平常年</span>'
+         '<span><i class="now"></i>今年</span></div>']
+    for it in items:
+        y0 = it.get("起始公历") or 0
+        if not y0:
+            return ""
+        p.append('<div class="life-row"><span class="life-lab">%s<em>%d–%d</em></span>'
+                 % (_esc(it.get("干支", "")), int(y0), int(y0) + 9))
+        for k in range(10):
+            yy = int(y0) + k
+            gi = (yy - 4) % 60
+            on = GAN_WUXING[gi % 10] in xs
+            cur = (yy == now_year)
+            p.append('<i class="lc%s%s" title="%d %s%s"></i>'
+                     % (" on" if on else "", " now" if cur else "",
+                        yy, GAN[gi % 10] + ZHI[gi % 12],
+                        " · 助力年" if on else ""))
+        p.append("</div>")
+    p.append("</div>")
+    return "".join(p)
+
+
 def _pick(d, k, default=None):
     return d.get(k, default)
 
