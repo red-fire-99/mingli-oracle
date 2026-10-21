@@ -295,14 +295,6 @@ details.fold>summary:focus-visible{outline:2px solid var(--gold);
 @media(max-width:720px){
   .dy-seg u{display:none}
   .dy-seg b{font-size:var(--t-sm)}
-  /* 窄屏时「结论预览」独占一行。
-     跟标题、计数抢同一行的话，它会被挤到 80–120px，
-     17 个字只剩 7–10 个 —— 第三批做这个预览的意义就没了。
-     用 order 调视觉顺序（标题 → 计数 → 预览），不动 HTML 结构。 */
-  details.fold>summary{flex-wrap:wrap;row-gap:2px}
-  details.fold>summary .cnt{order:1}
-  details.fold>summary .fold-prev{order:2;flex-basis:100%;max-width:100%;
-    margin-left:16px;text-align:left;padding-top:1px}
 }
 
 /* ---------- 紫微盘格子可点 ----------
@@ -405,7 +397,7 @@ a.cell.ming:hover{border-color:var(--red)}
   .fbody{padding-top:var(--s2)}
   /* 网页版的两个页签都要印出来，否则只印了当前那个 */
   .panel{display:block !important}
-  .tabs,.toc-tools,.toc-results,.ml-totop,.ml-pgbar{display:none !important}
+  .tabs,.toc-tools,.toc-results,.ml-totop,.ml-pgbar,.ml-jump,.ml-secnav{display:none !important}
 }
 
 /* ===================================================================
@@ -568,6 +560,10 @@ details.fold>summary .cnt{margin-left:auto;font-size:var(--t-sm);
   border:none;border-radius:var(--r-sm);cursor:pointer;font-family:inherit}
 .toc-results .r-i:hover{background:#f6efe1}
 .toc-results mark{background:#f7e8c0;color:inherit;border-radius:2px}
+/* 本页查找的命中底色。
+   Custom Highlight API 只管「哪几段算命中」，颜色得自己写 —— 少了这条，
+   命中区间注册成功、页面上却看不见任何标记。 */
+::highlight(ml-find){background-color:#f7e8c0}
 /* 锚点跳转时别被吸顶条压住 */
 h2[id]{scroll-margin-top:38px}
 .ml-pgbar{position:fixed;left:0;right:0;top:0;height:26px;z-index:60;
@@ -577,8 +573,78 @@ h2[id]{scroll-margin-top:38px}
 .ml-pgbar.on{opacity:1}
 .ml-pgbar-f{position:absolute;left:0;top:0;height:2px;width:0;
   background:var(--red)}
-.ml-pgbar-t{position:relative;margin-left:var(--s3);font-size:var(--t-sm);
-  color:var(--sub)}
+.ml-pgbar-btn{display:flex;align-items:center;gap:10px;width:100%;
+  height:100%;padding:0 var(--s3);background:none;border:none;
+  font-family:inherit;font-size:var(--t-sm);color:var(--sub);
+  cursor:pointer;text-align:left}
+.ml-pgbar-btn:hover{background:#f6efe1;color:var(--ink)}
+.ml-pgbar-t{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
+.ml-pgbar-c{flex:none;color:var(--red);font-weight:700;font-size:var(--t-xs);
+  letter-spacing:.4px}
+
+/* 跳转面板：任何时候点吸顶条都能换小节 */
+.ml-jump{position:fixed;left:0;right:0;top:26px;z-index:61;display:flex;
+  justify-content:center;pointer-events:none}
+.ml-jump[hidden]{display:none}
+.ml-jump-in{pointer-events:auto;width:min(520px,calc(100% - 16px));
+  max-height:min(72vh,540px);overflow:auto;background:var(--card);
+  border:1px solid var(--line);border-top:none;
+  border-radius:0 0 var(--r-md) var(--r-md);
+  box-shadow:0 12px 30px rgba(43,38,33,.16)}
+.ml-jump-h{display:flex;align-items:center;justify-content:space-between;
+  padding:9px 12px 6px;font-size:var(--t-sm);color:var(--ink)}
+.ml-jump-x{border:none;background:none;font-size:15px;line-height:1;
+  color:var(--sub);cursor:pointer;padding:4px 6px;border-radius:var(--r-sm);
+  font-family:inherit}
+.ml-jump-x:hover{background:#f6efe1;color:var(--ink)}
+.ml-jump-s{display:block;width:calc(100% - 20px);margin:0 10px 4px;
+  padding:5px 9px;font-size:13px;font-family:inherit;color:var(--ink);
+  background:#fffdf8;border:1px solid var(--line);border-radius:var(--r-sm)}
+.ml-jump-s:focus{outline:2px solid var(--gold);outline-offset:1px}
+.ml-jump-list{padding:2px 0 4px}
+.ml-jump-i{display:flex;align-items:baseline;gap:9px;width:100%;
+  padding:7px 12px;background:none;border:none;font-family:inherit;
+  font-size:13.5px;color:var(--ink);text-align:left;cursor:pointer}
+.ml-jump-i:hover{background:#f6efe1}
+.ml-jump-i.cur{background:#f7e8e6;color:var(--red);font-weight:700}
+.ml-jump-n{flex:none;font-size:11px;color:var(--sub);
+  font-variant-numeric:tabular-nums}
+.ml-jump-i.cur .ml-jump-n{color:var(--red)}
+.ml-jump-t{min-width:0}
+.ml-jump-res{padding:0 10px 8px;max-height:38vh;overflow:auto}
+.ml-jump-res[hidden]{display:none}
+.ml-jump-ft{padding:6px 12px 10px;font-size:var(--t-xs);color:var(--sub);
+  border-top:1px solid var(--line2)}
+
+/* 节末导航：长文读到一节末尾，最想问的是「然后呢」 */
+.ml-secnav{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  margin:var(--s5) 0 var(--s3);padding-top:var(--s3);
+  border-top:1px dashed var(--line2);font-size:var(--t-sm)}
+.ml-secnav-a{color:var(--red);text-decoration:none;line-height:1.6}
+.ml-secnav-a:hover{text-decoration:underline}
+.ml-secnav-p{flex:1 1 auto}
+.ml-secnav-t{flex:none;color:var(--sub);font-size:var(--t-xs);
+  border:1px solid var(--line);border-radius:var(--r-pill);
+  padding:1px 8px;text-decoration:none}
+.ml-secnav-t:hover{background:#f6efe1;text-decoration:none}
+.ml-secnav-n{flex:1 1 auto;text-align:right}
+
+/* 跳转落点闪一下：滚完常常不知道落在哪 */
+.ml-flash{animation:mlFlash 1.3s var(--ease)}
+@keyframes mlFlash{0%{background:#f7e8c0}100%{background:transparent}}
+
+/* 窄屏：结论预览独占一行。
+   必须放在样式表最后 —— 折叠预览的基础规则在后文（max-width:62%、
+   nowrap），同优先级下后出现的赢，写在前面会被压回去（实测过：仍是 164px）。 */
+@media(max-width:720px){
+  details.fold>summary{flex-wrap:wrap;row-gap:2px}
+  details.fold>summary .cnt{order:1}
+  details.fold>summary .fold-prev{order:2;flex-basis:100%;max-width:100%;
+    margin-left:16px;text-align:left;padding-top:1px;white-space:normal}
+  /* 面板条目手指点得着（32px 偏小） */
+  .ml-jump-i{padding:10px 12px}
+}
 .ml-totop{position:fixed;right:14px;bottom:18px;width:42px;height:42px;
   border-radius:50%;border:none;background:var(--red);color:#fff;
   font-size:18px;line-height:1;cursor:pointer;opacity:0;pointer-events:none;
@@ -587,6 +653,10 @@ h2[id]{scroll-margin-top:38px}
 @media(max-width:720px){
   .toc-grid{grid-template-columns:repeat(auto-fill,minmax(92px,1fr))}
   .ml-totop{right:10px;bottom:12px;width:38px;height:38px}
+  /* 拇指点得着的吸顶条 */
+  .ml-pgbar{height:32px}
+  .ml-jump{top:32px}
+  .ml-jump-in{width:calc(100% - 12px);max-height:76vh}
 }
 """
 
@@ -599,46 +669,93 @@ PAGE_JS = r"""(function () {
   if (window.__mlPageReady) return;
   window.__mlPageReady = 1;
 
+  var FLASH_MS = 1300;
+
+  // ---------- 吸顶条：进度 + 当前小节 + 目录按钮 ----------
+  // 以前这条只能看不能点：读到第 15 屏想换小节，得先滚回页首。
   var bar = document.createElement("div");
   bar.className = "ml-pgbar";
-  bar.innerHTML = '<div class="ml-pgbar-f"></div>' +
-                  '<span class="ml-pgbar-t"></span>';
+  bar.innerHTML = '<div class="ml-pgbar-f"></div>';
+  var barBtn = document.createElement("button");
+  barBtn.type = "button";
+  barBtn.className = "ml-pgbar-btn";
+  barBtn.setAttribute("aria-expanded", "false");
+  barBtn.setAttribute("aria-controls", "ml-jump");
+  barBtn.innerHTML = '<span class="ml-pgbar-t"></span>' +
+                     '<span class="ml-pgbar-c">目录</span>';
   var fill = bar.firstChild;
-  var label = bar.lastChild;
+  var label = barBtn.firstChild;
+  bar.appendChild(barBtn);
+
   var top = document.createElement("button");
   top.type = "button";
   top.className = "ml-totop";
   top.setAttribute("aria-label", "回到顶部");
   top.textContent = "↑";
+
+  // ---------- 跳转面板 ----------
+  var jump = document.createElement("div");
+  jump.className = "ml-jump";
+  jump.id = "ml-jump";
+  jump.hidden = true;
+  jump.innerHTML = '<div class="ml-jump-in" role="dialog" aria-label="跳到小节">' +
+    '<div class="ml-jump-h"><b>跳到…</b>' +
+    '<button type="button" class="ml-jump-x" aria-label="关闭">✕</button></div>' +
+    '<input class="ml-jump-s" type="search" placeholder="找一句话…" ' +
+    'aria-label="在本页查找">' +
+    '<div class="ml-jump-list"></div>' +
+    '<div class="ml-jump-res" hidden></div>' +
+    '<div class="ml-jump-ft">点一节跳过去 · Esc 关闭</div>' +
+    '</div>';
+
+  // 顺序 = Tab 顺序：面板紧跟吸顶条，点开目录后按 Tab 直接进面板
   document.body.appendChild(bar);
+  document.body.appendChild(jump);
   document.body.appendChild(top);
 
+  var jumpInner = jump.querySelector(".ml-jump-in");
+  var jumpList = jump.querySelector(".ml-jump-list");
+  var jumpRes = jump.querySelector(".ml-jump-res");
+  var jumpInput = jump.querySelector(".ml-jump-s");
+
+  function esc(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  // ---------- 小节列表 ----------
+  // secs：全部小节（含另一个页签里的）—— 面板要能跳过去
+  // vis ：当前可见的下标 —— 「现在读到哪一节」只在这堆里找
   var secs = [];
+  var vis = [];
+
   function collect() {
     secs = [];
+    vis = [];
     var hs = document.querySelectorAll("h2[data-t]");
     for (var i = 0; i < hs.length; i++) {
-      // 隐藏页签里的标题不算「当前小节」
-      if (hs[i].offsetParent !== null) secs.push(hs[i]);
+      secs.push(hs[i]);
+      if (hs[i].offsetParent !== null) vis.push(i);
     }
+    buildSecNav();
   }
-  function currentName() {
-    var cur = "";
-    for (var i = 0; i < secs.length; i++) {
-      if (secs[i].getBoundingClientRect().top <= 90) {
-        cur = secs[i].getAttribute("data-t");
-      }
+
+  function currentIdx() {
+    var idx = -1;
+    for (var k = 0; k < vis.length; k++) {
+      if (secs[vis[k]].getBoundingClientRect().top <= 90) idx = vis[k];
     }
-    return cur;
+    return idx;
   }
-  // 刷新进度条。用时间节流而不是 requestAnimationFrame：
-  // 窗口不可见时 rAF 不触发，进度条会永远停在空白（实测踩过）。
+
   function update() {
     var y = window.pageYOffset || document.documentElement.scrollTop || 0;
     var h = document.documentElement.scrollHeight - window.innerHeight;
     var p = h > 0 ? Math.max(0, Math.min(1, y / h)) : 0;
     fill.style.width = (p * 100).toFixed(2) + "%";
-    var c = currentName();
+    var i = currentIdx();
+    var c = i >= 0 ? secs[i].getAttribute("data-t") : "";
     if (label.textContent !== c) label.textContent = c;
     if (y > 360) {
       bar.classList.add("on");
@@ -648,6 +765,9 @@ PAGE_JS = r"""(function () {
       top.classList.remove("on");
     }
   }
+
+  // 刷新进度条。用时间节流而不是 requestAnimationFrame：
+  // 窗口不可见时 rAF 不触发，进度条会永远停在空白（实测踩过）。
   var lastRun = 0, pending = false;
   function onScroll() {
     var now = (window.performance && performance.now) ? performance.now()
@@ -667,12 +787,7 @@ PAGE_JS = r"""(function () {
       update();
     }, wait);
   }
-  window.addEventListener("scroll", onScroll, { passive: true });
-  window.addEventListener("resize", function () { collect(); onScroll(); });
-  document.addEventListener("mingli:refresh", function () {
-    collect();
-    onScroll();
-  });
+
   // 瞬时跳转，不用动画。
   // 实测：窗口不可见时 requestAnimationFrame 不触发，原生 smooth 滚动
   // 也依赖合成器、同样不动 —— 症状是「点了目录没反应」。
@@ -680,30 +795,166 @@ PAGE_JS = r"""(function () {
   function scrollToY(targetY) {
     var y = Math.max(0, Math.round(targetY));
     if (window.scrollTo) window.scrollTo(0, y);
+    // 主动刷一次：程序化滚动不保证有 scroll 事件（窗口不可见时就没有），
+    // 不刷的话吸顶条会停在上一节的名字。
+    onScroll();
   }
+
+  // 落点要停在吸顶条下面，否则标题正好被压住
+  function barH() { return (bar.offsetHeight || 26) + 8; }
+
   function scrollToEl(el) {
     var r = el.getBoundingClientRect();
-    var y = r.top + (window.pageYOffset || document.documentElement.scrollTop || 0) - 34;
+    var y = r.top + (window.pageYOffset || document.documentElement.scrollTop || 0)
+      - barH();
     scrollToY(y);
   }
-  top.addEventListener("click", function () { scrollToY(0); });
-  // 目录跳转：目标可能落在另一个页签里（网页版「专业数据」是单独一页签），
-  // 先广播一个事件让页面切过去，再滚动。
-  document.addEventListener("click", function (e) {
-    var a = (e.target && e.target.closest)
-      ? e.target.closest("a[href^='#']") : null;
-    if (!a) return;
-    var id = a.getAttribute("href").slice(1);
-    if (!id) return;
+
+  // 跳过去以后闪一下：长文里滚完常常不知道落在哪
+  function flash(el) {
+    if (!el || !el.classList) return;
+    el.classList.remove("ml-flash");
+    void el.offsetWidth;
+    el.classList.add("ml-flash");
+    setTimeout(function () { el.classList.remove("ml-flash"); }, FLASH_MS);
+  }
+
+  function goTo(id) {
     var el = document.getElementById(id);
     if (!el) return;
-    e.preventDefault();
+    closeJump();
+    // 目标可能落在另一个页签里（网页版「专业数据」是单独一页签），
+    // 先广播一个事件让页面切过去，再滚动。
     try {
       document.dispatchEvent(new CustomEvent("mingli:goto",
         { detail: { id: id } }));
     } catch (err) { /* 老浏览器没有 CustomEvent，忽略 */ }
-    setTimeout(function () { scrollToEl(el); }, 60);
+    setTimeout(function () {
+      scrollToEl(el);
+      flash(el);
+    }, 60);
+  }
+
+  top.addEventListener("click", function () { scrollToY(0); });
+
+  // ---------- 面板开关 ----------
+  function pad2(n) { return n < 10 ? "0" + n : "" + n; }
+
+  function fillList() {
+    var cur = currentIdx();
+    var html = "";
+    for (var i = 0; i < secs.length; i++) {
+      var s = secs[i];
+      var on = (i === cur);
+      html += '<button type="button" class="ml-jump-i' + (on ? " cur" : "") +
+        '" data-ml="jump" data-id="' + esc(s.id) + '"' +
+        (on ? ' aria-current="true"' : "") + ">" +
+        '<span class="ml-jump-n">' + pad2(i + 1) + "</span>" +
+        '<span class="ml-jump-t">' + esc(s.getAttribute("data-t")) +
+        "</span></button>";
+    }
+    jumpList.innerHTML = html;
+    jumpRes.hidden = true;
+    jumpRes.innerHTML = "";
+    jumpInput.value = "";
+    clearFind();
+    findQuery = "";
+    hitIdx = -1;
+  }
+
+  function openJump() {
+    fillList();
+    jump.hidden = false;
+    barBtn.setAttribute("aria-expanded", "true");
+    onScroll();
+  }
+
+  function closeJump() {
+    if (jump.hidden) return;
+    jump.hidden = true;
+    barBtn.setAttribute("aria-expanded", "false");
+  }
+
+  barBtn.addEventListener("click", function () {
+    if (jump.hidden) openJump(); else closeJump();
   });
+
+  jump.querySelector(".ml-jump-x").addEventListener("click", function (e) {
+    e.preventDefault();
+    closeJump();
+    barBtn.focus();
+  });
+
+  // 点面板外面关掉（点面板里不算）
+  document.addEventListener("mousedown", function (e) {
+    if (jump.hidden) return;
+    var t = e.target;
+    if (jumpInner.contains(t) || bar.contains(t)) return;
+    closeJump();
+  });
+
+  // ---------- 节末导航：上一节 / 目录 / 下一节 ----------
+  // 长文读到一节末尾时，最想问的是「然后呢」。
+  // 用当前可见的小节列表现算，所以页签切换、数据不全时都不会指向空处。
+  var secNavSig = "";
+
+  function mkNav(i) {
+    var nav = document.createElement("nav");
+    nav.className = "ml-secnav";
+    nav.setAttribute("aria-label", "小节导航");
+    var html = "";
+    if (i > 0) {
+      html += '<a class="ml-secnav-a ml-secnav-p" href="#' + esc(secs[i - 1].id) +
+        '">← ' + esc(secs[i - 1].getAttribute("data-t")) + "</a>";
+    }
+    html += '<a class="ml-secnav-a ml-secnav-t" href="#s-toc">目录</a>';
+    if (i + 1 < secs.length) {
+      html += '<a class="ml-secnav-a ml-secnav-n" href="#' + esc(secs[i + 1].id) +
+        '">' + esc(secs[i + 1].getAttribute("data-t")) + " →</a>";
+    }
+    nav.innerHTML = html;
+    return nav;
+  }
+
+  function buildSecNav() {
+    // 签名要带可见性：切页签时 id 不变，但该重建（隐藏的小节不插导航）
+    var sig = "";
+    for (var i = 0; i < secs.length; i++) {
+      sig += secs[i].id + (secs[i].offsetParent !== null ? "*" : "-") + "|";
+    }
+    if (sig === secNavSig) return;
+    secNavSig = sig;
+    var olds = document.querySelectorAll(".ml-secnav");
+    for (var k = 0; k < olds.length; k++) {
+      if (olds[k].parentNode) olds[k].parentNode.removeChild(olds[k]);
+    }
+    // 按容器分组：同一个小节容器（section / 面板）里的连续小节算一组。
+    // 只看可见的 —— 往隐藏页签里插导航是白插（看不见）。
+    var groups = [];
+    var lastBox = null;
+    for (var k = 0; k < vis.length; k++) {
+      var j = vis[k];
+      var box = secs[j].parentNode;
+      if (box !== lastBox) {
+        groups.push({ box: box, items: [] });
+        lastBox = box;
+      }
+      groups[groups.length - 1].items.push(j);
+    }
+    for (var g = 0; g < groups.length; g++) {
+      var items = groups[g].items;
+      for (var m = 0; m < items.length; m++) {
+        var idx = items[m];
+        var nav = mkNav(idx);
+        if (m + 1 < items.length) {
+          groups[g].box.insertBefore(nav, secs[items[m + 1]]);
+        } else {
+          groups[g].box.appendChild(nav);
+        }
+      }
+    }
+  }
+
   // ---------- 全部展开 / 全部收起 ----------
   function setAll(open) {
     var ds = document.querySelectorAll("details");
@@ -738,6 +989,9 @@ PAGE_JS = r"""(function () {
   // 不动 DOM；浏览器不支持时退化成「只列命中处」。
   var results = [];
   var findRoot = document.querySelector("main") || document.body;
+  var findQuery = "";
+  var findBox = null;
+  var hitIdx = -1;
 
   function clearFind() {
     results = [];
@@ -759,23 +1013,25 @@ PAGE_JS = r"""(function () {
     if (at < 0) at = 0;
     var from = Math.max(0, at - 14);
     var to = Math.min(txt.length, at + q.length + 22);
-    return (from > 0 ? "…" : "") + txt.slice(from, to)
-      + (to < txt.length ? "…" : "");
+    return (from > 0 ? "…" : "") + txt.slice(from, to) +
+      (to < txt.length ? "…" : "");
   }
 
   function renderFind(q) {
-    var box = document.querySelector(".toc-results");
+    var box = findBox;
     if (!box) return;
     if (!q) { box.hidden = true; box.innerHTML = ""; return; }
     if (!results.length) {
       box.hidden = false;
-      box.innerHTML = '<div class="r-h">没找到「' + q + "」</div>";
+      box.innerHTML = '<div class="r-h">没找到「' + esc(q) + "」</div>";
       return;
     }
-    var html = '<div class="r-h">找到 ' + results.length + " 处：</div>";
+    var head = "找到 " + results.length + " 处";
+    if (hitIdx >= 0) head = "第 " + (hitIdx + 1) + " / " + results.length + " 处";
+    var html = '<div class="r-h">' + head + "：</div>";
     for (var i = 0; i < results.length && i < 30; i++) {
-      html += '<button type="button" class="r-i" data-find="' + i + '">'
-        + results[i].snip + "</button>";
+      html += '<button type="button" class="r-i" data-find="' + i + '">' +
+        results[i].snip + "</button>";
     }
     if (results.length > 30) {
       html += '<div class="r-h">还有 ' + (results.length - 30) + " 处未列出</div>";
@@ -784,9 +1040,12 @@ PAGE_JS = r"""(function () {
     box.innerHTML = html;
   }
 
-  function doFind(q) {
+  function doFind(q, box) {
     clearFind();
+    findBox = box || findBox;
     q = (q || "").trim();
+    findQuery = q;
+    hitIdx = -1;
     if (q.length < 2) { renderFind(""); return; }
     var walker = document.createTreeWalker(findRoot, NodeFilter.SHOW_TEXT);
     var ranges = [];
@@ -814,65 +1073,130 @@ PAGE_JS = r"""(function () {
     }
     try {
       if (window.CSS && CSS.highlights && ranges.length) {
-        CSS.highlights.set("ml-find", new Highlight.apply(null, ranges));
+        // 注意：Highlight 是 class，不能 .apply（会抛 not a constructor）。
+        // 必须展开传参 —— 这里错了高亮会一直静默失效。
+        CSS.highlights.set("ml-find", new Highlight(...ranges));
       }
     } catch (e) { /* 不支持 Custom Highlight 就只列命中处 */ }
     renderFind(q);
   }
 
-  var searchBox = document.querySelector(".toc-search");
-  if (searchBox) {
+  function jumpHit(i) {
+    var r = results[i];
+    if (!r) return;
+    // 命中的内容在折叠块里就先把块打开，否则滚过去也是空的
+    var p = r.node.parentElement;
+    while (p && p !== document.body) {
+      if (p.tagName === "DETAILS") p.open = true;
+      p = p.parentElement;
+    }
+    setTimeout(function () {
+      var el = r.range.startContainer.parentElement;
+      if (el) { scrollToEl(el); flash(el); }
+    }, 30);
+  }
+
+  // 回车 / 边打边找：一条一条往下走，跟浏览器自带查找一个手感
+  function nextHit() {
+    if (!results.length) return;
+    hitIdx = (hitIdx + 1) % results.length;
+    renderFind(findQuery);
+    jumpHit(hitIdx);
+  }
+
+  function wireSearch(input, box) {
+    if (!input || !box) return;
     var timer = null;
-    searchBox.addEventListener("input", function () {
+    input.addEventListener("input", function () {
       if (timer) clearTimeout(timer);
-      timer = setTimeout(function () { doFind(searchBox.value); }, 180);
+      timer = setTimeout(function () {
+        timer = null;
+        doFind(input.value, box);
+      }, 180);
     });
-    searchBox.addEventListener("keydown", function (e) {
+    input.addEventListener("keydown", function (e) {
       if (e.key === "Enter") {
         e.preventDefault();
-        if (timer) clearTimeout(timer);
-        doFind(searchBox.value);
-      }
-      if (e.key === "Escape") {
-        searchBox.value = "";
-        doFind("");
+        if (timer) { clearTimeout(timer); timer = null; }
+        if (findQuery !== input.value.trim() || findBox !== box) {
+          doFind(input.value, box);
+        } else {
+          nextHit();
+        }
+      } else if (e.key === "Escape") {
+        input.value = "";
+        doFind("", box);
       }
     });
   }
 
+  wireSearch(document.querySelector(".toc-search"),
+             document.querySelector(".toc-results"));
+  wireSearch(jumpInput, jumpRes);
+
+  // ---------- 快捷键 ----------
+  // 「/」直接开查找：长文里手不用离开键盘
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && !jump.hidden) {
+      closeJump();
+      barBtn.focus();
+      return;
+    }
+    var tag = (e.target && e.target.tagName) || "";
+    if (e.key === "/" && !/^(INPUT|TEXTAREA|SELECT)$/.test(tag)) {
+      e.preventDefault();
+      if (jump.hidden) openJump();
+      setTimeout(function () { jumpInput.focus(); }, 20);
+    }
+  });
+
+  // ---------- 点击总入口 ----------
   document.addEventListener("click", function (e) {
-    var btn = e.target && e.target.closest
-      ? e.target.closest("[data-toc]") : null;
+    var t = e.target;
+    if (!t || !t.closest) return;
+
+    var jitem = t.closest("[data-ml='jump']");
+    if (jitem) {
+      e.preventDefault();
+      goTo(jitem.getAttribute("data-id"));
+      return;
+    }
+    var btn = t.closest("[data-toc]");
     if (btn) {
       e.preventDefault();
       setAll(btn.getAttribute("data-toc") === "expand");
       return;
     }
-    var hit = e.target && e.target.closest
-      ? e.target.closest("[data-find]") : null;
+    var hit = t.closest("[data-find]");
     if (hit) {
       e.preventDefault();
       var idx = Number(hit.getAttribute("data-find"));
-      var r = results[idx];
-      if (!r) return;
-      // 命中的内容在折叠块里就先把块打开，否则滚过去也是空的
-      var p = r.node.parentElement;
-      while (p && p !== document.body) {
-        if (p.tagName === "DETAILS") p.open = true;
-        p = p.parentElement;
-      }
-      setTimeout(function () {
-        if (r.range.startContainer.parentElement) {
-          r.range.startContainer.parentElement.scrollIntoView(
-            { block: "center" });
-        }
-      }, 30);
+      if (!results[idx]) return;
+      closeJump();
+      hitIdx = idx;
+      renderFind(findQuery);
+      jumpHit(idx);
+      return;
     }
+    var a = t.closest("a[href^='#']");
+    if (!a) return;
+    var id = a.getAttribute("href").slice(1);
+    if (!id || !document.getElementById(id)) return;
+    e.preventDefault();
+    goTo(id);
+  });
+
+  window.addEventListener("scroll", onScroll, { passive: true });
+  window.addEventListener("resize", function () { collect(); onScroll(); });
+  document.addEventListener("mingli:refresh", function () {
+    collect();
+    onScroll();
   });
 
   collect();
   onScroll();
-})();"""
+})();
+"""
 
 WX_COLOR = {"木": "#5b8c5a", "火": "#c0504d", "土": "#b08d4a", "金": "#8a8f98", "水": "#4a6fa5"}
 
@@ -2197,7 +2521,7 @@ def render_toc(plain_html, pro_html):
         return ""
     links = "".join('<a class="toc-i" href="#%s">%s</a>' % (i, t)
                     for i, t in items)
-    return ('<nav class="toc" aria-label="本页目录">'
+    return ('<nav class="toc" id="s-toc" aria-label="本页目录">'
             '<div class="toc-h">本页目录'
             '<span class="toc-tip">点一下跳到对应小节</span></div>'
             '<div class="toc-grid">%s</div>'

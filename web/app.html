@@ -950,6 +950,11 @@ function unpackSearch(v){
           $("#summaryText").innerHTML = "已按 <b>" + esc(summarize(v)) + "</b> 排盘";
           $("#formSummary").classList.add("show");
           $("#form").classList.add("collapsed");
+          // 出盘了：小节全换了，得让页面级脚本重算
+          //（吸顶条的当前小节、节末的上一节/下一节都靠它）
+          try {
+            document.dispatchEvent(new CustomEvent("mingli:refresh"));
+          } catch (err2) { /* 老浏览器没有 CustomEvent，忽略 */ }
           if (v.hourEstimated){
             // 必须明说：时柱是拿 12:00 猜的，不是用户的真实出生时刻。
             // 不说的话，用户会把一个编出来的时柱当成真结果。
@@ -1032,9 +1037,11 @@ function unpackSearch(v){
       var id = (e.detail && e.detail.id) || "";
       var el = document.getElementById(id);
       if (!el) return;
-      var pro = $("#panel-pro");
+      // 只在小节确实落在某个面板里时才切页签。
+      // 目录卡（#s-toc）在两个面板外面 —— 不能因为点了它就切回说人话。
+      var pro = $("#panel-pro"), plain = $("#panel-plain");
       if (pro && pro.contains(el)) switchTab("pro");
-      else switchTab("plain");
+      else if (plain && plain.contains(el)) switchTab("plain");
     });
   }
 

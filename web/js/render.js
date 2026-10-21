@@ -422,7 +422,7 @@ export function buildToc(plainHtml, proHtml) {
   if (!items.length) return "";
   const links = items.map(x => '<a class="toc-i" href="#' + x[0] + '">'
                           + x[1] + "</a>").join("");
-  return '<nav class="toc" aria-label="本页目录">'
+  return '<nav class="toc" id="s-toc" aria-label="本页目录">'
     + '<div class="toc-h">本页目录'
     + '<span class="toc-tip">点一下跳到对应小节</span></div>'
     + '<div class="toc-grid">' + links + "</div>"

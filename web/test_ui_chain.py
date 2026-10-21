@@ -1277,6 +1277,38 @@ if (/error/i.test(errMsg)) {
   } else {
     console.log("  OK   打印前会展开全部折叠");
   }
+
+  // 交互层：吸顶条可点 + 跳转面板 + 节末导航
+  const need = [
+    ["ml-pgbar-btn", "吸顶条上的目录按钮"],
+    ["ml-jump-in", "跳到面板"],
+    ["ml-secnav", "节末上一节/下一节"],
+    ["ml-flash", "跳转落点提示"],
+    ["data-ml=\"jump\"", "面板里的跳转项"],
+  ];
+  let miss = [];
+  for (const [k, name] of need) {
+    if (html.indexOf(k) < 0) miss.push(name);
+  }
+  if (miss.length) {
+    fail("产物里缺交互件：" + miss.join("、"));
+  } else {
+    console.log("  OK   吸顶条可点 / 跳到面板 / 节末导航 / 落点提示 都在");
+  }
+
+  // 查找高亮必须有样式：少了 ::highlight 规则，命中区间在、页面上却没颜色
+  if (html.indexOf("::highlight(ml-find)") < 0) {
+    fail("产物里没有 ::highlight(ml-find) 样式 —— 查找只会列清单，页面上不标黄");
+  } else {
+    console.log("  OK   查找命中在页面上有底色");
+  }
+
+  // 目录卡要有 s-toc 落点，否则「目录」链接点了没反应
+  if (html.indexOf('id="s-toc"') < 0) {
+    fail("目录卡没有 id=\"s-toc\" —— 节末的「目录」链接会落空");
+  } else {
+    console.log("  OK   目录卡有 s-toc 落点");
+  }
 }
 
 if (bad) { console.error("\nUI 端到端验证失败 " + bad + " 项"); process.exit(1); }
