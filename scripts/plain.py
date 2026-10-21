@@ -2667,8 +2667,8 @@ def persona_plain(bazi_r, ziwei_r, astro_r):
 # 这一点之前在大运起运岁数上踩过坑。
 # ===================================================================
 
-WX_COLOR5 = {"木": "#3f7a52", "火": "#c0453a", "土": "#a8842c",
-             "金": "#8a8f96", "水": "#2f5d7c"}
+WX_COLOR5 = {"木": "#3c6b4d", "火": "#b5433a", "土": "#a5812c",
+             "金": "#8a8f96", "水": "#2e5a77"}
 
 
 def _py1(x):
@@ -2726,7 +2726,7 @@ def wuxing_donut(stat, size=168):
         return ('<svg class="donut" viewBox="0 0 %d %d" width="%d" height="%d"'
                 ' role="img" aria-label="五行力量分布">'
                 '<circle cx="%.0f" cy="%.0f" r="%d" fill="none"'
-                ' stroke="#efe9dd" stroke-width="%d"/></svg>'
+                ' stroke="#e7ddc9" stroke-width="%d"/></svg>'
                 % (size, size, size, size, cx, cy, R, sw))
     total = sum(stat.values()) or 1
     C = 1000
@@ -2740,7 +2740,7 @@ def wuxing_donut(stat, size=168):
              % (size, size, size, size))
     # 底环
     p.append('<circle cx="%.0f" cy="%.0f" r="%d" fill="none" '
-             'stroke="#efe9dd" stroke-width="%d"/>' % (cx, cy, R, sw))
+             'stroke="#e7ddc9" stroke-width="%d"/>' % (cx, cy, R, sw))
     off = 0
     order = ["木", "火", "土", "金", "水"]
     for k in order:
@@ -2759,10 +2759,10 @@ def wuxing_donut(stat, size=168):
     # 中心文字：最强的一行
     top = max(stat, key=stat.get)
     p.append('<text x="%.0f" y="%.0f" text-anchor="middle" '
-             'class="d-main" fill="#2b2621">%s</text>'
+             'class="d-main" fill="#241f19">%s</text>'
              % (cx, cy - 2, _esc(top)))
     p.append('<text x="%.0f" y="%.0f" text-anchor="middle" '
-             'class="d-sub" fill="#6b6154">%.0f%%</text>'
+             'class="d-sub" fill="#6a6052">%.0f%%</text>'
              % (cx, cy + 16, stat.get(top, 0)))
     p.append("</svg>")
     return "".join(p)
@@ -2855,12 +2855,12 @@ def astro_chart(r, size=340):
              'role="img" aria-label="占星星盘">'
              % (size, size, size, size))
     p.append('<circle cx="%d" cy="%d" r="%d" fill="none" '
-             'stroke="#e3dbcd" stroke-width="1"/>' % (cx, cy, R_IN))
+             'stroke="#ddd2bf" stroke-width="1"/>' % (cx, cy, R_IN))
     p.append('<circle cx="%d" cy="%d" r="%d" fill="none" '
-             'stroke="#efe8da" stroke-width="1" stroke-dasharray="2 3"/>'
+             'stroke="#eae1d1" stroke-width="1" stroke-dasharray="2 3"/>'
              % (cx, cy, R_PL))
     p.append('<circle cx="%d" cy="%d" r="%d" fill="none" '
-             'stroke="#e3dbcd" stroke-width="1"/>' % (cx, cy, R_OUT))
+             'stroke="#ddd2bf" stroke-width="1"/>' % (cx, cy, R_OUT))
 
     # 十二宫刻度与星座名（每 30 度一格）
     for i, sg in enumerate(SIGN_ORDER):
@@ -2868,15 +2868,15 @@ def astro_chart(r, size=340):
         x1, y1 = _chart_xy(a, R_OUT, cx, cy)
         x2, y2 = _chart_xy(a, R_IN + 8, cx, cy)
         p.append('<line x1="%d" y1="%d" x2="%d" y2="%d" '
-                 'stroke="#efe8da" stroke-width="1"/>' % (x1, y1, x2, y2))
+                 'stroke="#eae1d1" stroke-width="1"/>' % (x1, y1, x2, y2))
         xt, yt = _chart_xy(a, R_OUT + 8, cx, cy)
         p.append('<text x="%d" y="%d" text-anchor="middle" '
-                 'class="a-sign" fill="#6b6154">%s</text>'
+                 'class="a-sign" fill="#6a6052">%s</text>'
                  % (xt, yt, _esc(sg)))
         # 宫位序号（从上升起算）
         xn, yn = _chart_xy(a, R_IN - 6, cx, cy)
         p.append('<text x="%d" y="%d" text-anchor="middle" '
-                 'class="a-num" fill="#6f675b">%d</text>'
+                 'class="a-num" fill="#6f6556">%d</text>'
                  % (xn, yn, i + 1))
 
     # 相位连线（先画线，行星压在线上层）
@@ -2902,12 +2902,12 @@ def astro_chart(r, size=340):
                  'class="a-asp %s" stroke="%s" stroke-width="%s"/>'
                  % (x1, y1, x2, y2,
                     "hard" if harmony else "",
-                    "#c8b88f" if harmony else "#d9b0a8",
+                    "#c2a05a" if harmony else "#d9a89e",
                     "1.6" if harmony else "1"))
         # 相位符号标注在线的中点
         mx, my = _r_half_up((x1 + x2) / 2), _r_half_up((y1 + y2) / 2)
         p.append('<text x="%d" y="%d" text-anchor="middle" '
-                 'class="a-asp-t" fill="#866a23">%s</text>'
+                 'class="a-asp-t" fill="#7c611e">%s</text>'
                  % (mx, my, _esc(tone)))
 
     # 行星点
@@ -2922,7 +2922,7 @@ def astro_chart(r, size=340):
                  'class="a-sym%s">%s<title>%s %s %s&#176;</title></text></g>'
                  % (x, y, "13" if main else "10",
                     " main" if main else "",
-                    "#fdf6ee" if main else "#fbf8f1",
+                    "#fbf6ea" if main else "#f6efe1",
                     x, y, " main" if main else "",
                     sym, _esc(q.get("天体", "")), _esc(q.get("星座", "")),
                     _py1(q.get("黄经") or 0)))
@@ -2931,10 +2931,10 @@ def astro_chart(r, size=340):
     sun = next((q for q in r["天体"] if q.get("天体") == "太阳"), None)
     if sun:
         p.append('<text x="%d" y="%d" text-anchor="middle" '
-                 'class="a-core" fill="#2b2621">%s</text>'
+                 'class="a-core" fill="#241f19">%s</text>'
                  % (cx, cy - 4, _esc(sun.get("星座", ""))))
         p.append('<text x="%d" y="%d" text-anchor="middle" '
-                 'class="a-core-sub" fill="#6b6154">太阳</text>'
+                 'class="a-core-sub" fill="#6a6052">太阳</text>'
                  % (cx, cy + 14))
     p.append("</svg>")
     return "".join(p)

@@ -501,7 +501,7 @@ export function renderPlain(data) {
 
   if (data.八字) {
     const b = gBazi = baziPlain(data.八字);
-    P.push('<h2 id="s-bazi" data-t="八字 · 性格天赋" style="font-size:15px;border-left-color:var(--gold)">八字 · 看你的性格和天赋</h2>');
+    P.push('<h2 id="s-bazi" data-t="八字 · 性格天赋">八字 · 看你的性格和天赋</h2>');
     P.push('<div class="sec-lead">这一节讲你是什么样的人、怎么做事、'
       + '力气往哪儿使。</div>');
     P.push('<div class="plain"><h3>' + h(b.性格底色.标题) + '</h3><p>' + h(b.性格底色.要点)
@@ -880,7 +880,7 @@ export function renderPlain(data) {
 
   if (data.紫微) {
     const z = gZiwei = ziweiPlain(data.紫微);
-    P.push('<h2 id="s-ziwei" data-t="紫微 · 事业财运" style="font-size:15px;border-left-color:var(--gold);margin-top:22px">'
+    P.push('<h2 id="s-ziwei" data-t="紫微 · 事业财运">'
       + "紫微斗数 · 看事业、财运、感情</h2>");
     P.push('<div class="sec-lead">这一节讲事业、财运、感情，'
       + '还有眼前这一段的重心落在哪儿。</div>');
@@ -1111,7 +1111,7 @@ export function renderPlain(data) {
 
   if (data.占星) {
     const a = gAstro = astroPlain(data.占星);
-    P.push('<h2 id="s-astro" data-t="占星 · 性格另一面" style="font-size:15px;border-left-color:var(--gold);margin-top:22px">'
+    P.push('<h2 id="s-astro" data-t="占星 · 性格另一面">'
       + "西洋占星 · 看性格的另一面</h2>");
     P.push('<div class="sec-lead">这一节从另一个角度看性格：别人看到的你、'
       + '情绪的来处、关系里的张力。</div>');
@@ -1332,7 +1332,7 @@ export function renderPlain(data) {
   if ("八字" in data || "紫微" in data || "占星" in data) {
     const x = P_crossPlain(data["八字"], data["紫微"], data["占星"]);
     if (x["一致"].length || x["分歧"].length || x["单盘"].length) {
-      P.push('<h2 id="s-cross" data-t="三盘交叉" style="font-size:15px;border-left-color:var(--gold)">'
+      P.push('<h2 id="s-cross" data-t="三盘交叉">'
            + "三盘交叉 · 几套体系一起看</h2>");
       P.push('<div class="plain"><p>' + h(x["要点"]) + '</p><p class="sub2">'
            + h(x["说明"]) + "</p></div>");
@@ -1421,7 +1421,7 @@ export function renderPlain(data) {
   // 铺平会被读成十几个并列且互相冲突的结论。
   const th = P_taohuaPlain(data["八字"], data["紫微"], data["占星"]);
   if (th["列表"].length) {
-    P.push('<h2 id="s-taohua" data-t="桃花星" style="font-size:15px;border-left-color:var(--gold)">'
+    P.push('<h2 id="s-taohua" data-t="桃花星">'
          + h(th["标题"]) + "</h2>");
     P.push('<div class="plain"><p>' + h(th["要点"]) + "</p>"
          + "<p class=\"li\">下面三边说的是<em>不同层面</em>，"
@@ -1448,7 +1448,7 @@ export function renderPlain(data) {
 
   const cr = P_careerPlain(data["八字"], data["紫微"], data["占星"]);
   if (cr["列表"].length) {
-    P.push('<h2 id="s-industry" data-t="行业细分" style="font-size:15px;border-left-color:var(--gold)">'
+    P.push('<h2 id="s-industry" data-t="行业细分">'
          + h(cr["标题"]) + "</h2>");
     P.push('<div class="plain"><p>' + h(cr["要点"]) + '</p><p class="sub2">'
          + h(cr["提醒"]) + "</p></div>");

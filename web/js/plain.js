@@ -1496,8 +1496,8 @@ export function personaPlain(baziR, ziweiR, astroR) {
    Python 的 round() 在 .5 归偶，JS 的 Math.round 四舍五入，
    这一点之前在大运起运岁数上导致过两侧分叉。
    =================================================================== */
-const WX_COLOR5 = { "木": "#3f7a52", "火": "#c0453a", "土": "#a8842c",
-                    "金": "#8a8f96", "水": "#2f5d7c" };
+const WX_COLOR5 = { "木": "#3c6b4d", "火": "#b5433a", "土": "#a5812c",
+                    "金": "#8a8f96", "水": "#2e5a77" };
 
 function rHalfUp(x) { return Math.floor(x + 0.5); }
 
@@ -1515,7 +1515,7 @@ export function wuxingDonut(stat, size) {
       + size + '" height="' + size
       + '" role="img" aria-label="五行力量分布"><circle cx="'
       + (size / 2) + '" cy="' + (size / 2) + '" r="62" fill="none"'
-      + ' stroke="#efe9dd" stroke-width="20"/></svg>';
+      + ' stroke="#e7ddc9" stroke-width="20"/></svg>';
   }
   const total = vals.reduce(function (a, b) { return a + b; }, 0) || 1;
   const C = 1000;
@@ -1527,7 +1527,7 @@ export function wuxingDonut(stat, size) {
          + size + '" height="' + size
          + '" role="img" aria-label="五行力量分布">');
   p.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + R
-         + '" fill="none" stroke="#efe9dd" stroke-width="' + sw + '"/>');
+         + '" fill="none" stroke="#e7ddc9" stroke-width="' + sw + '"/>');
   let off = 0;
   const order = ["木", "火", "土", "金", "水"];
   for (const k of order) {
@@ -1545,10 +1545,10 @@ export function wuxingDonut(stat, size) {
   let top = order[0];
   for (const k of order) if ((stat[k] || 0) > (stat[top] || 0)) top = k;
   p.push('<text x="' + cx + '" y="' + (cy - 2)
-         + '" text-anchor="middle" class="d-main" fill="#2b2621">'
+         + '" text-anchor="middle" class="d-main" fill="#241f19">'
          + escSvg(top) + "</text>");
   p.push('<text x="' + cx + '" y="' + (cy + 16)
-         + '" text-anchor="middle" class="d-sub" fill="#6b6154">'
+         + '" text-anchor="middle" class="d-sub" fill="#6a6052">'
          + rHalfUp(stat[top] || 0) + "%</text>");
   p.push("</svg>");
   return p.join("");
@@ -1622,12 +1622,12 @@ export function astroChart(r, size) {
          + size + '" height="' + size
          + '" role="img" aria-label="占星星盘">');
   p.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + R_IN
-         + '" fill="none" stroke="#e3dbcd" stroke-width="1"/>');
+         + '" fill="none" stroke="#ddd2bf" stroke-width="1"/>');
   p.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + R_PL
-         + '" fill="none" stroke="#efe8da" stroke-width="1"'
+         + '" fill="none" stroke="#eae1d1" stroke-width="1"'
          + ' stroke-dasharray="2 3"/>');
   p.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + R_OUT
-         + '" fill="none" stroke="#e3dbcd" stroke-width="1"/>');
+         + '" fill="none" stroke="#ddd2bf" stroke-width="1"/>');
 
   // 十二宫刻度与星座名
   for (let i = 0; i < SIGN_ORDER.length; i++) {
@@ -1636,14 +1636,14 @@ export function astroChart(r, size) {
     const a2 = chartXy(a, R_IN + 8, cx, cy);
     p.push('<line x1="' + a1[0] + '" y1="' + a1[1] + '" x2="' + a2[0]
            + '" y2="' + a2[1]
-           + '" stroke="#efe8da" stroke-width="1"/>');
+           + '" stroke="#eae1d1" stroke-width="1"/>');
     const at = chartXy(a, R_OUT + 8, cx, cy);
     p.push('<text x="' + at[0] + '" y="' + at[1]
-           + '" text-anchor="middle" class="a-sign" fill="#6b6154">'
+           + '" text-anchor="middle" class="a-sign" fill="#6a6052">'
            + escSvg(SIGN_ORDER[i]) + "</text>");
     const an = chartXy(a, R_IN - 6, cx, cy);
     p.push('<text x="' + an[0] + '" y="' + an[1]
-           + '" text-anchor="middle" class="a-num" fill="#6f675b">'
+           + '" text-anchor="middle" class="a-num" fill="#6f6556">'
            + (i + 1) + "</text>");
   }
 
@@ -1666,11 +1666,11 @@ export function astroChart(r, size) {
     p.push('<line x1="' + c1[0] + '" y1="' + c1[1] + '" x2="' + c2[0]
            + '" y2="' + c2[1] + '" class="a-asp '
            + (harmony ? "hard" : "") + '" stroke="'
-           + (harmony ? "#c8b88f" : "#d9b0a8") + '" stroke-width="'
+           + (harmony ? "#c2a05a" : "#d9a89e") + '" stroke-width="'
            + (harmony ? "1.6" : "1") + '"/>');
     p.push('<text x="' + rHalfUp((c1[0] + c2[0]) / 2) + '" y="'
            + rHalfUp((c1[1] + c2[1]) / 2)
-           + '" text-anchor="middle" class="a-asp-t" fill="#866a23">'
+           + '" text-anchor="middle" class="a-asp-t" fill="#7c611e">'
            + escSvg(a.相位) + "</text>");
   }
 
@@ -1683,7 +1683,7 @@ export function astroChart(r, size) {
     p.push('<g class="a-pl"><circle cx="' + c[0] + '" cy="' + c[1] + '" r="'
            + (main ? 13 : 10) + '" class="a-dot'
            + (main ? " main" : "") + '" fill="'
-           + (main ? "#fdf6ee" : "#fbf8f1") + '"/>'
+           + (main ? "#fbf6ea" : "#f6efe1") + '"/>'
            + '<text x="' + c[0] + '" y="' + c[1]
            + '" text-anchor="middle" class="a-sym'
            + (main ? " main" : "") + '">' + sym + "<title>"
@@ -1694,10 +1694,10 @@ export function astroChart(r, size) {
   const sun = r.天体.find((x) => x.天体 === "太阳");
   if (sun) {
     p.push('<text x="' + cx + '" y="' + (cy - 4)
-           + '" text-anchor="middle" class="a-core" fill="#2b2621">'
+           + '" text-anchor="middle" class="a-core" fill="#241f19">'
            + escSvg(sun.星座 || "") + "</text>");
     p.push('<text x="' + cx + '" y="' + (cy + 14)
-           + '" text-anchor="middle" class="a-core-sub" fill="#6b6154">太阳</text>');
+           + '" text-anchor="middle" class="a-core-sub" fill="#6a6052">太阳</text>');
   }
   p.push("</svg>");
   return p.join("");

@@ -241,7 +241,7 @@ def scan(css_text_all):
 # 五行环 / 占星盘的数字与标签都是 <text fill="...">，它们躺在页面底色上。
 # 之前 .a-num 用 #b3a693 只有 1.97:1 —— CSS 自动检查全过，真页面几乎看不见。
 SVG_TEXT_RE = re.compile(r'class="([a-zA-Z0-9_\- ]+)"\s+fill="#([0-9a-fA-F]{6})"')
-SVG_BGS = ["f7f4ee", "fffdf8", "fbf8f1"]   # 页面底 / 卡片底 / 折叠块底
+SVG_BGS = ["f2ece1", "fbf7ee", "f8f2e5"]   # 页面底 / 卡片底 / 折叠块底
 
 
 def scan_svg_text(paths):
